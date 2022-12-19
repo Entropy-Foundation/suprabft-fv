@@ -52,9 +52,12 @@ object validator(id:node_t) = {
     relation forest_store_temp(Q:cert_t,H:height_t)
     relation forest_ancestor_temp(Q1:cert_t, H1:height_t, Q2:cert_t, H2:height_t)
     relation forest_root_temp(Q:cert_t, H:height_t)
+    relation forest_succ_temp(Q1:cert_t, H1:height_t, Q2:cert_t, H2:height_t)
 
     # this is used to store the chain_size at which 2-chain commit is executed. It is used to write supporting invariants
     individual chain_size_2cc : height_t
+    individual dc_basis_qc : cert_t
+    individual dc_basis_hc : height_t
 
     individual locked_height : height_t
 
@@ -82,9 +85,12 @@ object validator(id:node_t) = {
         forest_store_temp(Q,H) := false;
         forest_ancestor_temp(Q1,H1,Q2,H2) := false;
         forest_root_temp(Q,H) := false;
+        forest_succ_temp(Q1,H1,Q2,H2) := false;
         #forest_root_child(Q,H) := false;
 
         chain_size_2cc := 0;
+        dc_basis_qc := cert_t.nil;
+        dc_basis_hc := 0;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -253,35 +259,35 @@ object validator(id:node_t) = {
     }
 
     # Algorithm 2: SupraBFT PrepareQC Processing
-    action tryLockAndCommit(qc:cert_t) = {
+    action tryLockAndCommit(qc:cert_t, hc:height_t) = {
         require qc ~= cert_t.nil & rcvd_qc(qc);
         require qc.block.parent ~= block_t.hash(block_t.nil);
-        require exists H:height_t. forest_store(qc,H);
+        require forest_store(qc,hc);
 
         var ok := true;
         ok := ok & (round_t.succ(locked.block.round, qc.block.round));
         ok := ok & (qc.block.parent = block_t.hash(locked.block));
         if ok {
             #2-chain commit. Commit all uncommitted ancestors of locked, which is the parent of qc
-            if some hc:height_t. forest_store(qc, hc) {
-                forest_store_temp(Q,H) := forest_store(Q,H);
-                forest_ancestor_temp(Q1,H1,Q2,H2) := forest_ancestor(Q1,H1,Q2,H2);
-                forest_root_temp(Q,H) := forest_root(Q,H);
-                blockchain_temp(H) := blockchain(H);
+            forest_store_temp(Q,H) := forest_store(Q,H);
+            forest_ancestor_temp(Q1,H1,Q2,H2) := forest_ancestor(Q1,H1,Q2,H2);
+            forest_root_temp(Q,H) := forest_root(Q,H);
+            forest_succ_temp(Q1,H1,Q2,H2) := forest_succ(Q1,H1, Q2, H2);
+            blockchain_temp(H) := blockchain(H);
 
-                chain_size_2cc := chain_size;
+            chain_size_2cc := chain_size;
+            dc_basis_qc := qc;
+            dc_basis_hc := hc;
 
-                blockchain(H) := *;
-                assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
-                assume forall H:height_t. ( chain_size <= H & H < hc) -> exists Q:cert_t. forest_store_temp(Q,H) & Q.block = blockchain(H) & forest_ancestor_temp(qc,hc,Q,H);
-                assume forall H:height_t. hc <= H -> blockchain(H) = block_t.nil;
+            blockchain(H) := *;
+            assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
+            assume forall H:height_t. ( chain_size <= H & H < hc) -> exists Q:cert_t. forest_store_temp(Q,H) & Q.block = blockchain(H) & forest_ancestor_temp(qc,hc,Q,H);
+            assume forall H:height_t. hc <= H -> blockchain(H) = block_t.nil;
 
-                chain_size := hc;
-                forest_store(Q,H) := Q=qc & H = hc;
-                forest_ancestor(Q1,H1,Q2,H2) := Q1 = qc & H1 = hc & Q2 = qc & H2 = hc;
-                locked := qc;
-                locked_height := hc;
-            }
+            chain_size := hc;
+            forest_store(Q,H) := Q=qc & H = hc;
+            forest_ancestor(Q1,H1,Q2,H2) := Q1 = qc & H1 = hc & Q2 = qc & H2 = hc;
+            
             # if some hc:height_t. forest_store(qc,hc)
             # {
             #     if some qr:cert_t. forest_ancestor(qc,hc,qr,chain_size) & forest_root(qr,chain_size) & qc ~= qr
@@ -301,16 +307,10 @@ object validator(id:node_t) = {
             #     }
             # }
         }
-        # else
-        # {
-        #     if (locked.block.round < qc.block.round) {
-        #         locked := qc;
-        #         if some hc:height_t. forest_store(qc,hc)
-        #         {
-        #             locked_height := hc;
-        #         }
-        #     }
-        # }
+        if (locked.block.round < qc.block.round) {
+            locked := qc;
+            locked_height := hc;
+        }
         call global_view.node_rcvd_quorum(id, qc.block, qc.cert);
     }
 
@@ -329,7 +329,7 @@ object validator(id:node_t) = {
                 forest_store(qc, chain_size) := true;
                 forest_ancestor(qc, chain_size, qc, chain_size) := true;
                 call broadcast_qc(qc);
-                call tryLockAndCommit(qc);
+                call tryLockAndCommit(qc,chain_size);
                 call finished_prepareQC_processing(qc);
             } else {
                     if some ql:cert_t. exists Hl:height_t. forest_leaf(ql, Hl) & qc.block.parent = block_t.hash(ql.block) & ql.block ~= block_t.nil {
@@ -347,7 +347,7 @@ object validator(id:node_t) = {
                             #assert is_good(id) -> chain_size < height_t.next(hl);
 
                             call broadcast_qc(qc);
-                            call tryLockAndCommit(qc);
+                            call tryLockAndCommit(qc,height_t.next(hl));
                             call finished_prepareQC_processing(qc);
                         }
                     }
@@ -538,73 +538,83 @@ object validator(id:node_t) = {
         }
     }
     
-    #invariant forall T:timeout_t. forall N:node_t. rcvd_timeout(T, N) -> global_view.node_sent_timeout(N, T)
+    invariant forall B:block_t. forall N:node_t. rcvd_prepare(B, N) -> global_view.node_has_voted(N, B)
+    
+    invariant forall T:timeout_t. forall N:node_t. rcvd_timeout(T, N) -> global_view.node_sent_timeout(N, T)
 
-    #invariant forall Qc:cert_t. rcvd_qc(Qc) -> valid_qc(Qc)
+    invariant forall Qc:cert_t. rcvd_qc(Qc) -> valid_qc(Qc)
 
-    #invariant forall Tc:timeout_cert_t. rcvd_tc(Tc) -> valid_tc(Tc)
+    invariant forall Tc:timeout_cert_t. rcvd_tc(Tc) -> valid_tc(Tc)
 
-    #invariant ((locked = cert_t.nil | locked.block.parent = block_t.hash(block_t.nil)) & is_good(id)) -> chain_size=0
+    invariant ((locked = cert_t.nil | locked.block.parent = block_t.hash(block_t.nil)) & is_good(id)) -> chain_size=0
 
-    ##invariant forall Q:cert_t. forall H:height_t. is_good(id) -> ~forest_root_child(Q,H)
+    #invariant forall Q:cert_t. forall H:height_t. is_good(id) -> ~forest_root_child(Q,H)
 
-    #invariant forall Hf:height_t. forall Qf:cert_t. (chain_size = 0 & forest_root(Qf,Hf) & is_good(id)) -> (Hf = 0 & Qf.block.parent = block_t.hash(block_t.nil))
+    invariant forall Hf:height_t. forall Qf:cert_t. (chain_size = 0 & forest_root(Qf,Hf) & is_good(id)) -> (Hf = 0 & Qf.block.parent = block_t.hash(block_t.nil))
 
-	#invariant forall B:block_t. (global_view.node_has_voted(id, B) & is_good(id)) -> r_c > B.round
+	invariant forall B:block_t. (global_view.node_has_voted(id, B) & is_good(id)) -> r_c > B.round
 
-	#invariant (locked.block ~= block_t.nil & is_good(id)) -> global_view.node_has_quorum(id, locked.block)
+	invariant (locked.block ~= block_t.nil & is_good(id)) -> global_view.node_has_quorum(id, locked.block)
 
-	#invariant forall H:height_t. (H < chain_size & is_good(id)) -> (blockchain(H) ~= block_t.nil)
+	invariant forall H:height_t. (H < chain_size & is_good(id)) -> (blockchain(H) ~= block_t.nil)
+
+    invariant forall H:height_t. (chain_size <= H & is_good(id)) -> (blockchain(H) = block_t.nil)
 
     invariant (locked ~= cert_t.nil & is_good(id)) -> forest_store(locked,locked_height)
 
-    #invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id))  -> (rcvd_qc(Q) & gv.node_has_quorum(id,Q.block) & forest_ancestor(Q,H,Q,H) & Q.block ~= block_t.nil) 
+    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id))  -> (rcvd_qc(Q) & gv.node_has_quorum(id,Q.block) & forest_ancestor(Q,H,Q,H) & Q.block ~= block_t.nil) 
 
     # these invariants support blockchain_parent invariant
-    #invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size) -> ( H2 < chain_size_2cc | H2 = chain_size_2cc | (chain_size_2cc <= H1 & H2 < chain_size))
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size) -> ( H2 < chain_size_2cc | H2 = chain_size_2cc | (chain_size_2cc <= H1 & H2 < chain_size))
 
-    #invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size_2cc & H2 < chain_size & is_good(id)) -> blockchain_temp(H2).parent = block_t.hash(blockchain_temp(H1))
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size_2cc & H2 < chain_size & is_good(id)) -> blockchain_temp(H2).parent = block_t.hash(blockchain_temp(H1))
         
-    #invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. (forest_store_temp(Q2,H2) -> forest_root_temp(Q2,H2))
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. (forest_store_temp(Q2,H2) -> forest_root_temp(Q2,H2))
 
-    #invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. (forest_store_temp(Q2,H2) -> (Q2.block.parent = block_t.hash(blockchain_temp(H1))))
-
-    #invariant [blockchain_parent] forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id)) -> blockchain(H2).parent = block_t.hash(blockchain(H1))
-
-    #invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & Q.block.parent = block_t.hash(block_t.nil) & is_good(id)) -> H = 0
-
-    #invariant forall H:height_t. forall Hf:height_t. forall Qf:cert_t. (forest_store(Qf,Hf) & is_good(id)) -> Qf.block ~= blockchain(H)
-
-    #invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & is_good(id)) -> H=chain_size
-
-    #invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id)) -> chain_size <= H
-
-    #invariant forall Qd,Qa:cert_t. forall Hd,Ha:height_t. (forest_strictAncestor(Qd,Hd,Qa,Ha) & is_good(id)) -> Ha < Hd
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. ((forest_store_temp(Q2,H2)) -> (Q2.block.parent = block_t.hash(blockchain_temp(H1))))
     
-    #invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_ancestor(Qd,Hd,Qa,Ha) & height_t.succ(Ha,Hd) & is_good(id)) -> Qd.block.parent = block_t.hash(Qa.block)
+    invariant forall Q1,Q2,Q3:cert_t. forall H1,H2,H3:height_t. (is_good(id) & forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q1,H1,Q3,H3) & height_t.succ(H3,H2)) -> forest_succ(Q2,H2,Q3,H3)
 
-    #invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & Q.block.parent ~= block_t.hash(block_t.nil) & is_good(id)) -> (forall Hc:height_t. height_t.succ(Hc,chain_size) -> Q.block.parent = block_t.hash(blockchain(Hc)))
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & chain_size_2cc <= H1) -> (forall Q1:cert_t.forall Q2:cert_t. (forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q1,H1) & forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q2,H2)) -> forest_succ_temp(Q2,H2,Q1,H1))
 
-    #invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & Q.block.parent = block_t.hash(block_t.nil) & is_good(id)) -> (H = 0 & chain_size = 0)
+    invariant forall Ha:height_t. forall Hd:height_t. (height_t.succ(Ha, Hd) & Hd < chain_size & is_good(id) & chain_size_2cc <= Ha) -> (forall Qa:cert_t. forall Qd:cert_t. (forest_store_temp(Qd,Hd) & forest_store_temp(Qa,Ha) & forest_succ_temp(Qd,Hd,Qa,Ha)) -> Qd.block.parent = block_t.hash(Qa.block))
 
-    #invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & ~forest_root(Q,H) & is_good(id)) -> exists Qs:cert_t. exists Hs:height_t. forest_strictAncestor(Q,H,Qs,Hs)
+    invariant [blockchain_parent] forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id)) -> blockchain(H2).parent = block_t.hash(blockchain(H1))
 
-    #invariant forall Q:cert_t. forall H:height_t. forall Qs:cert_t. forall Hs:height_t. (forest_strictAncestor(Q,H,Qs,Hs) & is_good(id)) -> exists Qss:cert_t. exists Hss:height_t. forest_succ(Q,H,Qss,Hss)
+    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & Q.block.parent = block_t.hash(block_t.nil) & is_good(id)) -> H = 0
+
+    invariant forall H:height_t. forall Hf:height_t. forall Qf:cert_t. (forest_store(Qf,Hf) & is_good(id)) -> Qf.block ~= blockchain(H)
+
+    invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & is_good(id)) -> H=chain_size
+
+    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id)) -> chain_size <= H
+
+    invariant forall Qd,Qa:cert_t. forall Hd,Ha:height_t. (forest_strictAncestor(Qd,Hd,Qa,Ha) & is_good(id)) -> Ha < Hd
     
-    #invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> (forest_succ(Qd,Hd,Qa,Ha) -> (Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)))
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_ancestor(Qd,Hd,Qa,Ha) & height_t.succ(Ha,Hd) & is_good(id)) -> Qd.block.parent = block_t.hash(Qa.block)
 
-    #invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  forest_succ(Qd,Hd,Qa,Ha))
+    invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & Q.block.parent ~= block_t.hash(block_t.nil) & is_good(id)) -> (forall Hc:height_t. height_t.succ(Hc,chain_size) -> Q.block.parent = block_t.hash(blockchain(Hc)))
 
-    #invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & is_good(id)) -> forest_store(Q1,H1) & forest_store(Q2,H2)
+    invariant forall Q:cert_t. forall H:height_t. (forest_root(Q,H) & Q.block.parent = block_t.hash(block_t.nil) & is_good(id)) -> (H = 0 & chain_size = 0)
 
-    #invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_store(Q1,H1) & forest_store(Q2,H2) & Q1.block = Q2.block & is_good(id)) -> (Q1 = Q2 & H1=H2)
+    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & ~forest_root(Q,H) & is_good(id)) -> exists Qs:cert_t. exists Hs:height_t. forest_strictAncestor(Q,H,Qs,Hs)
 
-    #invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & H1 = H2 & is_good(id)) -> (Q1 = Q2)
+    invariant forall Q:cert_t. forall H:height_t. forall Qs:cert_t. forall Hs:height_t. (forest_strictAncestor(Q,H,Qs,Hs) & is_good(id)) -> exists Qss:cert_t. exists Hss:height_t. forest_succ(Q,H,Qss,Hss)
+    
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> (forest_succ(Qd,Hd,Qa,Ha) -> (Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)))
 
-    #invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. is_good(id) ->((forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q1,H1)) <-> (Q1 = Q2 & H1 = H2 & forest_store(Q1,H1) & forest_store(Q2,H2)))
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  forest_succ(Qd,Hd,Qa,Ha))
 
-    #invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q3,H3) & is_good(id)) -> forest_ancestor(Q1,H1,Q3,H3)
+    invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & is_good(id)) -> forest_store(Q1,H1) & forest_store(Q2,H2)
 
-    #invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q1,H1,Q3,H3) & is_good(id)) -> (forest_ancestor(Q2,H2,Q3,H3) | forest_ancestor(Q3,H3,Q2,H2))
+    invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_store(Q1,H1) & forest_store(Q2,H2) & Q1.block = Q2.block & is_good(id)) -> (Q1 = Q2 & H1=H2)
+
+    invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & H1 = H2 & is_good(id)) -> (Q1 = Q2)
+
+    invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. is_good(id) ->((forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q1,H1)) <-> (Q1 = Q2 & H1 = H2 & forest_store(Q1,H1) & forest_store(Q2,H2)))
+
+    invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q3,H3) & is_good(id)) -> forest_ancestor(Q1,H1,Q3,H3)
+
+    invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q1,H1,Q3,H3) & is_good(id)) -> (forest_ancestor(Q2,H2,Q3,H3) | forest_ancestor(Q3,H3,Q2,H2))
 } # object validator
 } # module supraBFT
