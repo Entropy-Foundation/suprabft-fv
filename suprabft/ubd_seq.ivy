@@ -1,0 +1,15 @@
+#lang ivy1.8
+
+include order
+
+module ubd_seq =
+{
+    instantiate unbounded_sequence
+
+    object spec1 =
+    {
+        property forall X:t. forall Z:t. succ(X,Z) <-> (X < Z & forall Y:t. ~(X < Y & Y < Z))
+
+        property (succ(X,Z) & succ(Y,Z)) -> X = Y
+    }
+}

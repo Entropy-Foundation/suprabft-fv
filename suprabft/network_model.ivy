@@ -1,0 +1,97 @@
+#lang ivy1.8
+
+include udp
+
+include domain_model
+
+object msg_kind = {
+    type this = {proposal, prepare, qc, timeout, tc}
+}
+
+object msg = {
+    type this = struct {
+        kind : msg_kind,
+        prop : proposal_t,
+        prep : block_t,
+        qc : cert_t,
+        t : timeout_t,
+        tc : timeout_cert_t,
+        src : node_t
+    }
+}
+
+instance net : udp_simple(node_t, msg)
+
+isolate shim = {
+    # In order not repeat the same code for each handler, we use a handler
+    # module parameterized by the type of message it will handle. Below we
+    # instantiate this module for the five types of messages of SupraBFT
+    module handler(p_kind) = {
+        action handle(dst:node_t, m:msg)
+        object spec = {
+            before handle {
+                assert sent(m, dst) & m.kind = p_kind
+            }
+        }
+    }
+
+    instance proposal_handler : handler(msg_kind.proposal)
+    instance prepare_handler : handler(msg_kind.prepare)
+    instance qc_handler : handler(msg_kind.qc)
+    instance timeout_handler : handler(msg_kind.timeout)
+    instance tc_handler : handler(msg_kind.tc)
+
+    relation sent(M:msg, N:node_t)
+
+    action broadcast(src:node_t, m:msg)
+    action send(src:node_t,dst:node_t, m:msg)
+
+    specification {
+        after init {
+            sent(M, D) := false;
+        }
+        before broadcast {
+            sent(m, D) := true
+        }
+        before send {
+            sent(m, dst) := true
+        }
+    }
+
+    # Here we give an implementation of it that satisfies its specification:
+    implementation {
+        implement net.recv(dst:node_t ,m:msg) {
+            if m.kind = msg_kind.proposal {
+                call proposal_handler.handle(dst, m)
+            } else if m.kind = msg_kind.prepare {
+                call prepare_handler.handle(dst, m)
+            } else if m.kind = msg_kind.qc {
+                call qc_handler.handle(dst, m)
+            } else if m.kind = msg_kind.timeout {
+                call timeout_handler.handle(dst, m)
+            } else if m.kind = msg_kind.tc {
+                call tc_handler.handle(dst, m)
+            }
+        }
+
+        # broadcast sends to all nodes, including the sender.
+        implement broadcast {
+            var iter := node_t.iter.create(0);
+            while ~iter.is_end
+            invariant net.spec.sent(M,D) -> sent(M,D) {
+                var n := iter.val;
+                call net.send(src, n, m);
+                iter := iter.next;
+            }
+        }
+
+        implement send {
+            call net.send(src, dst, m)
+        }
+
+        private {
+            invariant net.spec.sent(M, D) -> sent(M, D)
+        }
+    }
+# to prove that the shim implementation satisfies the shim specification, we rely on the specification of net and node.
+} with net.spec, node_t

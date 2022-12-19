@@ -1,0 +1,118 @@
+#lang ivy1.8
+
+include ubd_seq
+
+instance round_t : ubd_seq
+instance height_t : ubd_seq
+
+instance node_t : iterable
+function leader(R:round_t) : node_t
+relation is_good(N:node_t)
+
+isolate hash_t = {
+    type this
+
+    individual nil: hash_t
+}
+
+isolate block_t = {
+    type this = struct {
+        round : round_t,
+        parent : hash_t
+    }
+    individual nil : block_t
+    function hash(B:block_t) : hash_t
+    action consBlock(p:hash_t, r:round_t) returns (b:block_t)
+
+    specification {
+	    property nil.round = 0
+        property hash(X) = hash(Y) -> X = Y
+        property hash(X) ~= hash_t.nil
+
+        after consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+            ensure b ~= block_t.nil
+        }
+    }
+
+    implementation {
+        implement consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+            b.round := r;
+            b.parent := p;
+        }
+    }
+}
+
+isolate quorum_t = {
+    type this
+    relation member(N:node_t, Q:quorum_t)
+
+    specification {
+        # only use in proofs
+        axiom forall Q:quorum_t. exists N:node_t. is_good(N) & member(N, Q)
+
+        axiom forall Q1:quorum_t. forall Q2:quorum_t. exists N:node_t. is_good(N) & member(N, Q1) & member(N, Q2)
+    }
+}
+
+isolate voted_t = {
+    type this = struct {
+        block : block_t
+    }
+    individual nil : voted_t
+
+    specification {
+        property forall V:voted_t . V ~= nil <-> V.block ~= block_t.nil
+    }
+}
+
+isolate cert_t = {
+    type this = struct {
+        block : block_t,
+        # every member of cert should have made rcvd_prepare() true for this round
+        round : round_t,
+        cert : quorum_t
+    }
+    individual nil : cert_t
+
+    specification {
+        property forall Qc:cert_t . Qc ~= nil <-> Qc.block ~= block_t.nil
+    }
+}
+
+isolate timeout_t = {
+    type this = struct {
+        round : round_t,
+        qc : cert_t
+    }
+    individual nil : timeout_t
+
+    specification {
+        property forall T:timeout_t . T ~= nil <-> T.qc ~= cert_t.nil
+    }
+}
+
+isolate timeout_cert_t = {
+    type this = struct {
+        round : round_t,
+        cert : quorum_t,
+        highestQC : cert_t
+    }
+    individual nil : timeout_cert_t
+
+    specification {
+        property forall Tc:timeout_cert_t . Tc ~= nil <-> Tc.highestQC ~= cert_t.nil
+    }
+}
+
+isolate proposal_t = {
+    type this = struct {
+        block : block_t,
+        qc : cert_t,
+        tc : timeout_cert_t
+    }
+    individual nil : proposal_t
+
+    specification {
+        property forall P:proposal_t . P = nil <-> P.block ~= block_t.nil
+    }
+}

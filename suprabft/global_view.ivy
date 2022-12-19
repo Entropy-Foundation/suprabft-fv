@@ -1,0 +1,43 @@
+#lang ivy1.8
+
+include domain_model
+
+module global_view = {
+	relation node_has_voted(N:node_t, B:block_t) #node N has voted for block B
+	relation node_has_quorum(N:node_t, B:block_t) # node N has received quorum for block B
+	relation node_sent_timeout(N:node_t, T:timeout_t) # node N has sent a timeout message T
+
+	action node_voted(n:node_t, b:block_t)
+	action node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t)
+	action node_timeout(n:node_t, t:timeout_t)
+
+	after init {
+		node_has_voted(N, B) := false;
+		node_has_quorum(N, B) := false;
+		node_sent_timeout(N, T) := false;
+	}
+
+	before node_voted(n:node_t, b:block_t) {
+		require forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round;
+	}
+
+	before node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t) {
+		require forall N:node_t. quorum_t.member(N, q) -> node_has_voted(N, b);
+	}
+
+	before node_timeout(n:node_t, t:timeout_t) {
+		require (t.qc.block ~= block_t.nil & is_good(n)) -> node_has_quorum(n, t.qc.block);
+	}
+
+	implement node_voted(n:node_t, b:block_t) {
+		node_has_voted(n, b) := true;
+	}
+
+	implement node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t) {
+		node_has_quorum(n, b) := true;
+	}
+
+	implement node_timeout(n:node_t, t:timeout_t) {
+		node_sent_timeout(n, t) := true;
+	}
+}
