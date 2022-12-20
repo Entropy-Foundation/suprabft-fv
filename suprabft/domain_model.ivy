@@ -22,7 +22,7 @@ isolate block_t = {
     }
     individual nil : block_t
     function hash(B:block_t) : hash_t
-    action consBlock(p:hash_t, r:round_t) returns (b:block_t)
+    action consBlock(r:round_t, p:hash_t) returns (b:block_t)
 
     specification {
 	    axiom forall B:block_t. B ~= nil <-> B.round ~= nil.round
@@ -31,17 +31,17 @@ isolate block_t = {
         axiom hash(X) = hash(Y) -> X = Y
         axiom hash(X) ~= hash_t.nil
 
-        before consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+        before consBlock(r:round_t, p:hash_t) returns (b:block_t) {
             require p ~= hash_t.nil
         }
 
-        after consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+        after consBlock(r:round_t, p:hash_t) returns (b:block_t) {
             ensure b ~= block_t.nil
         }
     }
 
     implementation {
-        implement consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+        implement consBlock(r:round_t, p:hash_t) returns (b:block_t) {
             b.round := r;
             b.parent := p;
         }

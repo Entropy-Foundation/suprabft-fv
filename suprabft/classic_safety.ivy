@@ -21,7 +21,7 @@ isolate basic_safety = {
 
 	invariant [round_safety_statement] forall N1:node_t. forall N2:node_t. forall H1:height_t. forall H2:height_t. (is_good(N1)  & is_good(N2) & validator(N1).blockchain(H1) ~= block_t.nil & validator(N2).blockchain(H2) ~= block_t.nil &validator(N1).blockchain(H1).round = validator(N2).blockchain(H2).round ) -> validator(N1).blockchain(H1) = validator(N2).blockchain(H2)
 
-	invariant forall Bc:block_t. forall Bp:block_t. (Bc.parent = block_t.hash(Bp)) -> Bp.round < Bc.round # parent must be strictly lesser than the child
+	# invariant forall Bc:block_t. forall Bp:block_t. (Bc.parent = block_t.hash(Bp)) -> Bp.round < Bc.round # parent must be strictly lesser than the child
 
 	invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind = msg_kind.prepare) -> gv.node_has_voted(M.src,M.prep)
 
