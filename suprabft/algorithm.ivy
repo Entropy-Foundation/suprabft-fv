@@ -81,11 +81,11 @@ object validator(id:node_t) = {
 
     	forest_store(Q, H) := false;
     	forest_ancestor(Q1, H1, Q2, H2) := false;
-        forest_store_temp(Q,H) := false;
-        forest_ancestor_temp(Q1,H1,Q2,H2) := false;
-        forest_root_temp(Q,H) := false;
-        forest_succ_temp(Q1,H1,Q2,H2) := false;
-        #forest_root_child(Q,H) := false;
+        forest_store_temp(Q, H) := false;
+        forest_ancestor_temp(Q1, H1, Q2, H2) := false;
+        forest_root_temp(Q, H) := false;
+        forest_succ_temp(Q1, H1, Q2, H2) := false;
+        # forest_root_child(Q, H) := false;
 
         chain_size_2cc := 0;
         dc_basis_qc := cert_t.nil;
@@ -93,36 +93,45 @@ object validator(id:node_t) = {
     }
 
     implement shim.proposal_handler.handle(m:msg) {
-        if (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
-            rcvd_proposal(m.prop, m.src) := true;
-            if m.prop.qc ~= cert_t.nil {
-                rcvd_qc(m.prop.qc) := true;
-            }
-            if m.prop.tc ~= timeout_cert_t.nil {
-                rcvd_tc(m.prop.tc) := true;
+        if m.prop ~= proposal_t.nil {
+            if (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
+                rcvd_proposal(m.prop, m.src) := true;
+                if m.prop.qc ~= cert_t.nil {
+                    rcvd_qc(m.prop.qc) := true;
+                }
+                if m.prop.tc ~= timeout_cert_t.nil {
+                    rcvd_tc(m.prop.tc) := true;
+                }
             }
         }
     }
     implement shim.prepare_handler.handle(m:msg) {
         # here we check the global view to make sure that sender of this message has really voted. in implementation, this has to be checked by examining the received message for authenticity
         # if global_view.node_has_voted(m.src, m.prep) {
+        if m.prep ~= block_t.nil {
             rcvd_prepare(m.prep, m.src) := true;
-        # }
+        }
     }
     implement shim.qc_handler.handle(m:msg) {
-        if m.qc ~= cert_t.nil & valid_qc(m.qc) {
-            rcvd_qc(m.qc) := true;
+        if m.qc ~= cert_t.nil {
+            if valid_qc(m.qc) {
+                rcvd_qc(m.qc) := true;
+            }
         }
     }
     implement shim.timeout_handler.handle(m:msg) {
         # here we check global view to ensure that the sender of this message has really sent this timeout message. In implementation, this is done by checking the cryptographic authenticity of the message
-        if m.t.qc ~= cert_t.nil & valid_qc(m.t.qc) {
-            rcvd_timeout(m.t, m.src) := true;
+        if m.t ~= timeout_t.nil {
+            if m.t.qc ~= cert_t.nil & valid_qc(m.t.qc) {
+                rcvd_timeout(m.t, m.src) := true;
+            }
         }
     }
     implement shim.tc_handler.handle(m:msg) {
-        if m.tc ~= timeout_cert_t.nil & valid_tc(m.tc) {
-            rcvd_tc(m.tc) := true;
+        if m.tc ~= timeout_cert_t.nil {
+            if valid_tc(m.tc) {
+                rcvd_tc(m.tc) := true;
+            }
         }
     }
 
@@ -244,8 +253,6 @@ object validator(id:node_t) = {
                 pb := tc_r_2.highestQC.block;
             }
             b := block_t.consBlock(r_c, block_t.hash(pb));
-            ensure pb ~= block_t.nil -> round_t.succ(pb.round, b.round);
-
             p.block := b;
             p.qc := qc;
             p.tc := tc_r_2;
@@ -255,7 +262,7 @@ object validator(id:node_t) = {
 
     action tryLockAndCommit(qc:cert_t, hc:height_t) = {
         require qc ~= cert_t.nil & rcvd_qc(qc);
-        # this should go to b0_qc
+        # a certificate with this should go to b0_qc
         require qc.block.parent ~= block_t.hash(block_t.nil);
         require forest_store(qc, hc);
 
@@ -299,7 +306,7 @@ object validator(id:node_t) = {
             #     }
             # }
         }
-        if (locked.block.round < qc.block.round) {
+        if locked.block.round < qc.block.round {
             locked := qc;
             locked_height := hc;
         }
@@ -320,7 +327,7 @@ object validator(id:node_t) = {
                 forest_store(qc, chain_size) := true;
                 forest_ancestor(qc, chain_size, qc, chain_size) := true;
                 call broadcast_qc(qc);
-                call tryLockAndCommit(qc,chain_size);
+                call tryLockAndCommit(qc, chain_size);
                 call finished_prepareQC_processing(qc);
             } else {
                 if some ql:cert_t. exists Hl:height_t. forest_leaf(ql, Hl) & qc.block.parent = block_t.hash(ql.block) & ql.block ~= block_t.nil {
@@ -331,12 +338,11 @@ object validator(id:node_t) = {
                         forest_ancestor(qc, height_t.next(hl), ql, hl) := true;
                         forest_ancestor(qc, height_t.next(hl), Q, H) := forest_ancestor(ql, hl, Q, H) | (Q=qc & H = height_t.next(hl));
 
-                        #assert is_good(id) -> ~forest_root(qc, height_t.next(hl));
-                        #assert is_good(id) -> forest_succ(qc, height_t.next(hl), ql,hl);
-                        #assert is_good(id) -> chain_size < height_t.next(hl);
-
+                        # assert is_good(id) -> ~forest_root(qc, height_t.next(hl));
+                        # assert is_good(id) -> forest_succ(qc, height_t.next(hl), ql,hl);
+                        # assert is_good(id) -> chain_size < height_t.next(hl);
                         call broadcast_qc(qc);
-                        call tryLockAndCommit(qc,height_t.next(hl));
+                        call tryLockAndCommit(qc, height_t.next(hl));
                         call finished_prepareQC_processing(qc);
                     }
                 } else {
@@ -348,6 +354,7 @@ object validator(id:node_t) = {
 
     export action process_proposal(p:proposal_t) = {
         require rcvd_proposal(p, leader(r_c));
+        require p.qc ~= cert_t.nil;
         require p.tc = timeout_cert_t.nil;
 
         var ok := true;
@@ -405,20 +412,18 @@ object validator(id:node_t) = {
         ok := ok & ~timed_out;
         ok := ok & p.tc.round = round_t.prev(round_t.prev(p.block.round));
         ok := ok & p.block.parent = block_t.hash(p.tc.highestQC.block);
-
+        ok := ok & p.block.parent = block_t.hash(locked.block);
         if ok {
             call advanceToRound(round_t.next(r_c), p.block, p.tc.highestQC, timeout_cert_t.nil)
         }
 
     }
 
-    # Algorithm 5: SupraBFT Round Synchronisation
     action finished_prepareQC_processing(qc:cert_t) = {
         require rcvd_qc(qc);
 
         var ok := true;
         ok := ok & round_t.next(qc.block.round) > r_c;
-
         if ok {
             if some qc2:cert_t. rcvd_qc(qc2) & block_t.hash(qc2.block) = qc.block.parent {
                 call advanceToRound(round_t.next(qc.block.round), qc.block, qc2, timeout_cert_t.nil);
@@ -438,7 +443,7 @@ object validator(id:node_t) = {
         }
     }
 
-    # Algorithm 6: SupraBFT Genesis
+    # Algorithm 3: SupraBFT Genesis
     export action proposal_b0_correct(p:proposal_t) = {
         require rcvd_proposal(p, leader(r_c));
         require p.qc = cert_t.nil;
@@ -458,8 +463,7 @@ object validator(id:node_t) = {
     export action proposal_b0_late(p:proposal_t) = {
         require rcvd_proposal(p, leader(r_c));
         require p.qc = cert_t.nil;
-	    require rcvd_tc(p.tc);
-
+        require p.tc ~= timeout_cert_t.nil;
 	    require p.block.round > 0;
 	    require round_t.prev(p.block.round) > 0;
 
@@ -475,10 +479,9 @@ object validator(id:node_t) = {
     }
 
     export action proposal_b1_correct(p:proposal_t) = {
-        require p ~= proposal_t.nil;
+        require rcvd_proposal(p, leader(r_c));
         require p.qc = cert_t.nil;
         require p.tc = timeout_cert_t.nil;
-        require rcvd_proposal(p, leader(r_c));
 
         var ok := true;
         ok := ok & p.block.round = r_c;
@@ -491,29 +494,18 @@ object validator(id:node_t) = {
 
     export action b0_qc(qc:cert_t) = {
         require rcvd_qc(qc);
+        require forall H:height_t. forall Q:cert_t. forest_store(Q, H) -> Q.block ~= qc.block;
 
         var ok := true;
         ok := ok & qc.block.parent = block_t.hash(block_t.nil);
         ok := ok & qc.block ~= block_t.nil;
         ok := ok & (locked = cert_t.nil | (locked.block.parent = block_t.hash(block_t.nil) & qc.block.round > locked.block.round));
-        ok := ok & forall H:height_t. forall Q:cert_t. forest_store(Q,H) -> Q.block ~= qc.block;
         if ok {
             call broadcast_qc(qc);
-            # var block_new : block_t;
-            # var locked_new : cert_t;
-            # block_new.round := qc.block.round;
-            # block_new.parent := qc.block.parent;
-            # block_new := qc.block;
-            # locked_new.block := block_new;
-            # locked_new.round := qc.round;
-            # locked_new.cert := qc.cert;
-            forest_store(qc,0) := true;
-            forest_ancestor(qc,0,qc,0) := true;
-            if (qc.block.round > locked.block.round)
-            {
-                locked := qc;
-                locked_height := 0;
-            }
+            locked := qc;
+            locked_height := 0;
+            forest_store(qc, 0) := true;
+            forest_ancestor(qc, 0, qc, 0) := true;
             call global_view.node_rcvd_quorum(id,qc.block,qc.cert);
         }
     }
@@ -526,13 +518,15 @@ object validator(id:node_t) = {
 
     invariant forall Tc:timeout_cert_t. rcvd_tc(Tc) -> valid_tc(Tc)
 
-    invariant forall P:proposal_t. forall N:node_t. rcvd_proposal(P, N) -> P ~= proposal_t.nil
+    invariant forall N:node_t. ~rcvd_proposal(proposal_t.nil, N)
 
-    invariant forall T:timeout_t. forall N:node_t. rcvd_timeout(T, N) -> T ~= timeout_t.nil
+    invariant forall N:node_t. ~rcvd_prepare(block_t.nil, N)
 
-    invariant forall Qc:cert_t. rcvd_qc(Qc) -> Qc ~= cert_t.nil
+    invariant forall N:node_t. ~rcvd_timeout(timeout_t.nil, N)
 
-    invariant forall Tc:timeout_cert_t. rcvd_tc(Tc) -> Tc ~= timeout_cert_t.nil
+    invariant ~rcvd_qc(cert_t.nil)
+
+    invariant ~rcvd_tc(timeout_cert_t.nil)
 
     invariant ((locked = cert_t.nil | locked.block.parent = block_t.hash(block_t.nil)) & is_good(id)) -> chain_size=0
 
