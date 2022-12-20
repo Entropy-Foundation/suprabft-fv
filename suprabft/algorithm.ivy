@@ -452,7 +452,7 @@ object validator(id:node_t) = {
         ok := ok & round_t.succ(locked.block.round, r_c);
 
         if ok {
-            call advanceToRound(round_t.next(locked.block.round), block_t.nil, cert_t.nil, timeout_cert_t.nil);
+            call advanceToRound(round_t.next(r_c), block_t.nil, cert_t.nil, timeout_cert_t.nil);
         }
     }
 
@@ -571,13 +571,17 @@ object validator(id:node_t) = {
         
     invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. (forest_store_temp(Q2,H2) -> forest_root_temp(Q2,H2))
 
+    invariant forall Q:cert_t. forall H:height_t. (forest_root_temp(Q,H) & Q.block.parent ~= block_t.hash(block_t.nil) & is_good(id)) -> (forall Hc:height_t. height_t.succ(Hc,chain_size_2cc) -> Q.block.parent = block_t.hash(blockchain_temp(Hc)))
+
     invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & H2 = chain_size_2cc) -> forall Q2:cert_t. ((forest_store_temp(Q2,H2)) -> (Q2.block.parent = block_t.hash(blockchain_temp(H1))))
     
     invariant forall Q1,Q2,Q3:cert_t. forall H1,H2,H3:height_t. (is_good(id) & forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q1,H1,Q3,H3) & height_t.succ(H3,H2)) -> forest_succ(Q2,H2,Q3,H3)
 
-    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & chain_size_2cc <= H1) -> (forall Q1:cert_t.forall Q2:cert_t. (forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q1,H1) & forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q2,H2)) -> forest_succ_temp(Q2,H2,Q1,H1))
+    invariant forall Q2,Q3:cert_t. forall H2,H3:height_t. (is_good(id) & forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q2,H2) & forest_ancestor_temp(dc_basis_qc,dc_basis_hc,Q3,H3) & height_t.succ(H3,H2)) -> forest_succ_temp(Q2,H2,Q3,H3)
 
-    invariant forall Ha:height_t. forall Hd:height_t. (height_t.succ(Ha, Hd) & Hd < chain_size & is_good(id) & chain_size_2cc <= Ha) -> (forall Qa:cert_t. forall Qd:cert_t. (forest_store_temp(Qd,Hd) & forest_store_temp(Qa,Ha) & forest_succ_temp(Qd,Hd,Qa,Ha)) -> Qd.block.parent = block_t.hash(Qa.block))
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store_temp(Qd,Hd) & forest_store_temp(Qa,Ha) & is_good(id)) -> (forest_succ_temp(Qd,Hd,Qa,Ha) -> (Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)))
+
+    invariant forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id) & chain_size_2cc <= H1) -> blockchain(H2).parent = block_t.hash(blockchain(H1))
 
     invariant [blockchain_parent] forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id)) -> blockchain(H2).parent = block_t.hash(blockchain(H1))
 
@@ -603,8 +607,12 @@ object validator(id:node_t) = {
     
     invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> (forest_succ(Qd,Hd,Qa,Ha) -> (Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)))
 
-    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  forest_succ(Qd,Hd,Qa,Ha))
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  forest_strictAncestor(Qd,Hd,Qa,Ha))
 
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  (forall Qaa:cert_t. forall Haa:height_t. (forest_ancestor(Qd,Hd,Qaa,Haa) & (Qd ~= Qaa | Hd ~= Haa)) -> forest_ancestor(Qa,Ha,Qaa,Haa)))
+
+    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> ((Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)) ->  forest_succ(Qd,Hd,Qa,Ha))
+    
     invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & is_good(id)) -> forest_store(Q1,H1) & forest_store(Q2,H2)
 
     invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_store(Q1,H1) & forest_store(Q2,H2) & Q1.block = Q2.block & is_good(id)) -> (Q1 = Q2 & H1=H2)
