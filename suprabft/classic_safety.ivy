@@ -26,7 +26,7 @@ isolate basic_safety = {
 	invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind = msg_kind.prepare) -> gv.node_has_voted(M.src,M.prep)
 
 	invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind=msg_kind.timeout) -> gv.node_sent_timeout(M.src,M.t)
-	
+
 	#invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & validator(N1).blockchain(H) ~= block_t.nil & validator(N2).blockchain(H) ~= block_t.nil) -> validator(N1).blockchain(H) = validator(N2).blockchain(H)
 
-} with gv, round_t, height_t, block_t, cert_t, shim, net.spec
+} with gv, round_t, height_t, block_t, voted_t, cert_t, timeout_t, timeout_cert_t, proposal_t, shim, net.spec

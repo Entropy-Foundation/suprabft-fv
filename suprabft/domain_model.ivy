@@ -25,9 +25,15 @@ isolate block_t = {
     action consBlock(p:hash_t, r:round_t) returns (b:block_t)
 
     specification {
-	    property nil.round = 0
-        property hash(X) = hash(Y) -> X = Y
-        property hash(X) ~= hash_t.nil
+	    axiom forall B:block_t. B ~= nil <-> B.round ~= nil.round
+        axiom forall B:block_t. B = nil <-> B.parent = hash_t.nil
+
+        axiom hash(X) = hash(Y) -> X = Y
+        axiom hash(X) ~= hash_t.nil
+
+        before consBlock(p:hash_t, r:round_t) returns (b:block_t) {
+            require p ~= hash_t.nil
+        }
 
         after consBlock(p:hash_t, r:round_t) returns (b:block_t) {
             ensure b ~= block_t.nil
@@ -61,7 +67,7 @@ isolate voted_t = {
     individual nil : voted_t
 
     specification {
-        property forall V:voted_t . V ~= nil <-> V.block ~= block_t.nil
+        axiom forall V:voted_t. V = nil <-> V.block = block_t.nil
     }
 }
 
@@ -75,7 +81,9 @@ isolate cert_t = {
     individual nil : cert_t
 
     specification {
-        property forall Qc:cert_t . Qc ~= nil <-> Qc.block ~= block_t.nil
+        axiom forall Qc:cert_t. Qc = nil <-> Qc.block = block_t.nil
+        axiom forall Qc:cert_t. Qc ~= nil <-> Qc.round ~= nil.round
+        axiom forall N:node_t. quorum_t.member(N, nil.cert)
     }
 }
 
@@ -87,7 +95,8 @@ isolate timeout_t = {
     individual nil : timeout_t
 
     specification {
-        property forall T:timeout_t . T ~= nil <-> T.qc ~= cert_t.nil
+        axiom forall T:timeout_t. T ~= nil <-> T.round ~= nil.round
+        axiom forall T:timeout_t. T = nil <-> T.qc = cert_t.nil
     }
 }
 
@@ -100,7 +109,9 @@ isolate timeout_cert_t = {
     individual nil : timeout_cert_t
 
     specification {
-        property forall Tc:timeout_cert_t . Tc ~= nil <-> Tc.highestQC ~= cert_t.nil
+        axiom forall Tc:timeout_cert_t. Tc ~= nil <-> Tc.round ~= nil.round
+        axiom forall N:node_t. quorum_t.member(N, nil.cert)
+        axiom forall Tc:timeout_cert_t. Tc = nil <-> Tc.highestQC = cert_t.nil
     }
 }
 
@@ -113,6 +124,8 @@ isolate proposal_t = {
     individual nil : proposal_t
 
     specification {
-        property forall P:proposal_t . P = nil <-> P.block ~= block_t.nil
+        axiom forall P:proposal_t. P = nil <-> P.block = block_t.nil
+        axiom nil.qc = cert_t.nil
+        axiom nil.tc = timeout_cert_t.nil
     }
 }
