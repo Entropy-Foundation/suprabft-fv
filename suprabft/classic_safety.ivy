@@ -4,29 +4,44 @@ include domain_model
 include algorithm
 include global_view
 
+# ivy_check trace=true isolate=basic_safety.gv classic_safety.ivy
+
+# ivy_check trace=true isolate=basic_safety.processor classic_safety.ivy
+
+# ivy_check trace=true isolate=basic_safety.global_properties classic_safety.ivy
+
 isolate gv = {
 	instantiate global_view
 
-	invariant forall N:node_t. forall B1:block_t. forall B2:block_t. (is_good(N) & node_has_voted(N,B1) & node_has_voted(N,B2) & B1.round = B2.round) -> B1 = B2
+	invariant forall B1:block_t. forall B2:block_t. forall N:node_t. (is_good(N) & node_has_voted(N,B1) & node_has_voted(N,B2) & B1.round = B2.round) -> B1 = B2
 
 	invariant forall N:node_t. forall B:block_t. node_has_quorum(N,B) -> (exists Q:quorum_t. forall N1:node_t. quorum_t.member(N1, Q) -> node_has_voted(N1, B))
 
 	invariant forall N1:node_t. forall N2:node_t. forall B1:block_t. forall B2:block_t. (is_good(N1) & is_good(N2) & node_has_quorum(N1, B1) & node_has_quorum(N2, B2) & B1.round = B2.round) -> B1 = B2
-} with round_t, block_t, quorum_t, cert_t, net.spec
+} with quorum_t, round_t
 
 isolate basic_safety = {
-	instantiate supraBFT(gv)
 
-	invariant forall N:node_t. forall H:height_t. (is_good(N) & validator(N).blockchain(H) ~= block_t.nil) -> gv.node_has_quorum(N,validator(N).blockchain(H))
+	isolate processor = {
+		instantiate supraBFT(gv)
 
-	invariant [round_safety_statement] forall N1:node_t. forall N2:node_t. forall H1:height_t. forall H2:height_t. (is_good(N1)  & is_good(N2) & validator(N1).blockchain(H1) ~= block_t.nil & validator(N2).blockchain(H2) ~= block_t.nil &validator(N1).blockchain(H1).round = validator(N2).blockchain(H2).round ) -> validator(N1).blockchain(H1) = validator(N2).blockchain(H2)
+		invariant forall Bc:block_t. forall Bp:block_t. (Bc.parent = block_t.hash(Bp)) -> Bp.round < Bc.round # parent must be strictly lesser than the child
+		
+		invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind = msg_kind.prepare) -> gv.node_has_voted(M.src,M.prep)
 
-	invariant forall Bc:block_t. forall Bp:block_t. (Bc.parent = block_t.hash(Bp)) -> Bp.round < Bc.round # parent must be strictly lesser than the child
+		invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind=msg_kind.timeout) -> gv.node_sent_timeout(M.src,M.t)
 
-	invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind = msg_kind.prepare) -> gv.node_has_voted(M.src,M.prep)
-
-	invariant forall M:msg. forall D:node_t. (shim.sent(M,D) & M.kind=msg_kind.timeout) -> gv.node_sent_timeout(M.src,M.t)
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & validator(N).blockchain(H) ~= block_t.nil) -> gv.node_has_quorum(N,validator(N).blockchain(H))
+	} with gv, round_t, height_t, block_t, cert_t, shim, net.spec
 	
-	#invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & validator(N1).blockchain(H) ~= block_t.nil & validator(N2).blockchain(H) ~= block_t.nil) -> validator(N1).blockchain(H) = validator(N2).blockchain(H)
 
+	isolate global_properties = {
+		invariant [round_safety_statement] forall N1:node_t. forall N2:node_t. forall H1:height_t. forall H2:height_t. (is_good(N1)  & is_good(N2) & processor.validator(N1).blockchain(H1) ~= block_t.nil & processor.validator(N2).blockchain(H2) ~= block_t.nil & processor.validator(N1).blockchain(H1).round = processor.validator(N2).blockchain(H2).round ) -> processor.validator(N1).blockchain(H1) = processor.validator(N2).blockchain(H2)
+
+		invariant forall N:node_t. forall B:block_t. (is_good(N) & gv.node_has_voted(N,B)) -> B.parent = block_t.hash(block_t.nil) | exists Bp:block_t. (B.parent = block_t.hash(Bp) & gv.node_has_quorum(N,Bp))
+
+		#invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(0) ~= block_t.nil & processor.validator(N2).blockchain(0) ~= block_t.nil) -> processor.validator(N1).blockchain(0) = processor.validator(N2).blockchain(0)
+
+		#invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(H) ~= block_t.nil & processor.validator(N2).blockchain(H) ~= block_t.nil) -> processor.validator(N1).blockchain(H) = processor.validator(N2).blockchain(H)
+	} with gv, height_t, processor
 } with gv, round_t, height_t, block_t, cert_t, shim, net.spec

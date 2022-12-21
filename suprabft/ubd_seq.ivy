@@ -2,14 +2,73 @@
 
 include order
 
-module ubd_seq =
-{
-    instantiate unbounded_sequence
+module ubd_seq = {
+        
+    type this
+    alias t = this
 
-    object spec1 =
-    {
-        property forall X:t. forall Z:t. succ(X,Z) <-> (X < Z & forall Y:t. ~(X < Y & Y < Z))
+    # returns the least key greater than x
+    action next(x:t) returns (y:t)
 
-        property (succ(X,Z) & succ(Y,Z)) -> X = Y
+    # returns the greatest key less than x
+    action prev(x:t) returns (y:t)
+
+    relation succ(X:t,Y:t)
+
+    definition succ(X,Z) = X < Z & forall Y:t. (X < Y -> (Z < Y | Z = Y))
+
+    function max2(X:t,Y:t) = Y if X <= Y else X
+    function mod(X:this,Y:this) = X - X / Y * Y
+
+    object spec = {
+
+	#property forall X:t. forall Z:t. succ(X,Z) <-> (X < Z & forall Y:t. ~(X < Y & Y < Z))
+
+	instantiate totally_ordered_with_zero(t)
+
+	after next {
+	    assert x < y & (x < Y -> y <= Y);
+	    assert succ(x,y)
+	}
+	before prev {
+	    assert 0 < x
+	}
+	after prev {
+	    assert y < x & (Y < x -> Y <= y);
+	    assert succ(y,x)
+	}
     }
+
+    object impl = {
+
+	interpret t -> nat
+
+	#definition succ(X,Y) = (Y = X + 1)
+
+	implement next {
+	    y := x + 1
+	}
+	implement prev {
+	    y := x - 1
+	}
+    }
+
+    isolate iso = impl,spec
+    
+    # When testing, use the integer implementation.
+
+    attribute test = impl
+
 }
+
+# module ubd_seq =
+# {
+#     instantiate unbounded_sequence
+
+#     object spec1 =
+#     {
+#         property forall X:t. forall Z:t. succ(X,Z) <-> (X < Z & forall Y:t. ~(X < Y & Y < Z))
+
+#         property (succ(X,Z) & succ(Y,Z)) -> X = Y
+#     }
+# }
