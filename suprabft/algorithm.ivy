@@ -322,7 +322,7 @@ object validator(id:node_t) = {
             locked := qc;
             locked_height := hc;
         }
-        call global_view.node_rcvd_quorum(id, qc.block, qc.cert);
+        call global_view.node_rcvd_quorum(id, qc.block, qc.cert, r_c);
         qc_processed(qc) := true;
     }
 
@@ -541,7 +541,7 @@ object validator(id:node_t) = {
                 locked := qc;
                 locked_height := 0;
             }
-            call global_view.node_rcvd_quorum(id,qc.block,qc.cert);
+            call global_view.node_rcvd_quorum(id,qc.block,qc.cert, r_c);
             qc_processed(qc) := true;
         }
     }
