@@ -211,8 +211,9 @@ object validator(id:node_t) = {
             }
             if m.kind = msg_kind.prepare {
                 var r : round_t;
+                var bl: block_t;
                 call shim.send(id, dst, m);
-                call global_view.node_voted(m.src,m.prep,r);
+                call global_view.node_voted(m.src,m.prep,r,bl);
             }
             if m.kind = msg_kind.qc & valid_qc(m.qc) {
                 var ok : bool;
@@ -242,7 +243,7 @@ object validator(id:node_t) = {
 
         if b_r_1 ~= block_t.nil {
             call broadcast_prepare(b_r_1);
-	        call global_view.node_voted(id, b_r_1, r_c);
+	        call global_view.node_voted(id, b_r_1, r_c, locked.block);
 
             voted.block := b_r_1;
         }
@@ -446,9 +447,8 @@ object validator(id:node_t) = {
 
         if ok {
             if some qc2:cert_t. qc_processed(qc2) & block_t.hash(qc2.block) = qc.block.parent {
-                call advanceToRound(round_t.next(qc.block.round), qc.block, qc2, timeout_cert_t.nil);
-            } else {
-                call advanceToRound(round_t.next(qc.block.round), block_t.nil, cert_t.nil, timeout_cert_t.nil);
+                voted.block := qc.block;
+                call advanceToRound(round_t.next(qc.block.round), block_t.nil, qc2, timeout_cert_t.nil);
             }
         }
     }

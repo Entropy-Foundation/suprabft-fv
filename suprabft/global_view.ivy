@@ -3,27 +3,26 @@
 include domain_model
 
 module global_view = {
-	relation node_has_voted_detail(N:node_t, B:block_t, R:round_t) #node N has voted for block B in round R, when it had locked the block Bl
+	relation node_has_voted_detail(N:node_t, B:block_t, R:round_t, Bl:block_t) #node N has voted for block B in round R, when it had locked the block Bl
 	relation node_has_voted(N:node_t, B:block_t)
 	relation node_has_quorum(N:node_t, B:block_t) # node N has received quorum for block B
 	relation node_sent_timeout(N:node_t, T:timeout_t) # node N has sent a timeout message T
 
-	definition node_has_voted(N:node_t, B:block_t) = exists R:round_t. node_has_voted_detail(N,B,R)
+	definition node_has_voted(N:node_t, B:block_t) = exists R:round_t. exists Bl:block_t. node_has_voted_detail(N,B,R,Bl)
 
-	action node_voted(n:node_t, b:block_t, r:round_t)
+	action node_voted(n:node_t, b:block_t, r:round_t, bl:block_t)
 	action node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t)
 	action node_timeout(n:node_t, t:timeout_t)
 
 	after init {
-		node_has_voted_detail(N, B, R) := false;
+		node_has_voted_detail(N, B, R, Bl) := false;
 		node_has_quorum(N, B) := false;
 		node_sent_timeout(N, T) := false;
 	}
 
-	before node_voted(n:node_t, b:block_t, r:round_t) {
+	before node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
 		require is_good(n) -> (forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round);
-		# the condition that n has locked b's parent could not be verified, since the call to advanceToRound from algorithm 5 line 74 violates that property
-		require is_good(n) -> b.parent = block_t.hash(block_t.nil) | (exists B:block_t. (b.parent = block_t.hash(B) & node_has_quorum(n,B)));
+		require is_good(n) -> b.parent = block_t.hash(block_t.nil) | b.parent = block_t.hash(bl);
 		require is_good(n) -> round_t.succ(b.round,r);
 	}
 
@@ -35,8 +34,8 @@ module global_view = {
 		require (t.qc.block ~= block_t.nil & is_good(n)) -> node_has_quorum(n, t.qc.block);
 	}
 
-	implement node_voted(n:node_t, b:block_t, r:round_t) {
-		node_has_voted_detail(n, b, r) := true;
+	implement node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
+		node_has_voted_detail(n, b, r, bl) := true;
 	}
 
 	implement node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t) {
