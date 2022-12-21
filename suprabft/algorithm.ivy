@@ -254,7 +254,6 @@ object validator(id:node_t) = {
         if id = leader(r_c) {
             var pb : block_t;
             pb := b_r_1 if b_r_1 ~= block_t.nil & voted.block = b_r_1 else locked.block;
-            pb := block_t.nil if locked = cert_t.nil else locked.block;
             if tc_r_2 ~= timeout_cert_t.nil {
                 pb := tc_r_2.highestQC.block;
             }
@@ -390,6 +389,17 @@ object validator(id:node_t) = {
         }
     }
 
+    export action timeout_synchronisation(t:timeout_t) = {
+        # f + 1 unique timeout messages -> at least 1 honest timeout message
+        require exists N:node_t. is_good(N) & rcvd_timeout(t, N);
+        # this is bad, but do we really want another data structure storing every timeout message we sent
+        require forall T:timeout_t. T.round = t.round -> ~global_view.node_sent_timeout(id, T);
+        require ~timed_out;
+
+        call timer_expiry;
+        call timeout(t.round);
+    }
+
     export action process_timeoutQC(tc:timeout_cert_t) = {
         require rcvd_tc(tc);
         require r_c > 0;
@@ -418,29 +428,48 @@ object validator(id:node_t) = {
         if ok {
             call advanceToRound(round_t.next(r_c), p.block, p.tc.highestQC, timeout_cert_t.nil)
         }
-
     }
 
     action finished_prepareQC_processing(qc:cert_t) = {
         require rcvd_qc(qc);
+        require exists Qc2:cert_t. qc_processed(Qc2) & block_t.hash(Qc2.block) = qc.block.parent;
 
         var ok := true;
         ok := ok & round_t.next(qc.block.round) > r_c;
         if ok {
+            voted.block := qc.block;
             if some qc2:cert_t. qc_processed(qc2) & block_t.hash(qc2.block) = qc.block.parent {
-                voted.block := qc.block;
                 call advanceToRound(round_t.next(qc.block.round), block_t.nil, qc2, timeout_cert_t.nil);
             }
         }
     }
 
     export action no_proposal = {
+        require exists Qc:cert_t. rcvd_qc(Qc) & locked.block.parent = block_t.hash(Qc.block);
+
         var ok := true;
         ok := ok & timed_out;
         ok := ok & round_t.succ(locked.block.round, r_c);
-
         if ok {
-            call advanceToRound(round_t.next(r_c), block_t.nil, cert_t.nil, timeout_cert_t.nil);
+            if some qc:cert_t. rcvd_qc(qc) & locked.block.parent = block_t.hash(qc.block) {
+                call advanceToRound(round_t.next(r_c), block_t.nil, qc, timeout_cert_t.nil);
+            }
+        }
+    }
+
+    export action leader_failed(p:proposal_t) = {
+        require rcvd_proposal(p, leader(r_c));
+        require p.qc ~= cert_t.nil;
+        require p.tc = timeout_cert_t.nil;
+        require r_c > 0;
+
+        var ok := true;
+        ok := ok & p.block.round = r_c;
+        ok := ok & voted.block.round < round_t.prev(r_c);
+        ok := ok & block_t.hash(p.qc.block) = locked.block.parent;
+        ok := ok & p.block.parent = block_t.hash(locked.block);
+        if ok {
+            call advanceToRound(round_t.next(r_c), p.block, locked, timeout_cert_t.nil);
         }
     }
 
