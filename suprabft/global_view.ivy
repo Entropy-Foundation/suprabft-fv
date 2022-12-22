@@ -27,6 +27,7 @@ module global_view = {
 	before node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
 		require is_good(n) -> (forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round);
 		require is_good(n) -> b.parent = block_t.hash(bl);
+		require (is_good(n) & bl ~= block_t.nil) -> node_has_quorum(n,bl);
 		require is_good(n) -> round_t.succ(b.round,r);
 	}
 
