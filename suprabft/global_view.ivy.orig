@@ -1,0 +1,34 @@
+#lang ivy1.8
+
+include domain_model
+
+<<<<<<< HEAD
+module global_view = {
+	relation node_has_voted(N:node_t, B:block_t) #node N has voted for block B
+	relation node_has_locked(N:node_t, B:block_t) # node N has locked block B
+
+	action node_voted(n:node_t, b:block_t)
+	action node_locked(n:node_t, b:block_t, q:quorum_t)
+=======
+isolate gv = {
+	relation node_has_voted(N:node_t, B:block_t)
+	relation node_has_locked(N:node_t, B:block_t)
+>>>>>>> 956e586556c6b6a37c65def4779d95f71cd550de
+
+	after init {
+		node_has_voted(N, B) := false;
+		node_has_locked(N, B) := false;
+	}
+
+	action node_voted(n:node_t, b:block_t) = {
+		require forall B:block_t. node_has_voted(n, B) -> b.round > B.round;
+
+		node_has_voted(n, b) := true;
+	}
+
+	action node_locked(n:node_t, b:block_t, q:quorum_t) = {
+		require forall N:node_t. quorum_t.member(N, q) -> node_has_voted(N, b);
+
+		node_has_locked(n, b) := true;
+	}
+}

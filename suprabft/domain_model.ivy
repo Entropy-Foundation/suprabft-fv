@@ -25,7 +25,6 @@ isolate block_t = {
     action consBlock(p:hash_t, r:round_t, n:node_t) returns (b:block_t)
 
     specification {
-	    axiom forall B:block_t. B ~= nil <-> B.round ~= nil.round
         axiom forall B:block_t. B = nil <-> B.parent = hash_t.nil
 
         axiom hash(X) = hash(Y) -> X = Y
