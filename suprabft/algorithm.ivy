@@ -29,7 +29,7 @@ object validator(id:node_t) = {
     definition valid_qc(Q:cert_t) = forall N:node_t. quorum_t.member(N,Q.cert) -> global_view.node_has_voted(N, Q.block)
 
     function valid_tc(Tc:timeout_cert_t) : bool
-    definition valid_tc(Tc:timeout_cert_t) = (forall N:node_t. quorum_t.member(N, Tc.cert) -> exists T:timeout_t. T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC.round >= T.qc.round) & (exists N:node_t. exists T:timeout_t. quorum_t.member(N, Tc.cert) & T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC = T.qc)
+    definition valid_tc(Tc:timeout_cert_t) = (forall N:node_t. quorum_t.member(N, Tc.cert) -> exists T:timeout_t. T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC.round >= T.qc.round) & (exists N:node_t. exists T:timeout_t. quorum_t.member(N, Tc.cert) & T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC = T.qc) & valid_qc(Tc.highestQC)
 
     relation forest_store(Qc:cert_t,H:height_t)
     relation forest_ancestor(Qd:cert_t,Hd:height_t,Qa:cert_t,Ha:height_t) #Qa is an ancestor of Qd
@@ -432,7 +432,6 @@ object validator(id:node_t) = {
         ok := ok & p.block.round = r_c;
         ok := ok & ~timed_out;
         ok := ok & p.tc.round = round_t.prev(round_t.prev(p.block.round));
-        ok := ok & valid_qc(p.tc.highestQC);
         ok := ok & p.block.parent = block_t.hash(p.tc.highestQC.block);
         ok := ok & p.block.parent = block_t.hash(locked.block);
         if ok {
