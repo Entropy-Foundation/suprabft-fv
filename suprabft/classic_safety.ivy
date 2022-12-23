@@ -67,15 +67,19 @@ isolate basic_safety = {
     	invariant forall N:node_t. forall Qd:cert_t. forall Hd,Ha,Hi:height_t. (is_good(N) & processor.validator(N).forest_heights(Qd,Hd,Ha) & Ha <= Hi & Hi <= Hd) -> processor.validator(N).forest_heights(Qd,Hd,Hi)
 
     	invariant forall Hd,Hi,Ha:height_t. (Hd = Ha & Ha <= Hi & Hi <= Hd) -> Hi = Hd
-	} with processor, round_t, height_t
+	} with gv,processor, round_t, height_t
 
 	isolate ldc_properties = {
 		relation ldc(N:node_t, B:block_t)
 
 		definition ldc(N:node_t, B:block_t) = processor.validator(N).locked.block = B & exists Bc:block_t. (Bc.parent = block_t.hash(B) & round_t.succ(B.round,Bc.round) & gv.node_has_quorum(N,Bc))
 
+		invariant forall N:node_t. forall B:block_t. forall R:round_t. gv.node_has_quorum_detail(N,B,R) -> R <= processor.validator(N).r_c
+
+		invariant forall N:node_t. forall B:block_t. forall Bp:block_t. forall R:round_t. (is_good(N) & gv.node_has_voted_detail(N,B,R,Bp) & B.parent ~= block_t.hash(block_t.nil)) -> (exists Rl:round_t. Rl <= R & gv.node_has_quorum_detail(N,Bp,Rl))
+
 		#invariant forall B:block_t. forall N:node_t. (B ~= block_t.nil & gv.node_has_quorum(N,B) & is_good(N)) -> gdc_properties1.gdc(B)
-	} with processor, round_t, gv, gdc_properties1
+	} with processor, round_t, gv
 
 
 	isolate global_properties = {
