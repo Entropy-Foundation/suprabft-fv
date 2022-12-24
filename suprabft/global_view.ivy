@@ -26,6 +26,10 @@ module global_view = {
 		node_has_locked_detail(N, B, R) := false;
 		node_has_locked(N,B) := false;
 		node_sent_timeout(N, T) := false;
+
+        assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
+
+        assume forall B:block_t. B.round = round_t.next(0) if B ~= block_t.nil else 0;
 	}
 
 	before node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
