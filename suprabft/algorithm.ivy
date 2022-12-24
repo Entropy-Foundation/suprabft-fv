@@ -317,6 +317,7 @@ object validator(id:node_t) = {
         if locked.block.round < qc.block.round {
             locked := qc;
             locked_height := hc;
+            call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
         }
     }
 
@@ -327,7 +328,7 @@ object validator(id:node_t) = {
         ok := ok & qc.block.parent ~= block_t.hash(block_t.nil);
         ok := ok & forall H:height_t. blockchain(H) ~= qc.block;
         ok := ok & forall Q:cert_t. forall H:height_t. forest_store(Q,H) -> Q.block ~= qc.block;
-        ok := ok & forall H:height_t. ~forest_store(qc, H);
+        ok := ok & forall Q:cert_t. qc_processed(Q) -> Q.block ~= qc.block;
         if ok {
             if some h:height_t. height_t.succ(h, chain_size) & qc.block.parent = block_t.hash(blockchain(h)) {
                 # this qc is a candidate for the child of the last committed block on the chain. start a new tree in the forest
@@ -336,7 +337,6 @@ object validator(id:node_t) = {
                 call broadcast_qc(qc);
                 call tryLockAndCommit(qc,chain_size);
                 call finished_prepareQC_processing(qc);
-                call global_view.node_rcvd_quorum(id, qc.block, qc.cert, r_c);
                 qc_processed(qc) := true;
             } else {
                 if some qp:cert_t. exists Hp:height_t. forest_store(qp, Hp) & qc.block.parent = block_t.hash(qp.block){
@@ -350,7 +350,6 @@ object validator(id:node_t) = {
                         call broadcast_qc(qc);
                         call tryLockAndCommit(qc,height_t.next(hp));
                         call finished_prepareQC_processing(qc);
-                        call global_view.node_rcvd_quorum(id, qc.block, qc.cert, r_c);
                         qc_processed(qc) := true;
                     }
                 } else {
@@ -553,7 +552,7 @@ object validator(id:node_t) = {
         ok := ok & qc.block.parent = block_t.hash(block_t.nil);
         ok := ok & qc.block ~= block_t.nil;
         ok := ok & (locked = cert_t.nil | (locked.block.parent = block_t.hash(block_t.nil) & qc.block.round > locked.block.round));
-        ok := ok & forall H:height_t. forall Q:cert_t. forest_store(Q,H) -> Q.block ~= qc.block;
+        ok := ok & forall Q:cert_t. qc_processed(Q) -> Q.block ~= qc.block;
         if ok {
             call broadcast_qc(qc);
             locked := qc;
@@ -561,7 +560,7 @@ object validator(id:node_t) = {
             forest_store(qc,0) := true;
             forest_ancestor(qc,0,qc,0) := true;
             call finished_prepareQC_processing(qc);
-            call global_view.node_rcvd_quorum(id,qc.block,qc.cert, r_c);
+            call global_view.node_locked_quorum(id,qc.block,qc.cert, r_c);
             qc_processed(qc) := true;
         }
     }
@@ -592,9 +591,9 @@ object validator(id:node_t) = {
 
     invariant (is_good(id) & locked.block ~= block_t.nil) -> locked.block.round < r_c
 
-    invariant forall Q:cert_t. (is_good(id) & qc_processed(Q)) -> global_view.node_has_quorum(id,Q.block)
+	invariant (locked.block ~= block_t.nil & is_good(id)) -> (exists Rl:round_t. Rl <= r_c & global_view.node_has_locked_detail(id, locked.block,Rl))
 
-	invariant (locked.block ~= block_t.nil & is_good(id)) -> global_view.node_has_quorum(id, locked.block)
+	invariant (locked.block ~= block_t.nil & is_good(id)) -> (global_view.node_has_locked(id, locked.block))
 
     invariant ((locked = cert_t.nil | locked.block.parent = block_t.hash(block_t.nil)) & is_good(id)) -> chain_size=0
 
@@ -606,7 +605,7 @@ object validator(id:node_t) = {
 
     invariant (locked ~= cert_t.nil & is_good(id)) -> forest_store(locked,locked_height)
 
-    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id))  -> (rcvd_qc(Q) & gv.node_has_quorum(id,Q.block) & forest_ancestor(Q,H,Q,H) & Q.block ~= block_t.nil & qc_processed(Q))
+    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id))  -> (rcvd_qc(Q) & forest_ancestor(Q,H,Q,H) & Q.block ~= block_t.nil & qc_processed(Q))
 
     invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_ancestor(Qd,Hd,Qa,Ha) & is_good(id)) -> (forest_store(Qd,Hd) & forest_store(Qa,Ha))
 

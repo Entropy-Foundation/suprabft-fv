@@ -7,36 +7,41 @@ module global_view = {
 
 	relation node_has_voted(N:node_t, B:block_t)
 
-	relation node_has_quorum_detail(N:node_t, B:block_t, R:round_t)
-	relation node_has_quorum(N:node_t, B:block_t) # node N has received quorum for block B
+	relation node_has_locked_detail(N:node_t, B:block_t, R:round_t)
+	relation node_has_locked(N:node_t, B:block_t) # node N has received quorum for block B
 
 	relation node_sent_timeout(N:node_t, T:timeout_t) # node N has sent a timeout message T
 
+	relation node_has_locked_recently(N:node_t, B:block_t, R:round_t)
+
+	definition node_has_locked_recently(N:node_t, B:block_t, R:round_t) = exists Rl:round_t. forall Rs:round_t. forall Br:block_t. (Rl < R & gv.node_has_locked_detail(N,B,Rl) & ((Rl < Rs & Rs < R) -> ~gv.node_has_locked_detail(N,Br,Rs)))
+
 	action node_voted(n:node_t, b:block_t, r:round_t, bl:block_t)
-	action node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t)
+	action node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t)
 	action node_timeout(n:node_t, t:timeout_t)
 
 	after init {
 		node_has_voted_detail(N, B, R, Bl) := false;
 		node_has_voted(N,B) := false;
-		node_has_quorum_detail(N, B, R) := false;
-		node_has_quorum(N,B) := false;
+		node_has_locked_detail(N, B, R) := false;
+		node_has_locked(N,B) := false;
 		node_sent_timeout(N, T) := false;
 	}
 
 	before node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
 		require is_good(n) -> (forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round);
 		require is_good(n) -> b.parent = block_t.hash(bl);
-		require (is_good(n) & bl ~= block_t.nil) -> node_has_quorum(n,bl);
+		require (is_good(n) & bl ~= block_t.nil) -> node_has_locked_recently(n,bl,r);
 		require is_good(n) -> round_t.succ(b.round,r);
 	}
 
-	before node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
+	before node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
 		require forall N:node_t. quorum_t.member(N, q) -> node_has_voted(N, b);
+		require ~is_good(n) | forall Rs:round_t. forall B1,B2:block_t. r < Rs -> ~node_has_voted_detail(n,B1,Rs,B2);
 	}
 
 	before node_timeout(n:node_t, t:timeout_t) {
-		require (t.qc.block ~= block_t.nil & is_good(n)) -> node_has_quorum(n, t.qc.block);
+		require (t.qc.block ~= block_t.nil & is_good(n)) -> node_has_locked(n, t.qc.block);
 	}
 
 	implement node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
@@ -44,9 +49,9 @@ module global_view = {
 		node_has_voted(n,b) := true;
 	}
 
-	implement node_rcvd_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
-		node_has_quorum_detail(n, b, r) := true;
-		node_has_quorum(n,b) := true;
+	implement node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
+		node_has_locked_detail(n, b, r) := true;
+		node_has_locked(n,b) := true;
 	}
 
 	implement node_timeout(n:node_t, t:timeout_t) {
