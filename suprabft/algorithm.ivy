@@ -317,7 +317,6 @@ object validator(id:node_t) = {
         if locked.block.round < qc.block.round {
             locked := qc;
             locked_height := hc;
-            call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
         }
     }
 
@@ -337,7 +336,12 @@ object validator(id:node_t) = {
                 call broadcast_qc(qc);
                 call tryLockAndCommit(qc,chain_size);
                 call finished_prepareQC_processing(qc);
+                if locked = qc {
+                    assert ~is_good(id) | qc.block.round < r_c;
+                    call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
+                }
                 qc_processed(qc) := true;
+                call global_view.node_processed_qc(id,qc);
             } else {
                 if some qp:cert_t. exists Hp:height_t. forest_store(qp, Hp) & qc.block.parent = block_t.hash(qp.block){
                     # this qc is a candidate for the child of qp, which is in the forest at height Hp
@@ -350,7 +354,12 @@ object validator(id:node_t) = {
                         call broadcast_qc(qc);
                         call tryLockAndCommit(qc,height_t.next(hp));
                         call finished_prepareQC_processing(qc);
+                        if locked = qc {
+                            assert ~is_good(id) | qc.block.round < r_c;
+                            call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
+                        }
                         qc_processed(qc) := true;
+                        call global_view.node_processed_qc(id,qc);
                     }
                 } else {
                     #wait for ancestor QCs
@@ -450,7 +459,6 @@ object validator(id:node_t) = {
         if ok {
             voted.block := qc.block;
             if some qc2:cert_t. qc_processed(qc2) & block_t.hash(qc2.block) = qc.block.parent {
-                #r_c := round_t.next(qc.block.round);
                 call advanceToRound(round_t.next(qc.block.round), block_t.nil, qc2, timeout_cert_t.nil);
             }
             else {
@@ -560,8 +568,10 @@ object validator(id:node_t) = {
             forest_store(qc,0) := true;
             forest_ancestor(qc,0,qc,0) := true;
             call finished_prepareQC_processing(qc);
+            assert qc.block.round < r_c;
             call global_view.node_locked_quorum(id,qc.block,qc.cert, r_c);
             qc_processed(qc) := true;
+            call global_view.node_processed_qc(id,qc);
         }
     }
 
