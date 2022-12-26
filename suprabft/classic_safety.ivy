@@ -43,7 +43,7 @@ isolate gdc_properties = {
 
 	relation gdc(B:block_t)
 
-	definition gdc(B:block_t) = exists Q:quorum_t. exists R:round_t. (round_t.succ(B.round,R) & (forall N:node_t. (quorum_t.member(N,Q)) -> gv.node_has_locked_detail(N,B,R)))
+	definition gdc(B:block_t) = exists Q:quorum_t. exists R:round_t. (round_t.succ(B.round,R) & (forall N:node_t. (quorum_t.member(N,Q) & is_good(N)) -> gv.node_has_locked_detail(N,B,R)))
 
 	invariant forall Bc:block_t. forall Bp:block_t. Bc.parent = block_t.hash(Bp) -> Bp.round < Bc.round
 
@@ -54,10 +54,36 @@ isolate gdc_properties = {
 	}
 
 	invariant forall N:node_t. forall B:block_t. forall R:round_t. (is_good(N) & gv.node_has_locked_detail(N,B,R)) -> B.round < R
+
+	private {
+		invariant forall N:node_t. forall B:block_t. (is_good(N) & gv.node_has_voted(N,B)) -> exists R:round_t. exists Bp:block_t. (gv.node_has_voted_detail(N,B,R,Bp) & round_t.succ(B.round,R) & B.parent = block_t.hash(Bp))
+	}
+
+	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & is_good(N) & B ~= block_t.nil) -> (exists Q:quorum_t. exists R:round_t. round_t.succ(B.round,R) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (gv.node_has_voted_detail(N1,B,R,Bp) & is_good(N1))))
+
 	############# starting experimentation from here
+} with gv, quorum_t, round_t, block_t
+
+isolate gdc_properties2 = {
+	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp)) -> (exists Q:quorum_t. exists R:round_t. round_t.succ(B.round,R) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (Bp = block_t.nil | gv.node_has_locked_recently(N1,Bp,R))))
+
+} with gv, quorum_t, round_t, block_t, gdc_properties
+
+isolate gdc_properties3 = {
+	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp)) -> (exists Q:quorum_t. forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (Bp = block_t.nil | (exists Rp:round_t. gv.node_has_locked_detail(N1,Bp,Rp) & Bp.round < Rp & Rp <= B.round))))
+
+	#invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round)) -> (exists Q:quorum_t. forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (Bp = block_t.nil | (exists Rp:round_t. (round_t.succ(Bp.round, Rp) & gv.node_has_locked_detail(N1,Bp,Rp))))))
+
+	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round)) -> (exists Q:quorum_t. exists Rp:round_t. (round_t.succ(Bp.round, Rp) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (Bp = block_t.nil |  gv.node_has_locked_detail(N1,Bp,Rp)))))
+
+	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round) & Bp ~= block_t.nil) -> gdc_properties.gdc(Bp)
+
+	invariant forall B:block_t. forall Bp:block_t. forall N:node_t. (is_good(N) & gv.node_has_locked(N,B) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round) & Bp ~= block_t.nil) -> gdc_properties.gdc(Bp)
+
+	#invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round)) -> (exists Q:quorum_t. exists R:round_t. round_t.succ(Bp.round,R) & forall N1:node_t. (quorum_t.member(N1,Q) -> (Bp = block_t.nil | gv.node_has_locked_detail(N1,Bp,R))))
 
 	#invariant forall B:block_t. forall Bc:block_t. forall N:node_t. (B ~= block_t.nil & Bc.parent ~= block_t.hash(block_t.nil) & Bc.parent = block_t.hash(B) & gv.node_has_locked(N,Bc) & is_good(N) & round_t.succ(B.round,Bc.round)) -> gdc(B)
-} with gv, quorum_t, round_t, block_t
+} with gv, quorum_t, round_t, block_t, gdc_properties, gdc_properties2
 
 isolate basic_safety = {
 
@@ -92,9 +118,9 @@ isolate basic_safety = {
 	} with gv,processor, round_t, height_t
 
 	isolate ldc_properties = {
-		relation ldc(N:node_t, B:block_t)
+		relation ldc(N:node_t, Bp:block_t, Bc:block_t)
 
-		definition ldc(N:node_t, B:block_t) = gv.node_has_locked(N,B) & exists Bc:block_t. (Bc.parent = block_t.hash(B) & round_t.succ(B.round,Bc.round) & gv.node_has_locked(N,Bc))
+		definition ldc(N:node_t, Bp:block_t, Bc:block_t) = gv.node_has_locked(N,Bp) & Bc.parent = block_t.hash(Bp) & round_t.succ(Bp.round,Bc.round) & gv.node_has_locked(N,Bc)
 
 		invariant forall N:node_t. forall B:block_t. forall R:round_t. gv.node_has_locked_detail(N,B,R) -> R <= processor.validator(N).r_c
 
@@ -106,9 +132,24 @@ isolate basic_safety = {
 
 		########### starting experimentation from here
 
-		#invariant forall N:node_t. forall B:block_t. forall Bp:block_t. forall R:round_t. (is_good(N) & gv.node_has_voted_detail(N,B,R,Bp) & B.parent ~= block_t.hash(block_t.nil)) -> (exists Rl:round_t. Rl <= R & gv.node_has_locked_detail(N,Bp,Rl))
+	} with processor, round_t, gv, cert_t, gdc_properties, gdc_properties2, gdc_properties3
 
-	} with processor, round_t, gv, cert_t, gdc_properties
+	isolate ldc_properties2 = {
+		relation gdc_req(N:node_t, Bp:block_t, Bc:block_t)
+
+		definition gdc_req(N:node_t, Bp:block_t, Bc:block_t) = gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & round_t.succ(Bp.round,Bc.round) & Bp ~= block_t.nil & is_good(N)
+
+		invariant forall Bp:block_t. forall Bc:block_t. forall N:node_t. (Bp ~= block_t.nil & ldc_properties.ldc(N,Bp,Bc) & is_good(N)) -> gdc_req(N,Bp,Bc)
+
+		invariant forall Bp:block_t. forall Bc:block_t. forall N:node_t. gdc_req(N,Bp,Bc) -> gdc_properties.gdc(Bp)
+
+	} with processor, round_t, gv, cert_t, gdc_properties, gdc_properties3, ldc_properties
+
+	isolate ldc_properties3 = {
+		invariant forall Bp:block_t. forall Bc:block_t. forall N:node_t. (Bp ~= block_t.nil & ldc_properties.ldc(N,Bp,Bc) & is_good(N)) -> gdc_properties.gdc(Bp)
+
+		#invariant forall N:node_t. forall B:block_t. forall Bp:block_t. forall R:round_t. (is_good(N) & gv.node_has_voted_detail(N,B,R,Bp) & B.parent ~= block_t.hash(block_t.nil)) -> (exists Rl:round_t. Rl <= R & gv.node_has_locked_detail(N,Bp,Rl))		
+	} with processor, round_t, gv, cert_t, gdc_properties, gdc_properties3, gdc_properties2, ldc_properties, ldc_properties2
 
 	isolate global_properties = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (processor.validator(N).qc_processed(Q) & Q.block = processor.validator(N).blockchain(H))
@@ -117,9 +158,7 @@ isolate basic_safety = {
 
 		invariant forall N:node_t. forall B:block_t. (is_good(N) & gv.node_has_voted(N,B)) -> B.parent = block_t.hash(block_t.nil) | exists Bp:block_t. (B.parent = block_t.hash(Bp) & gv.node_has_locked(N,Bp))
 
-		invariant forall B:block_t. forall N:node_t. (B ~= block_t.nil & is_good(N) & ldc_properties.ldc(N,B)) -> gv.node_has_locked(N,B)
-
-		#invariant forall B:block_t. forall N:node_t. (B ~= block_t.nil & is_good(N) & ldc_properties.ldc(N,B)) -> gdc_properties1.gdc(B) # Lemma 2 LDC -> GDC
+		#invariant forall B:block_t. forall N:node_t. (B ~= block_t.nil & is_good(N) & ldc_properties.ldc(N,B)) -> gdc_properties.gdc(B) # Lemma 2 LDC -> GDC
 
 		#invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(0) ~= block_t.nil & processor.validator(N2).blockchain(0) ~= block_t.nil) -> processor.validator(N1).blockchain(0) = processor.validator(N2).blockchain(0)
 
@@ -127,4 +166,4 @@ isolate basic_safety = {
 
 		########### starting experimentation from here
 	} with gv, height_t, processor, ldc_properties, round_t, block_t
-} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties1, gdc_properties2
+} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties, gdc_properties2
