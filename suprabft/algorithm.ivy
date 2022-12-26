@@ -59,6 +59,9 @@ object validator(id:node_t) = {
     individual chain_size_2cc : height_t
     individual dc_basis_qc : cert_t
     individual dc_basis_hc : height_t
+    individual dc_basis_block : block_t
+    individual dc_basis_parent : hash_t
+    individual dc_basis_round : round_t
 
     individual locked_height : height_t
 
@@ -90,7 +93,10 @@ object validator(id:node_t) = {
         commit_candidates(Q,H) := false;
         chain_size_2cc := 0;
         dc_basis_qc := cert_t.nil;
+        dc_basis_block := block_t.nil;
         dc_basis_hc := 0;
+        dc_basis_parent := block_t.nil.parent;
+        dc_basis_round := block_t.nil.round;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -285,6 +291,7 @@ object validator(id:node_t) = {
             chain_size_2cc := chain_size;
             dc_basis_qc := qc;
             dc_basis_hc := hc;
+            dc_basis_block := qc.block;
 
             blockchain(H) := *;
             assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
