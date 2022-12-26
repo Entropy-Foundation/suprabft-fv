@@ -18,6 +18,9 @@ module global_view = {
 
 	relation node_has_processed_qc(N:node_t, Qc:cert_t)
 
+	relation quorum_of_votes(Bc:block_t, Bp:block_t)
+	relation quorum_of_recent_locks(Bp:block_t, R:round_t)
+
 	action node_voted(n:node_t, b:block_t, r:round_t, bl:block_t)
 	action node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t)
 	action node_timeout(n:node_t, t:timeout_t)
@@ -30,6 +33,8 @@ module global_view = {
 		node_has_locked(N,B) := false;
 		node_sent_timeout(N, T) := false;
 		node_has_processed_qc(N,Q) := false;
+		quorum_of_votes(Bc, Bp) := false;
+		quorum_of_recent_locks(B,R) := false;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -60,11 +65,17 @@ module global_view = {
 	implement node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
 		node_has_voted_detail(n, b, r, bl) := true;
 		node_has_voted(n,b) := true;
+
+		if (exists Q:quorum_t. exists R:round_t. round_t.succ(b.round,R) &  b.parent=block_t.hash(bl) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (gv.node_has_voted_detail(N1,b,R,bl))))
+		{
+			quorum_of_votes(b,bl) := true;
+		}
 	}
 
 	implement node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
 		node_has_locked_detail(n, b, r) := true;
 		node_has_locked(n,b) := true;
+		quorum_of_recent_locks(B,R) := exists Q:quorum_t. forall N:node_t. ((quorum_t.member(N,Q) & is_good(N)) -> node_has_locked_recently(N,B,R))
 	}
 
 	implement node_timeout(n:node_t, t:timeout_t) {
