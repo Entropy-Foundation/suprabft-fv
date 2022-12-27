@@ -58,10 +58,11 @@ object validator(id:node_t) = {
     # this is used to store the chain_size at which 2-chain commit is executed. It is used to write supporting invariants
     individual chain_size_2cc : height_t
     individual dc_basis_qc : cert_t
-    individual dc_basis_hc : height_t
     individual dc_basis_block : block_t
-    individual dc_basis_parent : hash_t
-    individual dc_basis_round : round_t
+    individual tip_of_chain_qc : cert_t
+    individual tip_of_chain_height : height_t
+    individual qc_added : cert_t
+    individual qc_added_height : height_t
 
     individual locked_height : height_t
 
@@ -94,9 +95,8 @@ object validator(id:node_t) = {
         chain_size_2cc := 0;
         dc_basis_qc := cert_t.nil;
         dc_basis_block := block_t.nil;
-        dc_basis_hc := 0;
-        dc_basis_parent := block_t.nil.parent;
-        dc_basis_round := block_t.nil.round;
+        tip_of_chain_qc := cert_t.nil;
+        tip_of_chain_height := 0;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -290,8 +290,9 @@ object validator(id:node_t) = {
 
             chain_size_2cc := chain_size;
             dc_basis_qc := qc;
-            dc_basis_hc := hc;
             dc_basis_block := qc.block;
+            tip_of_chain_qc := locked;
+            tip_of_chain_height := locked_height;
 
             blockchain(H) := *;
             assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
@@ -348,6 +349,8 @@ object validator(id:node_t) = {
                     call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
                 }
                 qc_processed(qc) := true;
+                qc_added := qc;
+                qc_added_height := chain_size;
                 call global_view.node_processed_qc(id,qc);
             } else {
                 if some qp:cert_t. exists Hp:height_t. forest_store(qp, Hp) & qc.block.parent = block_t.hash(qp.block){
@@ -366,6 +369,8 @@ object validator(id:node_t) = {
                             call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
                         }
                         qc_processed(qc) := true;
+                        qc_added := qc;
+                        qc_added_height := chain_size;
                         call global_view.node_processed_qc(id,qc);
                     }
                 } else {

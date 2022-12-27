@@ -132,7 +132,17 @@ isolate basic_safety = {
 
 		########### starting experimentation from here
 
-		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H,processor.validator(N).chain_size)) -> round_t.succ(processor.validator(N).blockchain(H).round,processor.validator(N).dc_basis_qc.block.round)
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H,processor.validator(N).chain_size)) -> (gv.node_has_locked(N,processor.validator(N).tip_of_chain_qc.block) & round_t.succ(processor.validator(N).tip_of_chain_qc.block.round, processor.validator(N).dc_basis_block.round) & processor.validator(N).dc_basis_block.parent = block_t.hash(processor.validator(N).tip_of_chain_qc.block))
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).locked ~= cert_t.nil) -> processor.validator(N).forest_leaf(processor.validator(N).locked, processor.validator(N).locked_height)
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> processor.validator(N).commit_candidates(processor.validator(N).tip_of_chain_qc,processor.validator(N).tip_of_chain_height)
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> (processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height) = processor.validator(N).tip_of_chain_qc.block & processor.validator(N).dc_basis_block.parent = block_t.hash(processor.validator(N).tip_of_chain_qc.block) & round_t.succ(processor.validator(N).tip_of_chain_qc.block.round, processor.validator(N).dc_basis_block.round))
+
+		#invariant forall N:node_t. (is_good(N) & processor.validator(N).dc_basis_qc ~= cert_t.nil) -> processor.validator(N).forest_root(processor.validator(N).dc_basis_qc,processor.validator(N).chain_size)
+
+		#invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H,processor.validator(N).chain_size)) -> round_t.succ(processor.validator(N).blockchain(H).round,processor.validator(N).dc_basis_qc.block.round)
 		
 		invariant forall N:node_t. (is_good(N) & processor.validator(N).dc_basis_qc ~= cert_t.nil) -> gv.node_has_locked(N,processor.validator(N).dc_basis_block)
 
