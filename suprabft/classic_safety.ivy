@@ -130,34 +130,30 @@ isolate basic_safety = {
 
 		invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & ldc(N,Bp,B) & Bp ~= block_t.nil)) -> gdc_properties.gdc(Bp)
 
-		########### starting experimentation from here
-
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H,processor.validator(N).chain_size)) -> (gv.node_has_locked(N,processor.validator(N).tip_of_chain_qc.block) & round_t.succ(processor.validator(N).tip_of_chain_qc.block.round, processor.validator(N).dc_basis_block.round) & processor.validator(N).dc_basis_block.parent = block_t.hash(processor.validator(N).tip_of_chain_qc.block))
 
 		invariant forall N:node_t. (is_good(N) & processor.validator(N).locked ~= cert_t.nil) -> processor.validator(N).forest_leaf(processor.validator(N).locked, processor.validator(N).locked_height)
 
-		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> processor.validator(N).commit_candidates(processor.validator(N).tip_of_chain_qc,processor.validator(N).tip_of_chain_height)
-
-		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> (processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height) = processor.validator(N).tip_of_chain_qc.block & processor.validator(N).dc_basis_block.parent = block_t.hash(processor.validator(N).tip_of_chain_qc.block) & round_t.succ(processor.validator(N).tip_of_chain_qc.block.round, processor.validator(N).dc_basis_block.round))
-
-		#invariant forall N:node_t. (is_good(N) & processor.validator(N).dc_basis_qc ~= cert_t.nil) -> processor.validator(N).forest_root(processor.validator(N).dc_basis_qc,processor.validator(N).chain_size)
-
-		#invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H,processor.validator(N).chain_size)) -> round_t.succ(processor.validator(N).blockchain(H).round,processor.validator(N).dc_basis_qc.block.round)
-		
 		invariant forall N:node_t. (is_good(N) & processor.validator(N).dc_basis_qc ~= cert_t.nil) -> gv.node_has_locked(N,processor.validator(N).dc_basis_block)
-
-		invariant forall N:node_t. processor.validator(N).dc_basis_qc.block = processor.validator(N).dc_basis_block
 
 		relation ldc_x(N:node_t, Bp:block_t, Bc:block_t)
 
 		definition ldc_x(N,Bp:block_t,Bc:block_t) = Bc.parent = block_t.hash(Bp) & gv.node_has_locked(N,Bc) & Bp.round < Bc.round & forall Rp:round_t. (Bp.round < Rp -> Bc.round <= Rp)
 
 		invariant forall N:node_t. forall Bp:block_t. forall Bc:block_t. ldc(N,Bp,Bc) <-> ldc_x(N,Bp,Bc)
+		
+		invariant forall N:node_t. (is_good(N)) -> processor.validator(N).qp_when_adding_qc = processor.validator(N).tip_of_chain_qc
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> processor.validator(N).commit_candidates(processor.validator(N).tip_of_chain_qc,processor.validator(N).tip_of_chain_height)
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).tip_of_chain_qc ~= cert_t.nil) -> (processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height) = processor.validator(N).tip_of_chain_qc.block & processor.validator(N).dc_basis_block.parent = block_t.hash(processor.validator(N).tip_of_chain_qc.block) & round_t.succ(processor.validator(N).tip_of_chain_qc.block.round, processor.validator(N).dc_basis_block.round))
 
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H, processor.validator(N).chain_size)) -> ldc_x(N,processor.validator(N).blockchain(H),processor.validator(N).dc_basis_block)
 
-	} with processor, round_t, gv, cert_t, gdc_properties2, height_t
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H, processor.validator(N).chain_size)) -> gdc_properties.gdc(processor.validator(N).blockchain(H))
 
+		########### starting experimentation from here
+	} with processor, round_t, gv, cert_t, gdc_properties2, height_t, block_t
 
 	isolate global_properties = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (processor.validator(N).qc_processed(Q) & Q.block = processor.validator(N).blockchain(H))
@@ -166,12 +162,9 @@ isolate basic_safety = {
 
 		invariant forall N:node_t. forall B:block_t. (is_good(N) & gv.node_has_voted(N,B)) -> B.parent = block_t.hash(block_t.nil) | exists Bp:block_t. (B.parent = block_t.hash(Bp) & gv.node_has_locked(N,Bp))
 
-		#invariant forall B:block_t. forall N:node_t. (B ~= block_t.nil & is_good(N) & ldc_properties.ldc(N,B)) -> gdc_properties.gdc(B) # Lemma 2 LDC -> GDC
-
+		########### starting experimentation from here
 		#invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(0) ~= block_t.nil & processor.validator(N2).blockchain(0) ~= block_t.nil) -> processor.validator(N1).blockchain(0) = processor.validator(N2).blockchain(0)
 
 		#invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(H) ~= block_t.nil & processor.validator(N2).blockchain(H) ~= block_t.nil) -> processor.validator(N1).blockchain(H) = processor.validator(N2).blockchain(H)
-
-		########### starting experimentation from here
 	} with gv, height_t, processor, ldc_properties, round_t, block_t
 } with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties, gdc_properties2

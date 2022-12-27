@@ -61,8 +61,7 @@ object validator(id:node_t) = {
     individual dc_basis_block : block_t
     individual tip_of_chain_qc : cert_t
     individual tip_of_chain_height : height_t
-    individual qc_added : cert_t
-    individual qc_added_height : height_t
+    individual qp_when_adding_qc : cert_t
 
     individual locked_height : height_t
 
@@ -97,6 +96,7 @@ object validator(id:node_t) = {
         dc_basis_block := block_t.nil;
         tip_of_chain_qc := cert_t.nil;
         tip_of_chain_height := 0;
+        qp_when_adding_qc := cert_t.nil;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -277,7 +277,7 @@ object validator(id:node_t) = {
         }
     }
 
-    action tryLockAndCommit(qc:cert_t, hc:height_t) = {
+    action tryLockAndCommit(qc:cert_t, hc:height_t, qp:cert_t) = {
         require qc ~= cert_t.nil & rcvd_qc(qc);
         require qc.block.parent ~= block_t.hash(block_t.nil);
         require forest_store(qc,hc);
@@ -293,6 +293,7 @@ object validator(id:node_t) = {
             dc_basis_block := qc.block;
             tip_of_chain_qc := locked;
             tip_of_chain_height := locked_height;
+            qp_when_adding_qc := qp;
 
             blockchain(H) := *;
             assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
@@ -342,15 +343,13 @@ object validator(id:node_t) = {
                 forest_store(qc, chain_size) := true;
                 forest_ancestor(qc, chain_size, qc, chain_size) := true;
                 call broadcast_qc(qc);
-                call tryLockAndCommit(qc,chain_size);
+                call tryLockAndCommit(qc,chain_size,cert_t.nil);
                 call finished_prepareQC_processing(qc);
                 if locked = qc {
                     assert ~is_good(id) | qc.block.round < r_c;
                     call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
                 }
                 qc_processed(qc) := true;
-                qc_added := qc;
-                qc_added_height := chain_size;
                 call global_view.node_processed_qc(id,qc);
             } else {
                 if some qp:cert_t. exists Hp:height_t. forest_store(qp, Hp) & qc.block.parent = block_t.hash(qp.block){
@@ -362,15 +361,13 @@ object validator(id:node_t) = {
                         forest_ancestor(qc, height_t.next(hp), Q, H) := forest_ancestor(qp, hp, Q, H) | (Q=qc & H = height_t.next(hp));
 
                         call broadcast_qc(qc);
-                        call tryLockAndCommit(qc,height_t.next(hp));
+                        call tryLockAndCommit(qc,height_t.next(hp),qp);
                         call finished_prepareQC_processing(qc);
                         if locked = qc {
                             assert ~is_good(id) | qc.block.round < r_c;
                             call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
                         }
                         qc_processed(qc) := true;
-                        qc_added := qc;
-                        qc_added_height := chain_size;
                         call global_view.node_processed_qc(id,qc);
                     }
                 } else {
