@@ -251,6 +251,7 @@ object validator(id:node_t) = {
         require ~is_good(id) | qc = cert_t.nil | rcvd_qc(qc);
         require tc_r_2 = timeout_cert_t.nil | rcvd_tc(tc_r_2);
         require b_r_1 ~= block_t.nil -> b_r_1.parent = block_t.hash(locked.block);
+        require forall B:block_t. forall R:round_t. (is_good(id) & global_view.node_has_locked_detail(id,B,R)) -> (B.round < locked.block.round | B = locked.block);
 
         r_c := r;
         timed_out := false;
