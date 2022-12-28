@@ -14,7 +14,7 @@ module global_view = {
 
 	relation node_has_locked_recently(N:node_t, B:block_t, R:round_t)
 
-	definition node_has_locked_recently(N:node_t, B:block_t, R:round_t) = exists Rl:round_t. forall Rs:round_t. forall Br:block_t. (Rl < R & gv.node_has_locked_detail(N,B,Rl) & ((Rl < Rs & Rs < R) -> ~gv.node_has_locked_detail(N,Br,Rs)))
+	definition node_has_locked_recently(N:node_t, B:block_t, R:round_t) = exists Rl:round_t. forall Rs:round_t. forall Br:block_t. (Rl < R & gv.node_has_locked_detail(N,B,Rl) & ((Rl < Rs & Rs < R) -> ~gv.node_has_locked_detail(N,Br,Rs)) & ((gv.node_has_locked_detail(N,Br,Rl)) -> Br.round < B.round))
 
 	relation node_has_processed_qc(N:node_t, Qc:cert_t)
 
