@@ -48,7 +48,9 @@ isolate gdc_properties = {
 	definition gdc(B:block_t) = exists Q:quorum_t. exists R:round_t. (round_t.succ(B.round,R) & (forall N:node_t. (quorum_t.member(N,Q) & is_good(N)) -> gv.node_has_locked_detail(N,B,R)))
 
 	invariant forall Bc:block_t. forall Bp:block_t. Bc.parent = block_t.hash(Bp) -> Bp.round < Bc.round
+}
 
+isolate gdc_properties1 = {
 	invariant forall N:node_t. forall B:block_t. forall R:round_t. forall Bl:block_t. (gv.node_has_voted_detail(N,B,R,Bl) & is_good(N)) -> (round_t.succ(B.round,R) & B.parent = block_t.hash(Bl) & gv.node_has_voted(N,B) & (Bl = block_t.nil | gv.node_has_locked_recently(N,Bl,R)))
 
 	invariant forall N:node_t. forall B:block_t. forall R:round_t. (is_good(N) & gv.node_has_locked_detail(N,B,R)) -> B.round < R
@@ -79,7 +81,7 @@ isolate gdc_properties2 = {
 	invariant forall N:node_t. forall B:block_t. forall R:round_t. (is_good(N) & gv.node_has_locked_detail(N,B,R)) -> B.round < R
 
 	invariant forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round) & Bp ~= block_t.nil) -> gdc_properties.gdc(Bp)
-} with gv, quorum_t, round_t, gdc_properties
+} with gv, quorum_t, round_t, gdc_properties,gdc_properties1
 
 isolate gdc_properties3 = {
 
@@ -97,26 +99,28 @@ isolate gdc_properties3 = {
 	invariant forall N:node_t. forall B:block_t. forall R:round_t. forall Bl:block_t. (gv.node_has_voted_detail(N,B,R,Bl) & is_good(N)) -> (round_t.succ(B.round,R) & B.parent = block_t.hash(Bl) & gv.node_has_voted(N,B) & (Bl = block_t.nil | gv.node_has_locked_recently(N,Bl,R)))
 
 	invariant forall N:node_t. forall Bc:block_t. forall R:round_t. forall Bp:block_t. forall Qc:cert_t. (is_good(N) & gv.node_has_processed_qc(N,Qc) & Qc.block = Bc & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & round_t.succ(Bc.round,R)) -> forall N1:node_t. (is_good(N1) & quorum_t.member(N1,Qc.cert)) -> (is_good(N1) & (Bp ~= block_t.nil | gv.node_has_locked_recently(N1,Bp,R)))
-} with gv, quorum_t, round_t, gdc_properties, gdc_properties2, block_t
+} with gv, quorum_t, round_t, gdc_properties,gdc_properties1, gdc_properties2, block_t
 
 isolate gdc_properties4 = {
 	invariant forall Bgdc:block_t. forall Rgdc:round_t. (gdc_properties.gdc(Bgdc) & round_t.succ(Bgdc.round,Rgdc)) -> exists Q:quorum_t. (forall N:node_t. (quorum_t.member(N,Q) & is_good(N)) -> gv.node_has_locked_detail(N,Bgdc,Rgdc))
 
-} with gv, quorum_t, round_t, block_t, gdc_properties
+} with gv, quorum_t, round_t, block_t, gdc_properties,gdc_properties1
 
-isolate gdc_properties5 = { #gets stuck trying to prove
+isolate gdc_properties5 = {
 	relation quorum_of_locks(B:block_t, R:round_t)
 
 	definition quorum_of_locks(B:block_t, R:round_t) = exists Q:quorum_t. forall N:node_t. (is_good(N) & quorum_t.member(N,Q)) -> gv.node_has_locked_detail(N,B,R)
 
-	invariant forall Bp:block_t. forall R:round_t. (gv.quorum_of_recent_locks(Bp,R) -> exists Q:quorum_t. forall N:node_t. (quorum_t.member(N,Q) & is_good(N) & Bp~= block_t.nil) -> gv.node_has_locked_recently(N,Bp,R))
+	invariant forall Bp:block_t. forall R:round_t. (gv.quorum_of_recent_locks(Bp,R) & Bp ~= block_t.nil) -> exists Q:quorum_t. forall N:node_t. (quorum_t.member(N,Q) & is_good(N)) -> gv.node_has_locked_recently(N,Bp,R)
 
 	invariant forall B:block_t. forall R:round_t. quorum_of_locks(B, R) -> exists Q:quorum_t. forall N:node_t. (is_good(N) & quorum_t.member(N,Q)) -> gv.node_has_locked_detail(N,B,R)
 
 	#invariant exists Qgdc:quorum_t. exists Bgdc:block_t. exists Rgdc:round_t. ((forall N:node_t. (quorum_t.member(N,Q) & is_good(N)) -> gv.node_has_locked_detail(N,Bgdc,Rgdc)) -> (exists Qlr:quorum_t. exists Bplr:block_t. exists Rlr:round_t. ((forall N1:node_t. (is_good(N1) & quorum_t.member(N1,Qlr)) -> (is_good(N1) & (Bplr ~= block_t.nil | gv.node_has_locked_recently(N1,Bplr,Rlr)))) -> exists N2:node_t. (is_good(N2) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & (Bplr ~= block_t.nil | gv.node_has_locked_recently(N1,Bplr,Rlr))))))
 
-	invariant forall Bgdc:block_t. forall Rgdc:round_t. forall Blr:block_t. forall Rlr:round_t. (quorum_of_locks(Bgdc,Rgdc) & gv.quorum_of_recent_locks(Blr,Rlr)) -> exists N:node_t. (is_good(N) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & (Bp~= block_t.nil | gv.node_has_locked_recently(N,Blr,Rlr)))
-} with gv,quorum_t, gdc_properties
+	invariant forall Bgdc:block_t. forall Rgdc:round_t. forall Blr:block_t. forall Rlr:round_t. (quorum_of_locks(Bgdc,Rgdc) & gv.quorum_of_recent_locks(Blr,Rlr) & Blr~= block_t.nil) -> exists N:node_t. (is_good(N) & gv.node_has_locked_detail(N,Bgdc,Rgdc)  & gv.node_has_locked_recently(N,Blr,Rlr))
+
+	invariant forall Bgdc:block_t. forall Blr:block_t. exists Rgdc:round_t. exists Rlr:round_t. (quorum_of_locks(Bgdc,Rgdc) & gv.quorum_of_recent_locks(Blr,Rlr) & Blr~= block_t.nil & Rgdc < Rlr) -> exists N:node_t. (is_good(N) & gv.node_has_locked_detail(N,Bgdc,Rgdc)  & gv.node_has_locked_recently(N,Blr,Rlr) & Rgdc < Rlr)
+} with gv,quorum_t
 
 isolate gdc_properties6 = {
 	relation no_lock(N:node_t,Rl:round_t,Ru:round_t,Bs:block_t)
@@ -130,32 +134,40 @@ isolate gdc_properties6 = {
 	invariant forall N:node_t. forall Bs:block_t. forall Rs:round_t. forall Bgdc:block_t. forall Rgdc:round_t. (gv.node_has_locked_recently(N,Bs,Rs) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & Rgdc < Rs) -> (forall Rl:round_t. Rl < Rgdc -> ~no_lock(N,Rl,Rs,Bs))
 
 
-	invariant  forall Bgdc:block_t. forall N:node_t. forall Bs:block_t. exists Rgdc:round_t. exists Rs:round_t. (gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bs,Rs) & round_t.succ(Bgdc.round,Rgdc) & Rgdc < Rs) -> exists Rl:round_t. (Rgdc <= Rl & Rl < Rs & gv.node_has_locked_detail(N,Bs,Rl) & no_lock(N,Rl,Rs,Bs))
+	invariant  forall Bgdc:block_t. forall N:node_t. forall Bp:block_t. forall Bc:block_t. exists Rgdc:round_t. exists Rcp1:round_t. (round_t.succ(Bc.round,Rcp1) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bp,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & Rgdc < Rcp1) -> exists Rl:round_t. (Rgdc <= Rl & Rl < Rcp1 & gv.node_has_locked_detail(N,Bp,Rl) & no_lock(N,Rl,Rcp1,Bp) & Rgdc < Rcp1)
 
 
-	invariant  exists Bgdc:block_t. exists Rgdc:round_t. exists N:node_t. exists Bs:block_t. exists Rs:round_t. ((gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bs,Rs) & Rgdc < Rs) -> exists Rl:round_t. (Rgdc <= Rl & Rl < Rs & gv.node_has_locked_detail(N,Bs,Rl) & no_lock(N,Rl,Rs,Bs)))
+
+	#invariant  exists Bgdc:block_t. exists Rgdc:round_t. exists N:node_t. exists Bs:block_t. exists Rs:round_t. ((gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bs,Rs) & Rgdc < Rs) -> exists Rl:round_t. (Rgdc <= Rl & Rl < Rs & gv.node_has_locked_detail(N,Bs,Rl) & no_lock(N,Rl,Rs,Bs)))
 } with gv, quorum_t, round_t, block_t
 
 isolate gdc_properties7 = {
-	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil) -> exists Rcp1:round_t. round_t.succ(Bc.round,Rcp1) & gv.quorum_of_recent_locks(Bp,Rcp1)
-} with gv,round_t,gdc_properties5,gdc_properties6,gdc_properties
 
-isolate gdc_properties8 = { #gets stuck trying to prove
+	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil) -> gv.quorum_of_votes(Bc,Bp)
+
+	#invariant forall Bc:block_t. forall Bp:block_t. forall R:round_t. (gv.quorum_of_votes(Bc,Bp) & round_t.succ(Bc.round,R) & Bp ~= block_t.nil) -> gv.quorum_of_recent_locks(Bp,R)
+
+	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil) -> exists Rcp1:round_t. round_t.succ(Bc.round,Rcp1) & gv.quorum_of_recent_locks(Bp,Rcp1)
+} with gv,round_t,gdc_properties2,gdc_properties,gdc_properties1
+
+isolate gdc_properties8 = {
 	invariant forall Bgdc:block_t. gdc_properties.gdc(Bgdc) -> exists Rgdc:round_t. round_t.succ(Bgdc.round,Rgdc) & gdc_properties5.quorum_of_locks(Bgdc,Rgdc)
-} with gv,round_t,gdc_properties5,gdc_properties6,gdc_properties
+} with gv,round_t,gdc_properties5,quorum_t,gdc_properties
 
 isolate gdc_properties9 = {
-	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) -> exists Rcp1:round_t. round_t.succ(Bc.round,Rcp1) & gv.quorum_of_recent_locks(Bp,Rcp1) & exists Rgdc:round_t. round_t.succ(Bgdc.round,Rgdc) & gdc_properties5.quorum_of_locks(Bgdc,Rgdc) & Rgdc < Rcp1
+	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) -> (exists Rcp1:round_t. round_t.succ(Bc.round,Rcp1) & gv.quorum_of_recent_locks(Bp,Rcp1) & exists Rgdc:round_t. round_t.succ(Bgdc.round,Rgdc) & gdc_properties5.quorum_of_locks(Bgdc,Rgdc) & Rgdc < Rcp1)
 
 } with gv, round_t,gdc_properties,gdc_properties7,gdc_properties8,gdc_properties5
 
-isolate gdc_properties10 = { #gets stuck trying to prove
-	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) -> exists N:node_t. exists Rcp1:round_t. exists Rgdc:round_t. (round_t.succ(Bc.round,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bp,Rcp1) & Rgdc < Rcp1)
-} with gv, round_t,gdc_properties,gdc_properties7,gdc_properties8,gdc_properties5,gdc_properties9
+isolate gdc_properties10 = {
+	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) -> exists N1:node_t. exists Rcp1:round_t. exists Rgdc:round_t. (round_t.succ(Bc.round,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & gv.node_has_locked_detail(N1,Bgdc,Rgdc) & gv.node_has_locked_recently(N1,Bp,Rcp1) & Rgdc < Rcp1)
+} with gv, round_t,gdc_properties5,gdc_properties9
 
 isolate gdc_properties11 = { # out of FAU fragment
-	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) -> exists Rcp1:round_t. exists Rgdc:round_t. exists Rl:round_t. (round_t.succ(Bc.round,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & Rgdc <= Rl & Rl < Rcp1 & gv.node_has_locked_detail(N,Bp,Rl) & gdc_properties6.no_lock(N,Rl,Rcp1,Bp))
-} with gv, round_t,gdc_properties,gdc_properties10,gdc_properties6
+	invariant  forall Bgdc:block_t. forall Bp:block_t. forall Bc:block_t.  exists N:node_t. exists Rgdc:round_t. exists Rcp1:round_t. (round_t.succ(Bc.round,Rcp1) & gv.node_has_locked_detail(N,Bgdc,Rgdc) & gv.node_has_locked_recently(N,Bp,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & Rgdc < Rcp1) -> exists Rl:round_t. (Rgdc <= Rl & Rl < Rcp1 & gv.node_has_locked_detail(N,Bp,Rl) & gdc_properties6.no_lock(N,Rl,Rcp1,Bp) & Rgdc < Rcp1)
+
+	invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.node_has_locked(N,Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round) ->  exists Rcp1:round_t. exists Rgdc:round_t. exists Rl:round_t. (round_t.succ(Bc.round,Rcp1) & round_t.succ(Bgdc.round,Rgdc) & Rgdc <= Rl & Rl < Rcp1 & gv.node_has_locked_detail(N,Bp,Rl) & gdc_properties6.no_lock(N,Rl,Rcp1,Bp) & Rgdc < Rcp1)
+} with gv, round_t,gdc_properties,gdc_properties10,gdc_properties6, block_t,quorum_t
 
 
 
