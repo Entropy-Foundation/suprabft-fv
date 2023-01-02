@@ -269,7 +269,11 @@ object validator(id:node_t) = {
             if tc_r_2 ~= timeout_cert_t.nil {
                 pb := tc_r_2.highestQC.block;
             }
-            var b := block_t.consBlock(block_t.hash(pb), r_c, id);
+            var b : block_t;
+            assert ~is_good(id) | block_t.hash(pb) ~= hash_t.nil;
+            assume b.parent = block_t.hash(pb);
+            b.round := r_c;
+            #:= block_t.consBlock(block_t.hash(pb), r_c, id);
             var p : proposal_t;
             p.block := b;
             p.qc := qc;
