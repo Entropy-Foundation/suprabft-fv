@@ -4,6 +4,7 @@ include domain_model
 include network_model
 include algorithm
 include global_view
+include ubd_seq
 
 # ivy_check trace=true isolate=<each_item_in_list_below> classic_safety.ivy
 # gv
@@ -522,6 +523,22 @@ isolate basic_safety = {
 		invariant forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc)
 	} with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1,gdc_chain_lemma2
 
+    isolate gdc_chain_lemma5 = {
+        invariant forall B1:block_t. forall B2:block_t. (gdc_properties.gdc(B1) & gdc_properties.gdc(B2)) -> (gdc_chain_lemma.ascendant(B1,B2) | gdc_chain_lemma.ascendant(B2,B1))
+    } with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1,gdc_chain_lemma2,gdc_chain_lemma
+
+    isolate gdc_chain_lemma6 = {
+        invariant forall N1:node_t. forall N2:node_t. forall Hc1:height_t. forall Hc2:height_t. (is_good(N1) & is_good(N2) & height_t.succ(Hc1, processor.validator(N1).chain_size) & height_t.succ(Hc2, processor.validator(N2).chain_size)) -> (gdc_chain_lemma.ascendant(processor.validator(N1).blockchain(Hc1),processor.validator(N2).blockchain(Hc2)) | gdc_chain_lemma.ascendant(processor.validator(N2).blockchain(Hc2),processor.validator(N1).blockchain(Hc1)))
+
+        invariant forall N:node_t. forall H1,H2:height_t. (is_good(N) & H1 < H2 & H2 < processor.validator(N).chain_size) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(H2),processor.validator(N).blockchain(H1))
+
+        invariant forall N1,N2:node_t. forall H1,H2:height_t. (is_good(N1) & is_good(N2) & H1 < processor.validator(N1).chain_size & H2 < processor.validator(N2).chain_size) -> (gdc_chain_lemma.ascendant(processor.validator(N1).blockchain(H1),processor.validator(N2).blockchain(H2)) | gdc_chain_lemma.ascendant(processor.validator(N2).blockchain(H2),processor.validator(N1).blockchain(H1)))
+
+		invariant forall N:node_t. (is_good(N) & 0 < processor.validator(N).chain_size) -> processor.validator(N).blockchain(0).parent = block_t.hash(block_t.nil)
+
+		invariant forall B1:block_t. forall B2:block_t. (gdc_chain_lemma.ascendant(B1,B2) & B1.parent = B2.parent) -> B1 = B2
+    } with gv,processor,gdc_chain_lemma,ldc_propertiesm1,gdc_chain_lemma5 ,block_t
+
 	isolate global_properties = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (processor.validator(N).qc_processed(Q) & Q.block = processor.validator(N).blockchain(H))
 
@@ -529,9 +546,31 @@ isolate basic_safety = {
 
 		invariant forall N:node_t. forall B:block_t. (is_good(N) & gv.node_has_voted(N,B)) -> B.parent = block_t.hash(block_t.nil) | exists Bp:block_t. (B.parent = block_t.hash(Bp) & gv.node_has_locked(N,Bp))
 
+		invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(0) ~= block_t.nil & processor.validator(N2).blockchain(0) ~= block_t.nil) -> processor.validator(N1).blockchain(0) = processor.validator(N2).blockchain(0)
+
 		########### starting experimentation from here
-		#invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(0) ~= block_t.nil & processor.validator(N2).blockchain(0) ~= block_t.nil) -> processor.validator(N1).blockchain(0) = processor.validator(N2).blockchain(0)
+
+		relation height_safety(H:height_t)
+
+		definition height_safety(H:height_t) = forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & H < processor.validator(N1).chain_size & H < processor.validator(N2).chain_size) -> processor.validator(N1).blockchain(H) = processor.validator(N2).blockchain(H)
+
+		invariant height_safety(0)
+
+		invariant forall H1,H2:height_t. (height_t.succ(H1,H2) & height_safety(H1)) -> height_safety(H2)
+
+		axiom [height_induction] {
+			relation rel1(H:height_t)
+			#---------------------------------------------------
+			property ((rel1(0)) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & rel1(H1)) -> rel1(H2))) -> (forall H:height_t. rel1(H))
+		}
+
+		property ((height_safety(0)) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & height_safety(H1)) -> height_safety(H2))) -> (forall H:height_t. height_safety(H))
+		proof {
+			apply height_induction# with rel1=height_safety
+		}
+
+		invariant forall H:height_t. height_safety(H)
 
 		#invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(H) ~= block_t.nil & processor.validator(N2).blockchain(H) ~= block_t.nil) -> processor.validator(N1).blockchain(H) = processor.validator(N2).blockchain(H)
 	} with gv, height_t, processor, ldc_properties, round_t, block_t
-} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties, gdc_properties2
+} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties, gdc_properties2,gdc_chain_lemma6
