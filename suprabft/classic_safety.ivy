@@ -445,9 +445,9 @@ isolate basic_safety = {
 
 		object spec = {
 			after init {
-				assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
+				#assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
-				assume forall B:block_t. B.round = round_t.next(0) if B ~= block_t.nil else 0;
+				#assume forall B:block_t. B.round = round_t.next(0) if B ~= block_t.nil else 0;
 
 				ascendant(Bc,Bp) := true if (Bc = Bp | (Bc ~= block_t.nil & Bp = block_t.nil)) else false;
 			}
@@ -476,20 +476,20 @@ isolate basic_safety = {
 
 		definition qov_after_gdc(R:round_t, Bgdc:block_t) = forall B:block_t. (B.round = R & gdc_properties.gdc(Bgdc) & Bgdc.round < B.round & quorum_propogation.block_has_qov(B)) -> (gdc_chain_lemma.ascendant(B,Bgdc) | B.parent = block_t.hash(block_t.nil))
 
-		#invariant qov_after_gdc(0,Bgdc)
+		invariant qov_after_gdc(0,Bgdc)
 
-		#invariant forall B:block_t. forall Bp:block_t. (quorum_propogation.block_has_qov(B) & B.parent = block_t.hash(Bp)) -> gv.quorum_of_votes(B,Bp)
+		invariant forall B:block_t. forall Bp:block_t. (quorum_propogation.block_has_qov(B) & B.parent = block_t.hash(Bp)) -> gv.quorum_of_votes(B,Bp)
 
-		#invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (gv.quorum_of_votes(Bc,Bp) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc) -> Bgdc.round < Bp.round
+		invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (gv.quorum_of_votes(Bc,Bp) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc) -> Bgdc.round < Bp.round
 
 		invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (is_good(N) & gv.quorum_of_votes(Bc,Bp) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc) -> Bgdc.round < Bp.round
 
-		#invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (quorum_propogation.block_has_qov(Bp) & Bgdc.round < Bp.round)
+		invariant forall Bc:block_t. forall Bp:block_t. forall N:node_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (quorum_propogation.block_has_qov(Bp) & Bgdc.round < Bp.round)
 
-		#invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc & qov_after_gdc(Bp.round,Bgdc)) -> (Bp.parent = block_t.hash(block_t.nil) | gdc_chain_lemma.ascendant(Bp,Bgdc))
+		invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc & qov_after_gdc(Bp.round,Bgdc)) -> (Bp.parent = block_t.hash(block_t.nil) | gdc_chain_lemma.ascendant(Bp,Bgdc))
 
 		invariant forall R:round_t. forall Bgdc:block_t. forall Rp:round_t.(Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc) & (Rp < R -> qov_after_gdc(Rp,Bgdc))) -> qov_after_gdc(R,Bgdc)
-	} with round_t,block_t,ldc_properties6a,ldc_propertiesm1,gv,processor#,quorum_propogation
+	} with round_t,block_t,ldc_properties6a,ldc_propertiesm1,gv,processor,quorum_propogation
 
 	isolate gdc_chain_lemma2 = {
 		#invariant forall B:block_t. forall Bp:block_t. (quorum_propogation.block_has_qov(B) & B.parent = block_t.hash(Bp)) -> gv.quorum_of_votes(B,Bp)
@@ -508,47 +508,68 @@ isolate basic_safety = {
 
 		invariant forall Bc:block_t. forall Bgdc:block_t. (is_good(N) & quorum_propogation.block_has_qov(Bc) & Bc.parent ~= block_t.hash(block_t.nil) & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & (forall Rp:round_t. (Rp < Bc.round -> gdc_chain_lemma1.qov_after_gdc(Rp,Bgdc)))) -> ((gdc_chain_lemma.ascendant(Bc,Bgdc)))
 
-		#invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (quorum_propogation.block_has_qov(Bp) & Bgdc.round < Bp.round)
+		invariant forall Bgdc:block_t. forall R1,R2:round_t. (Bgdc ~= block_t.nil & gdc_properties.gdc(Bgdc) & round_t.succ(R1,R2) & gdc_chain_lemma1.qov_after_gdc(R1,Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R2,Bgdc)
 
-	} with round_t,block_t,gv,processor,quorum_propogation,gdc_chain_lemma1,gdc_chain_lemma
-
-	isolate gdc_chain_lemma2a = {
 		invariant gdc_chain_lemma1.qov_after_gdc(0, Bgdc)
-
-		relation ascendant_induction(Bc:block_t, Bgdc:block_t)
-
-		definition ascendant_induction(Bc:block_t, Bgdc:block_t) = forall N:node_t. (is_good(N) & quorum_propogation.block_has_qov(Bc) & Bc.parent ~= block_t.hash(block_t.nil) & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & (forall Rp:round_t. (Rp < Bc.round -> gdc_chain_lemma1.qov_after_gdc(Rp,Bgdc)))) -> gdc_chain_lemma.ascendant(Bc,Bgdc)
 
 		axiom [qov_induction] {
 			relation rel1(R:round_t, Bgdc:block_t)
-			relation rel2(Bc:block_t, Bgdc:block_t)
 		 	#---------------------------------------------------
-			property rel1(0, Bgdc) & rel2(Bc, Bgdc) -> rel1(R, Bgdc)
+			property forall Bgdc:block_t. ((Bgdc ~= block_t.nil & gdc_properties.gdc(Bgdc) & rel1(0,Bgdc) & (forall R1,R2:round_t. (round_t.succ(R1,R2) & rel1(R1,Bgdc)) -> rel1(R2,Bgdc)) )-> forall R:round_t. rel1(R,Bgdc))
 		}
 
-		property gdc_chain_lemma1.qov_after_gdc(0, Bgdc) & ascendant_induction(Bc, Bgdc) -> gdc_chain_lemma1.qov_after_gdc(R, Bgdc)
+		property forall Bgdc:block_t. ((Bgdc ~= block_t.nil & gdc_properties.gdc(Bgdc) & gdc_chain_lemma1.qov_after_gdc(0,Bgdc) & (forall R1,R2:round_t. (round_t.succ(R1,R2) & gdc_chain_lemma1.qov_after_gdc(R1,Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R2,Bgdc)) )-> forall R:round_t. gdc_chain_lemma1.qov_after_gdc(R,Bgdc))
 		proof {
-			apply qov_induction
+				apply qov_induction
 		}
 
-		invariant gdc_chain_lemma1.qov_after_gdc(R, Bgdc)
-	} with round_t,block_t,gv,processor,quorum_propogation,gdc_chain_lemma1,gdc_chain_lemma2
+		invariant forall Bgdc:block_t. ((Bgdc ~= block_t.nil & gdc_properties.gdc(Bgdc)) -> forall R:round_t. gdc_chain_lemma1.qov_after_gdc(R,Bgdc))
 
-	isolate gdc_chain_lemma3 = {
-		property forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc) & gdc_chain_lemma1.qov_after_gdc(0,Bgdc) & (forall R:round_t. forall Rp:round_t.( (Rp < R -> gdc_chain_lemma1.qov_after_gdc(Rp,Bgdc))) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc))) -> (forall R:round_t. gdc_chain_lemma1.qov_after_gdc(R,Bgdc))
+		#invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & ldc_propertiesm1.gdc_x(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (quorum_propogation.block_has_qov(Bp) & Bgdc.round < Bp.round)
 
-		#assume (forall R:round_t. forall Bgdc:block_t. forall Rp:round_t.(Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc) & (Rp < R -> qov_after_gdc(Rp,Bgdc))) -> qov_after_gdc(R,Bgdc)) -> (forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> qov_after_gdc(R,Bgdc))
+	} with round_t,block_t,gv,processor,quorum_propogation,gdc_chain_lemma1,gdc_chain_lemma,gdc_properties
 
-		#invariant forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc)
-	} with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1
+	# isolate gdc_chain_lemma2a = {
 
-	isolate gdc_chain_lemma4 = {
-		invariant forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc)
-	} with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1,gdc_chain_lemma2
+
+	# 	relation ascendant_induction(Bc:block_t, Bgdc:block_t)
+
+	# 	definition ascendant_induction(Bc:block_t, Bgdc:block_t) = forall N:node_t. (is_good(N) & quorum_propogation.block_has_qov(Bc) & Bc.parent ~= block_t.hash(block_t.nil) & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & (forall Rp:round_t. (Rp < Bc.round -> gdc_chain_lemma1.qov_after_gdc(Rp,Bgdc)))) -> gdc_chain_lemma.ascendant(Bc,Bgdc)
+
+	# 	axiom [qov_induction] {
+	# 		relation rel1(R:round_t, Bgdc:block_t)
+	# 		relation rel2(Bc:block_t, Bgdc:block_t)
+	# 	 	#---------------------------------------------------
+	# 		property rel1(0, Bgdc) & rel2(Bc, Bgdc) -> rel1(R, Bgdc)
+	# 	}
+
+	# 	property gdc_chain_lemma1.qov_after_gdc(0, Bgdc) & ascendant_induction(Bc, Bgdc) -> gdc_chain_lemma1.qov_after_gdc(R, Bgdc)
+	# 	proof {
+	# 		apply qov_induction
+	# 	}
+
+	# 	invariant gdc_chain_lemma1.qov_after_gdc(R, Bgdc)
+	# } with round_t,block_t,gv,processor,quorum_propogation,gdc_chain_lemma1,gdc_chain_lemma2
+
+	# isolate gdc_chain_lemma3 = {
+	# 	property forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc) & gdc_chain_lemma1.qov_after_gdc(0,Bgdc) & (forall R:round_t. forall Rp:round_t.( (Rp < R -> gdc_chain_lemma1.qov_after_gdc(Rp,Bgdc))) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc))) -> (forall R:round_t. gdc_chain_lemma1.qov_after_gdc(R,Bgdc))
+
+	# 	#assume (forall R:round_t. forall Bgdc:block_t. forall Rp:round_t.(Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc) & (Rp < R -> qov_after_gdc(Rp,Bgdc))) -> qov_after_gdc(R,Bgdc)) -> (forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> qov_after_gdc(R,Bgdc))
+
+	# 	#invariant forall R:round_t. forall Bgdc:block_t. (Bgdc~= block_t.nil & gdc_properties.gdc(Bgdc)) -> gdc_chain_lemma1.qov_after_gdc(R,Bgdc)
+	# } with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1
+
+    isolate gdc_chain_lemma4 = {
+
+		invariant forall Bgdc:block_t. (Bgdc ~= block_t.nil & Bgdc.parent ~= block_t.hash(block_t.nil) & gdc_properties.gdc(Bgdc)) -> quorum_propogation.block_has_qov(Bgdc)
+
+    } with round_t,block_t,gv,processor,gdc_chain_lemma2,gdc_chain_lemma,gdc_properties7m1,gdc_properties,gdc_properties8,gdc_properties5
 
     isolate gdc_chain_lemma5 = {
-        invariant forall B1:block_t. forall B2:block_t. (gdc_properties.gdc(B1) & gdc_properties.gdc(B2)) -> (gdc_chain_lemma.ascendant(B1,B2) | gdc_chain_lemma.ascendant(B2,B1))
-    } with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1,gdc_chain_lemma2,gdc_chain_lemma
+		invariant forall B1:block_t. forall B2:block_t. (gdc_properties.gdc(B1) & gdc_properties.gdc(B2) & B1.round = B2.round) -> B1 = B2
+
+        invariant forall B1:block_t. forall B2:block_t. (gdc_properties.gdc(B1) & gdc_properties.gdc(B2) & B1 ~= block_t.nil & B2 ~= block_t.nil & B1.parent ~= block_t.hash(block_t.nil)) -> (gdc_chain_lemma.ascendant(B1,B2) | gdc_chain_lemma.ascendant(B2,B1))
+    } with round_t,block_t,gv,processor,gdc_chain_lemma2,gdc_chain_lemma,gdc_chain_lemma2,gdc_properties,gdc_chain_lemma4
 
     isolate gdc_chain_lemma6 = {
         invariant forall N1:node_t. forall N2:node_t. forall Hc1:height_t. forall Hc2:height_t. (is_good(N1) & is_good(N2) & height_t.succ(Hc1, processor.validator(N1).chain_size) & height_t.succ(Hc2, processor.validator(N2).chain_size)) -> (gdc_chain_lemma.ascendant(processor.validator(N1).blockchain(Hc1),processor.validator(N2).blockchain(Hc2)) | gdc_chain_lemma.ascendant(processor.validator(N2).blockchain(Hc2),processor.validator(N1).blockchain(Hc1)))
@@ -560,7 +581,7 @@ isolate basic_safety = {
 		invariant forall N:node_t. (is_good(N) & 0 < processor.validator(N).chain_size) -> processor.validator(N).blockchain(0).parent = block_t.hash(block_t.nil)
 
 		invariant forall B1:block_t. forall B2:block_t. (gdc_chain_lemma.ascendant(B1,B2) & B1.parent = B2.parent) -> B1 = B2
-    } with gv,processor,gdc_chain_lemma,ldc_propertiesm1,gdc_chain_lemma5 ,block_t
+    } with gv,processor,gdc_chain_lemma,ldc_propertiesm1,gdc_chain_lemma5 ,block_t,round_t
 
 	isolate global_properties = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (processor.validator(N).qc_processed(Q) & Q.block = processor.validator(N).blockchain(H))
