@@ -46,6 +46,7 @@ module global_view = {
 		require is_good(n) -> (forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round);
 		require is_good(n) -> b.parent = block_t.hash(bl);
 		require (is_good(n) & bl ~= block_t.nil) -> node_has_locked_recently(n,bl,r);
+		require (is_good(n) & bl = block_t.nil) -> (node_has_locked_detail(n,B,R) -> B = block_t.nil);
 		require is_good(n) -> round_t.succ(b.round,r);
 	}
 
