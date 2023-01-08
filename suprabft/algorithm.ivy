@@ -338,6 +338,7 @@ object validator(id:node_t) = {
         require rcvd_qc(qc);
 
         var ok := true;
+        ok := ok & qc.block ~= block_t.nil;
         ok := ok & qc.block.parent ~= block_t.hash(block_t.nil);
         ok := ok & forall H:height_t. blockchain(H) ~= qc.block;
         ok := ok & forall Q:cert_t. forall H:height_t. forest_store(Q,H) -> Q.block ~= qc.block;

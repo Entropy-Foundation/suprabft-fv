@@ -62,6 +62,7 @@ module global_view = {
 	}
 
 	before node_processed_qc(n:node_t, qc:cert_t) {
+		require qc.block ~= block_t.nil;
 		require forall N:node_t. quorum_t.member(N, qc.cert) -> node_has_voted(N, qc.block);
 	}
 
