@@ -62,6 +62,7 @@ object validator(id:node_t) = {
     individual tip_of_chain_qc : cert_t
     individual tip_of_chain_height : height_t
     individual qp_when_adding_qc : cert_t
+    individual pred_of_chain_height : height_t
 
     individual locked_height : height_t
 
@@ -97,6 +98,7 @@ object validator(id:node_t) = {
         tip_of_chain_qc := cert_t.nil;
         tip_of_chain_height := 0;
         qp_when_adding_qc := cert_t.nil;
+        pred_of_chain_height := 0;
 
         assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
 
@@ -299,6 +301,10 @@ object validator(id:node_t) = {
             tip_of_chain_qc := locked;
             tip_of_chain_height := locked_height;
             qp_when_adding_qc := qp;
+            if (0 < tip_of_chain_height)
+            {
+                pred_of_chain_height := height_t.prev(tip_of_chain_height);
+            }
 
             blockchain(H) := *;
             assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
