@@ -665,7 +665,7 @@ isolate basic_safety = {
 	} with height_t,block_t,processor,gv,gdc_chain_lemma8,ldc_propertiesm1,gdc_properties16,gdc_chain_lemma,gdc_chain_lemma7,gdc_properties
 
 	isolate gdc_chain_lemma10 = {
-		invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & 0 < processor.validator(N1).tip_of_chain_height & 0 < processor.validator(N2).tip_of_chain_height) -> (processor.validator(N1).blockchain(processor.validator(N1).tip_of_chain_height) = processor.validator(N2).blockchain(processor.validator(N2).tip_of_chain_height))
+		invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & 0 < processor.validator(N1).tip_of_chain_height & 0 < processor.validator(N2).tip_of_chain_height & processor.validator(N2).blockchain(processor.validator(N2).tip_of_chain_height).round = processor.validator(N1).blockchain(processor.validator(N1).tip_of_chain_height).round) -> (processor.validator(N1).blockchain(processor.validator(N1).tip_of_chain_height) = processor.validator(N2).blockchain(processor.validator(N2).tip_of_chain_height))
 
 		invariant forall N1:node_t. forall N2:node_t. (is_good(N1) & is_good(N2) & 0 < processor.validator(N1).tip_of_chain_height & 0 < processor.validator(N2).tip_of_chain_height) -> (gdc_chain_lemma.ascendant(processor.validator(N1).blockchain(processor.validator(N1).tip_of_chain_height),processor.validator(N2).blockchain(processor.validator(N2).tip_of_chain_height)) | gdc_chain_lemma.ascendant(processor.validator(N2).blockchain(processor.validator(N2).tip_of_chain_height),processor.validator(N1).blockchain(processor.validator(N1).tip_of_chain_height)))
 	} with gv, height_t, processor, ldc_properties, round_t, block_t,gdc_chain_lemma9,gdc_chain_lemma
@@ -676,6 +676,10 @@ isolate basic_safety = {
 	# 	invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (is_good(N) & quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp = Bgdc & gdc_chain_lemma1.qov_after_gdc(Bp.round,Bgdc)) -> (quorum_propogation.block_has_qov(Bp) & (gdc_chain_lemma.ascendant(Bp,Bgdc)))
 	# } with round_t,block_t,quorum_propogation,ldc_properties6a,ldc_propertiesm1,gdc_chain_lemma,gv,processor,gdc_chain_lemma1
 
+
+	isolate blockchain_ascendant = {
+
+	} with gv,processor,gdc_chain_lemma
 
 	isolate global_properties = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (processor.validator(N).qc_processed(Q) & Q.block = processor.validator(N).blockchain(H))
