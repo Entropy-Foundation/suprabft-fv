@@ -100,7 +100,7 @@ isolate gdc_properties2 = {
 		invariant forall N:node_t. forall B:block_t. forall R:round_t. forall Bl:block_t. (gv.node_has_voted_detail(N,B,R,Bl) & is_good(N) & Bl ~= block_t.nil) -> (round_t.succ(B.round,R) & B.parent = block_t.hash(Bl) & gv.node_has_voted(N,B) & gv.node_has_locked_recently(N,Bl,R))
 	}
 
-	invariant forall Bc:block_t. forall Bp:block_t. forall R:round_t. (gv.quorum_of_votes(Bc,Bp) & round_t.succ(Bc.round,R) & Bp ~= block_t.nil) -> exists Q:quorum_t. exists R:round_t. round_t.succ(Bc.round,R) &  Bc.parent=block_t.hash(Bp) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (gv.node_has_voted_detail(N1,Bc,R,Bp) & is_good(N1)))
+	invariant forall Bc:block_t. forall Bp:block_t. forall R:round_t. (gv.quorum_of_votes(Bc,Bp) & round_t.succ(Bc.round,R) & Bp ~= block_t.nil) -> exists Q:quorum_t. (round_t.succ(Bc.round,R) &  Bc.parent=block_t.hash(Bp) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (gv.node_has_voted_detail(N1,Bc,R,Bp) & is_good(N1))))
 
 	invariant forall Bc:block_t. forall Bp:block_t. forall R:round_t. (gv.quorum_of_votes(Bc,Bp) & round_t.succ(Bc.round,R) & Bp ~= block_t.nil) -> gv.quorum_of_recent_locks(Bp,R)
 
@@ -352,7 +352,9 @@ isolate gdc_properties16 = {
 
 	invariant forall Bgdc:block_t. forall Bp:block_t. (Bgdc.parent=block_t.hash(Bp) & gv.quorum_of_votes(Bgdc,Bp)) -> quorum_propogation.block_has_qov(Bgdc)
 
-	invariant forall Bgdc:block_t. forall Bp:block_t. (gdc_properties.gdc(Bgdc) & Bgdc.parent=block_t.hash(Bp)) -> exists N:node_t. (is_good(N) & gv.node_has_locked(N,Bgdc) & gv.quorum_of_votes(Bgdc,Bp))
+	private {
+		invariant forall Bgdc:block_t. forall Bp:block_t. (gdc_properties.gdc(Bgdc) & Bgdc.parent=block_t.hash(Bp)) -> exists N:node_t. (is_good(N) & gv.node_has_locked(N,Bgdc) & gv.quorum_of_votes(Bgdc,Bp))
+	}
 
 	invariant forall Bgdc:block_t. forall Bp:block_t. (gdc_properties.gdc(Bgdc) & Bgdc.parent=block_t.hash(Bp)) -> quorum_propogation.block_has_qov(Bgdc)
 } with gv, quorum_t, round_t, block_t,gdc_properties,gdc_properties15,quorum_propogation
@@ -645,6 +647,8 @@ isolate basic_safety = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & height_t.succ(H, processor.validator(N).chain_size)) -> ldc_propertiesm1.gdc_x(processor.validator(N).blockchain(H))
 
 		invariant forall N:node_t. (is_good(N) & 0 < processor.validator(N).tip_of_chain_height) -> height_t.succ(processor.validator(N).pred_of_chain_height,processor.validator(N).tip_of_chain_height)
+
+		invariant forall N:node_t. forall Q:cert_t. forall H:height_t. (is_good(N) & processor.validator(N).locked = cert_t.nil) -> ~processor.validator(N).forest_store(Q,H)
 
 		invariant forall N:node_t. (is_good(N) & 0 < processor.validator(N).chain_size) -> height_t.succ(processor.validator(N).tip_of_chain_height,processor.validator(N).chain_size)
 
