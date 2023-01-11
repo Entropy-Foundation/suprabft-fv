@@ -713,17 +713,21 @@ isolate basic_safety = {
 		proof {
 			apply height_induction
 		}
-
-		invariant forall H:height_t. blockchain_height_ascendant(H)
 	} with gv,processor,gdc_chain_lemma,height_t
+
+	isolate blockchain_ascendant1 = {
+
+		invariant forall H:height_t. blockchain_ascendant.blockchain_height_ascendant(H)
+
+	} with gv,processor,gdc_chain_lemma,height_t,blockchain_ascendant
 
 	isolate blockchain_safety_lemma0 = {
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> 0 < processor.validator(N).chain_size
-		
+
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height) ~= block_t.nil
 		
 		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height),processor.validator(N).blockchain(H))
-	} with blockchain_ascendant, gv,processor,block_t,round_t,height_t,gdc_chain_lemma8
+	} with blockchain_ascendant,blockchain_ascendant1, gv,processor,block_t,round_t,height_t,gdc_chain_lemma8
 
 	isolate blockchain_safety_lemma1 = {
 
