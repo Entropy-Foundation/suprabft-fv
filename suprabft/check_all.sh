@@ -1,13 +1,13 @@
-# date
-# ivy_check trace=true complete=fo isolate=basic_safety classic_safety.ivy
-# date
-# ivy_check trace=true isolate=basic_safety.ascendant_not_sibling classic_safety.ivy
-# date
-# ivy_check trace=true macro_finder=false isolate=basic_safety.blockchain_ascendant classic_safety.ivy
-# date
-# ivy_check trace=true isolate=basic_safety.blockchain_ascendant1 classic_safety.ivy
-# date
-# ivy_check trace=true isolate=basic_safety.blockchain_safety_lemma0 classic_safety.ivy
+date
+ivy_check trace=true complete=fo isolate=basic_safety classic_safety.ivy
+date
+ivy_check trace=true isolate=basic_safety.ascendant_not_sibling classic_safety.ivy
+date
+ivy_check trace=true macro_finder=false isolate=basic_safety.blockchain_ascendant classic_safety.ivy
+date
+ivy_check trace=true isolate=basic_safety.blockchain_ascendant1 classic_safety.ivy
+date
+ivy_check trace=true isolate=basic_safety.blockchain_safety_lemma0 classic_safety.ivy
 date
 ivy_check trace=true macro_finder=false isolate=basic_safety.blockchain_safety_lemma1 classic_safety.ivy
 date
@@ -101,7 +101,7 @@ ivy_check trace=true isolate=gdc_properties15 classic_safety.ivy
 date
 ivy_check trace=true isolate=gdc_properties16 classic_safety.ivy
 date
-ivy_check trace=true macro_finder=false isolate=gdc_properties2 classic_safety.ivy
+ivy_check trace=true isolate=gdc_properties2 classic_safety.ivy
 date
 ivy_check trace=true isolate=gdc_properties3 classic_safety.ivy
 date
