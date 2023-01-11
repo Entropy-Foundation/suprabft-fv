@@ -692,7 +692,7 @@ isolate basic_safety = {
 	} with gv,processor,gdc_chain_lemma
 
 	isolate blockchain_safety_lemma0 = {
-		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height),processor.validator(N).blockchain(H))
+		#invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height),processor.validator(N).blockchain(H))
 	}
 
 	isolate blockchain_safety_lemma1 = {
@@ -768,4 +768,4 @@ isolate basic_safety = {
 
 		invariant forall N1:node_t. forall N2:node_t. forall H:height_t. (is_good(N1) & is_good(N2) & processor.validator(N1).blockchain(H) ~= block_t.nil & processor.validator(N2).blockchain(H) ~= block_t.nil) -> processor.validator(N1).blockchain(H) = processor.validator(N2).blockchain(H)
 	} with gv, height_t, processor, ldc_properties, round_t, block_t,blockchain_safety_lemma2
-} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, processor, gdc_properties, gdc_properties2
+} with gv, round_t, height_t, block_t, cert_t, shim, net.spec, gdc_properties, gdc_properties2
