@@ -15,7 +15,7 @@ module ubd_seq = {
 
     relation succ(X:t,Y:t)
 
-    definition succ(X,Z) = X < Z & forall Y:t. (X < Y -> (Z < Y | Z = Y))
+    definition [successor_definition] succ(X,Z) = X < Z & forall Y:t. (X < Y -> (Z < Y | Z = Y))
 
     function max2(X:t,Y:t) = Y if X <= Y else X
     function mod(X:this,Y:this) = X - X / Y * Y
@@ -53,7 +53,7 @@ module ubd_seq = {
 	}
     }
 
-    isolate iso = impl,spec
+    isolate iso = impl,spec,successor_definition
     
     # When testing, use the integer implementation.
 

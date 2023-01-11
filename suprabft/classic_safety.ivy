@@ -580,7 +580,7 @@ isolate basic_safety = {
 
 		invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (Bgdc.round < Bp.round)
 
-	} with round_t,block_t,ldc_properties6c,ldc_propertiesm1,gv,processor,gdc_chain_lemma2
+	} with round_t,block_t,ldc_properties6c,gv,processor,gdc_chain_lemma2
 
 	isolate gdc_chain_lemma3 = {
 		invariant forall Bc:block_t. forall Bp:block_t. forall Bgdc:block_t. (quorum_propogation.block_has_qov(Bc) & Bc.parent=block_t.hash(Bp) & Bp ~= block_t.nil & gdc_properties.gdc(Bgdc) & Bgdc.round < Bc.round & Bgdc ~= block_t.nil & Bp ~= Bgdc )-> (quorum_propogation.block_has_qov(Bp))
@@ -689,11 +689,41 @@ isolate basic_safety = {
 
 	isolate blockchain_ascendant = {
 
-	} with gv,processor,gdc_chain_lemma
+		axiom [height_induction] {
+			relation rel1(H:height_t)
+		 	#--------------------------------------------------
+			property (rel1(0) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & rel1(H1)) -> rel1(H2))) -> forall H:height_t. rel1(H)
+		}
+		
+		relation blockchain_height_ascendant(H:height_t)
+
+		definition blockchain_height_ascendant(H:height_t) = forall N:node_t. forall Hl:height_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil & Hl <= H) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(H),processor.validator(N).blockchain(Hl))
+
+		invariant forall N:node_t. (is_good(N) & processor.validator(N).blockchain(H) ~= block_t.nil) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(0),processor.validator(N).blockchain(0))
+
+		invariant blockchain_height_ascendant(0)
+
+		invariant forall N:node_t. forall H1,H2:height_t. (is_good(N) & processor.validator(N).blockchain(H2) ~= block_t.nil & height_t.succ(H1,H2)) -> processor.validator(N).blockchain(H2).parent = block_t.hash(processor.validator(N).blockchain(H1))
+
+		invariant forall N:node_t. forall H1,H2:height_t. (is_good(N) & processor.validator(N).blockchain(H2) ~= block_t.nil & height_t.succ(H1,H2)) -> gdc_chain_lemma.block_parent(processor.validator(N).blockchain(H2),processor.validator(N).blockchain(H1))
+
+		invariant forall H1,H2:height_t. (height_t.succ(H1,H2) & blockchain_height_ascendant(H1)) -> blockchain_height_ascendant(H2)
+
+		property (blockchain_height_ascendant(0) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & blockchain_height_ascendant(H1)) -> blockchain_height_ascendant(H2))) -> forall H:height_t. blockchain_height_ascendant(H)
+		proof {
+			apply height_induction
+		}
+
+		invariant forall H:height_t. blockchain_height_ascendant(H)
+	} with gv,processor,gdc_chain_lemma,height_t
 
 	isolate blockchain_safety_lemma0 = {
-		#invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height),processor.validator(N).blockchain(H))
-	}
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> 0 < processor.validator(N).chain_size
+		
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height) ~= block_t.nil
+		
+		invariant forall N:node_t. forall H:height_t. (is_good(N) & H <= processor.validator(N).tip_of_chain_height & processor.validator(N).blockchain(H) ~= block_t.nil) -> gdc_chain_lemma.ascendant(processor.validator(N).blockchain(processor.validator(N).tip_of_chain_height),processor.validator(N).blockchain(H))
+	} with blockchain_ascendant, gv,processor,block_t,round_t,height_t,gdc_chain_lemma8
 
 	isolate blockchain_safety_lemma1 = {
 
@@ -741,15 +771,9 @@ isolate basic_safety = {
 
 		invariant forall H1,H2:height_t. (height_t.succ(H1,H2) & blockchain_safe(H1)) -> blockchain_safe(H2)
 
-		axiom [height_induction] {
-			relation rel1(H:height_t)
-		 	#--------------------------------------------------
-			property (rel1(0) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & rel1(H1)) -> rel1(H2))) -> forall H:height_t. rel1(H)
-		}
-
 		property (blockchain_safe(0) & (forall H1,H2:height_t. (height_t.succ(H1,H2) & blockchain_safe(H1)) -> blockchain_safe(H2))) -> forall H:height_t. blockchain_safe(H)
 		proof {
-			apply height_induction
+			apply blockchain_ascendant.height_induction
 		}
 
 		invariant forall H:height_t. blockchain_safe(H)
