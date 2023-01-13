@@ -71,7 +71,7 @@ ivy_check trace=true isolate=basic_safety.ldc_properties6c classic_safety.ivy
 date
 ivy_check trace=true isolate=basic_safety.ldc_propertiesm1 classic_safety.ivy
 date
-ivy_check trace=true isolate=basic_safety.ldc_propertiesm2 classic_safety.ivy
+ivy_check trace=true macro_finder=false isolate=basic_safety.ldc_propertiesm2 classic_safety.ivy
 date
 ivy_check trace=true isolate=basic_safety.processor classic_safety.ivy
 date
@@ -101,7 +101,9 @@ ivy_check trace=true isolate=gdc_properties15 classic_safety.ivy
 date
 ivy_check trace=true isolate=gdc_properties16 classic_safety.ivy
 date
-ivy_check trace=true isolate=gdc_properties2 classic_safety.ivy
+ivy_check trace=true macro_finder=false isolate=gdc_properties2 classic_safety.ivy
+date
+ivy_check trace=true macro_finder=false isolate=gdc_properties2a classic_safety.ivy
 date
 ivy_check trace=true isolate=gdc_properties3 classic_safety.ivy
 date
