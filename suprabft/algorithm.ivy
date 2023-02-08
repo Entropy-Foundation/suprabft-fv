@@ -1,12 +1,54 @@
 #lang ivy1.8
 
 include domain_model
-include network_model
 
-# definition succ(X,Y) = (Y = X + 1)
+module moonshot(global_view) = {
+object process(id:node_t) = {
+    individual locked : qc_t
+    individual proposed : round_t
+    individual r_c : round_t
+    individual timeout : round_t;
+    individual timer : bool
+    relation uncommitted(QC:qc_t);
+    individual voted : round_t
 
-module supraBFT(global_view) = {
-object validator(id:node_t) = {
+    after init {
+        locked := qc_t.genesis;
+        proposed := 0;
+        r_c := round_t.next(0);
+        timeout := 0;
+        timer := false;
+        uncommitted(QC) := false;
+        voted := 0;
+    }
+
+    action proposeNormal(pB:block_t) = {
+        var ok := true;
+        ok := ok & block_t.round(pB, round_t.prev(r_c));
+        ok := ok & leader(r_c) = id;
+        ok := ok & proposed < r_c;
+        if ok {
+            var b := block_t.block(r_c, pB);
+            var p : proposal_n_t.proposal_n(b);
+            call global_view.broadcast_proposal_n(p);
+            proposed := r_c;
+        }
+    }
+
+    action advanceToRound(r:round_t) = {
+        if r > r_c {
+            r_c := r;
+            timer := false;
+        }
+    }
+
+    action vote(b:block_t) = {
+        if some r:round_t. block_t.round(b, r) & r > voted {
+            var p : prepare_t.prepare(b);
+            voted := r;
+        }
+    }
+
     individual locked : cert_t
     individual voted : voted_t
     individual r_c : round_t

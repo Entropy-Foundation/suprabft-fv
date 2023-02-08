@@ -6,125 +6,157 @@ instance round_t : ubd_seq
 instance height_t : ubd_seq
 
 instance node_t : iterable
-function leader(R:round_t) : node_t
 relation is_good(N:node_t)
 
-isolate hash_t = {
-    type this
-
-    individual nil: hash_t
-}
+# how to get fairness guarantee, needed for liveness?
+function leader(R:round_t) : node_t
 
 isolate block_t = {
-    type this = struct {
-        round : round_t,
-        parent : hash_t
-    }
-    individual nil : block_t
-    function hash(B:block_t) : hash_t
-    action consBlock(p:hash_t, r:round_t, n:node_t) returns (b:block_t)
+    type this
+
+    relation round(B:block_t, R:round_t)
+    relation parent(B:block_t, P:block_t)
+
+    relation ancestor(B:block_t, A:block_t)
+    function height(B:block_t) : height_t
+
+    individual genesis : block_t
+
+    action block(r_c:round_t, pB:block_t) returns (b:block_t)
 
     specification {
-        axiom forall B:block_t. B = nil <-> B.parent = hash_t.nil
+        relation valid(B:block_t)
 
-        axiom hash(X) = hash(Y) -> X = Y
-        axiom hash(X) ~= hash_t.nil
-
-        before consBlock(p:hash_t, r:round_t, n:node_t) returns (b:block_t) {
-            require ~is_good(n) | p ~= hash_t.nil;
+        after init {
+            valid(B) := B = genesis;
         }
 
-        after consBlock(p:hash_t, r:round_t) returns (b:block_t) {
-            ensure b ~= block_t.nil
+        before block {
+            require valid(pB);
+            assume ~valid(b);
         }
+
+        after block {
+            valid(B) := valid(B) | B = b;
+        }
+
+        invariant round(genesis, 0)
+        invariant parent(genesis, P) <-> P = genesis
+
+        invariant ancestor(genesis, A) <-> A = genesis
+
+        invariant valid(genesis)
+        invariant parent(B, P) -> (valid(B) & valid(P))
+
+        invariant ancestor(B, A) -> (valid(B) & valid(A))
+
+        invariant valid(B) -> exists R:round_t. round(B, R)
+        relation orphan(B:block_t)
+        definition orphan(B) = forall P:block_t. ~parent(B, P)
+        invariant valid(B) -> ~orphan(B)
+
+        invariant ~valid(B) -> ~round(B, R)
+        invariant ~valid(B) -> ~parent(B, P)
+        invariant ~valid(B) -> ~ancestor(B, A)
+
+        invariant round(B, R1) & round(B, R2) -> R1 = R2
+        invariant parent(B, P1) & parent(B, P2) -> P1 = P2
+
+        invariant parent(B, P) -> ancestor(B, P)
+        invariant ancestor(A1, A2) & ancestor(A2, A3) -> ancestor(A1, A3)
+        invariant ancestor(B, A1) & ancestor(B, A2) -> (A1 = A2 | ancestor(A1, A2) | ancestor(A2, A1))
+
+        invariant height(genesis) = 0
+        invariant parent(B, P) -> ((B = genesis & P = genesis) | height_t.succ(height(P), height(B)))
     }
 
     implementation {
-        implement consBlock(p:hash_t, r:round_t) returns (b:block_t) {
-            b.round := r;
-            b.parent := p;
+        after init {
+            round(B, R) := B = genesis & R = 0;
+            parent(B, P) := B = genesis & P = genesis;
+            ancestor(B, A) := B = genesis & A = genesis;
+            height(genesis) := 0;
+        }
+
+        implement block(r_c:round_t, pB:block_t) returns (b:block_t) {
+            round(B, R) := round(B, R) | (B = b & R = r_c);
+            parent(B, P) := parent(B, P) | (B = b & P = pB);
+            ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
+            height(b) := height_t.next(height(pB));
         }
     }
-}
+} with height_t
+export block_t.block
 
 isolate quorum_t = {
     type this
-    relation member(N:node_t, Q:quorum_t)
+    relation member(Q:quorum_t, N:node_t)
 
     specification {
-        # only use in proofs
-        axiom forall Q:quorum_t. exists N:node_t. is_good(N) & member(N, Q)
+        axiom exists N:node_t. is_good(N) & member(Q, N)
+    }
 
-        axiom forall Q1:quorum_t. forall Q2:quorum_t. exists N:node_t. is_good(N) & member(N, Q1) & member(N, Q2)
+    private {
+        axiom [quorum_intersection_axiom] exists N:node_t. is_good(N) & member(Q1, N) & member(Q2, N)
     }
 }
 
-isolate voted_t = {
-    type this = struct {
-        block : block_t
-    }
-    individual nil : voted_t
+# isolate cert_t = {
+    # type this
+    # relation block(C:cert_t, B:block_t)
+        #block : block_t,
+        ## every member of cert should have made rcvd_prepare() true for this round
+        #round : round_t,
+        #cert : quorum_t
+    #}
+    #individual nil : cert_t
 
-    specification {
-        axiom forall V:voted_t. V = nil <-> V.block = block_t.nil
-    }
-}
+    #specification {
+        #axiom forall Qc:cert_t. Qc = nil <-> Qc.block = block_t.nil
+        #axiom forall Qc:cert_t. Qc ~= nil <-> Qc.round ~= nil.round
+        #axiom forall N:node_t. quorum_t.member(N, nil.cert)
+    #}
+#}
 
-isolate cert_t = {
-    type this = struct {
-        block : block_t,
-        # every member of cert should have made rcvd_prepare() true for this round
-        round : round_t,
-        cert : quorum_t
-    }
-    individual nil : cert_t
+#isolate timeout_t = {
+    #type this = struct {
+        #round : round_t,
+        #qc : cert_t
+    #}
+    #individual nil : timeout_t
 
-    specification {
-        axiom forall Qc:cert_t. Qc = nil <-> Qc.block = block_t.nil
-        axiom forall Qc:cert_t. Qc ~= nil <-> Qc.round ~= nil.round
-        axiom forall N:node_t. quorum_t.member(N, nil.cert)
-    }
-}
+    #specification {
+        #axiom forall T:timeout_t. T ~= nil <-> T.round ~= nil.round
+        #axiom forall T:timeout_t. T = nil <-> T.qc = cert_t.nil
+    #}
+#}
 
-isolate timeout_t = {
-    type this = struct {
-        round : round_t,
-        qc : cert_t
-    }
-    individual nil : timeout_t
+#isolate timeout_cert_t = {
+    #type this = struct {
+        #round : round_t,
+        #cert : quorum_t,
+        #highestQC : cert_t
+    #}
+    #individual nil : timeout_cert_t
 
-    specification {
-        axiom forall T:timeout_t. T ~= nil <-> T.round ~= nil.round
-        axiom forall T:timeout_t. T = nil <-> T.qc = cert_t.nil
-    }
-}
+    #specification {
+        #axiom forall Tc:timeout_cert_t. Tc ~= nil <-> Tc.round ~= nil.round
+        #axiom forall N:node_t. quorum_t.member(N, nil.cert)
+        #axiom forall Tc:timeout_cert_t. Tc = nil <-> Tc.highestQC = cert_t.nil
+    #}
+#}
 
-isolate timeout_cert_t = {
-    type this = struct {
-        round : round_t,
-        cert : quorum_t,
-        highestQC : cert_t
-    }
-    individual nil : timeout_cert_t
+#isolate proposal_t = {
+    #type this = struct {
+        #block : block_t,
+        #qc : cert_t,
+        #tc : timeout_cert_t
+    #}
+    #individual nil : proposal_t
 
-    specification {
-        axiom forall Tc:timeout_cert_t. Tc ~= nil <-> Tc.round ~= nil.round
-        axiom forall N:node_t. quorum_t.member(N, nil.cert)
-        axiom forall Tc:timeout_cert_t. Tc = nil <-> Tc.highestQC = cert_t.nil
-    }
-}
-
-isolate proposal_t = {
-    type this = struct {
-        block : block_t,
-        qc : cert_t,
-        tc : timeout_cert_t
-    }
-    individual nil : proposal_t
-
-    specification {
-        axiom forall P:proposal_t. P = nil <-> P.block = block_t.nil
-        axiom nil.qc = cert_t.nil
-        axiom nil.tc = timeout_cert_t.nil
-    }
-}
+    #specification {
+        #axiom forall P:proposal_t. P = nil <-> P.block = block_t.nil
+        #axiom nil.qc = cert_t.nil
+        #axiom nil.tc = timeout_cert_t.nil
+    #}
+#}
