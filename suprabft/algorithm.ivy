@@ -12,25 +12,45 @@ object process(id:node_t) = {
     relation uncommitted(QC:qc_t);
     individual voted : round_t
 
+    relation qc_processed(QC:qc_t)
+    relation tc_processed(TC:tc_t)
+
+    relation received_proposal_n(P:proposal_n_t, Src:node_t)
+    relation received_proposal_f(P:proposal_f_t, Src:node_t)
+    relation received_prepare(P:prepare_t, Src:node_t)
+    relation received_qc(Qc:qc_t)
+    relation received_timeout(T:timeout_t, Src:node_t)
+    relation received_tc(Tc:tc_t)
+
     after init {
         locked := qc_t.genesis;
         proposed := 0;
-        r_c := round_t.next(0);
+        r_c := 1;
         timeout := 0;
         timer := false;
         uncommitted(QC) := false;
         voted := 0;
+
+        qc_processed(QC) := false;
+        tc_processed(TC) := false;
+
+        received_proposal_n(P, Src) := false;
+        received_proposal_f(P, Src) := false;
+        received_prepare(P, Src) := false;
+        received_qc(Qc) := false;
+        received_timeout(T, Src) := false;
+        received_tc(Tc) := false;
     }
 
     action proposeNormal(pB:block_t) = {
         var ok := true;
-        ok := ok & block_t.round(pB, round_t.prev(r_c));
+        ok := ok & block_t.get_round(pB) = round_t.prev(r_c);
         ok := ok & leader(r_c) = id;
         ok := ok & proposed < r_c;
         if ok {
             var b := block_t.block(r_c, pB);
-            var p : proposal_n_t.proposal_n(b);
-            call global_view.broadcast_proposal_n(p);
+            var p := proposal_n_t.proposal_n(b);
+            call broadcast_proposal_n(p);
             proposed := r_c;
         }
     }
@@ -43,27 +63,102 @@ object process(id:node_t) = {
     }
 
     action vote(b:block_t) = {
-        if some r:round_t. block_t.round(b, r) & r > voted {
+        if block_t.get_round(b) > voted {
             var p : prepare_t.prepare(b);
-            voted := r;
+            call broadcast_prepare(p);
+            voted := block_t.get_round(b);
         }
     }
 
-    individual locked : cert_t
-    individual voted : voted_t
-    individual r_c : round_t
+    action tryLock(qc:qc_t) = {
+        if block_t.get_round(qc_t.get_block(qc)) > block_t.get_round(qc_t.get_block(locked)) {
+            locked := qc;
+        }
+    }
 
-    individual timed_out : bool
+    action tryCommit(qc:qc_t) = {
+        if some qcp:qc_t. uncommitted(qcp) & round_t.next(block_t.get_round(qc_t.get_block(qcp))) = block_t.get_round(qc_t.get_block(qc)) & qc_t.get_block(qcp) = block_t.get_parent(qc_t.get_block(qc)) {
+            call commit(qcp);
+        } else {}
+        if some qcp:qc_t. uncommitted(qcp) & round_t.next(block_t.get_round(qc_t.get_block(qc))) = block_t.get_round(qc_t.get_block(qcp)) & qc_t.get_block(qc) = block_t.get_parent(qc_t.get_block(qcp)) {
+            call commit(qc);
+        } else {}
+    }
+
+    export action qc_processing(qc:qc_t) = {
+        require qc_t.valid(qc);
+        require forall N:node_t. quorum_t.member(qc_t.get_quorum(qc), N) -> received_prepare(qc_t.get_block(qc));
+        require forall QC:qc_t. qc_processed(QC) -> (block_t.get_round(qc_t.get_block(QC)) ~= block_t.get_round(qc_t.get_block(qc)));
+
+        qc_processed(qc) := true;
+
+        uncommitted(QC) := uncommitted(QC) | QC = qc;
+        voted := block_t.get_round(qc_t.get_block(qc)) if block_t.get_round(qc_t.get_block(qc)) > voted else voted;
+        call proposeNormal(qc_t.get_block(qc));
+        call tryLock(qc);
+        call tryCommit(qc);
+        call broadcast_qc(qc);
+        call advanceToRound(round_t.next(round_t.next(block_t.get_round(qc_t.get_block(qc)))));
+    }
+
+    export action proposal_n_processing(p:proposal_n_t) = {
+        require proposal_n_t.valid(p);
+        require received_proposal_n(p, leader(round_t.prev(r_c)));
+        require ~timer;
+        require block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
+        require block_t.get_parent(proposal_n_t.get_block(p)) = qc_t.get_block(locked);
+
+        call proposeNormal(proposal_n_t.get_block(p));
+        call vote(proposal_n_t.get_block(p));
+    }
+
+    action proposeFR(tc:tc_t) = {
+        var ok := true;
+        ok := ok & tc_t.get_round(tc) = round_t.prev(round_t.prev(r_c));
+        ok := ok & leader(r_c) = id;
+        ok := ok & proposed < r_c;
+
+        if ok {
+            var qcp := qc_t.maxQC(locked, tc_t.getMaxQC(tc));
+            var b := block_t.block(r_c, qc_t.get_block(qcp));
+            var p := proposal_f_t.proposal_f(b, qcp, tc);
+            call broadcast_proposal_f(p);
+            proposed := r_c;
+        }
+    }
+
+    action timeout(r:round_t) = {
+        var t := timeout_t.timeout(r, locked);
+        call broadcast_timeout(t);
+    }
+
+    export action fallback = {
+        require ~timer;
+
+        timer := true;
+        call timeout(round_t.prev(r_c));
+    }
+
+    # timeout sync
+    # tc processing
+
+    export action proposal_f_processing(p:proposal_f_t) = {
+        require proposal_f_t.valid(p);
+        require received_proposal_f(p, leader(round_t.prev(r_c)));
+        require qc_processed(proposal_f_t.get_qc(p));
+        require tc_processed(proposal_f_t.get_tc(p));
+        require ~timer;
+        require block_t.get_round(proposal_f_t.get_block(p)) = round_t.prev(r_c);
+        require tc_t.get_round(proposal_f_t.get_tc(p)) = round_t.prev(round_t.prev(r_c));
+        require block_t.get_parent(proposal_f_t.get_block(p)) = qc_t.get_block(qc_t.maxQC(proposal_f_t.get_qc(p), tc_t.getMaxQC(proposal_f_t.get_tc(p))));
+
+        call proposeNormal(proposal_f_t.get_block(p));
+        call vote(proposal_f_t.get_block(p));
+    }
 
     function blockchain (H:height_t) : block_t
     individual chain_size : height_t
     function blockchain_temp (H:height_t) : block_t
-
-    relation rcvd_proposal(P:proposal_t, Src:node_t)
-    relation rcvd_prepare(B:block_t, Src:node_t)
-    relation rcvd_qc(Qc:cert_t)
-    relation rcvd_timeout(T:timeout_t, Src:node_t)
-    relation rcvd_tc(Tc:timeout_cert_t)
 
     function valid_qc(Qc:cert_t) : bool
     #definition valid_qc(Q:quorum_t, B:block_t) = forall N:node_t . quorum_t.member(N, Qc.cert) -> rcvd_prepare(Qc.block, N)

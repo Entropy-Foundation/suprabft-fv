@@ -18,9 +18,13 @@ isolate block_t = {
     relation parent(B:block_t, P:block_t)
 
     relation ancestor(B:block_t, A:block_t)
-    function height(B:block_t) : height_t
+    relation height(B:block_t, H:height_t)
 
     individual genesis : block_t
+
+    action get_round(b:block_t) returns (r:round_t)
+    action get_parent(b:block_t) returns (pB:block_t)
+    action get_height(b:block_t) returns (h:height_t)
 
     action block(r_c:round_t, pB:block_t) returns (b:block_t)
 
@@ -29,6 +33,30 @@ isolate block_t = {
 
         after init {
             valid(B) := B = genesis;
+        }
+
+        before get_round {
+            require valid(b);
+        }
+
+        after get_round {
+            ensure round(b, r);
+        }
+
+        before get_parent {
+            require valid(b);
+        }
+
+        after get_parent {
+            ensure parent(b, pB);
+        }
+
+        before get_height {
+            require valid(b);
+        }
+
+        after get_height {
+            ensure height(b, h);
         }
 
         before block {
@@ -44,30 +72,34 @@ isolate block_t = {
         invariant parent(genesis, P) <-> P = genesis
 
         invariant ancestor(genesis, A) <-> A = genesis
+        invariant height(genesis, 0)
 
         invariant valid(genesis)
+        invariant round(B, R) -> valid(B)
         invariant parent(B, P) -> (valid(B) & valid(P))
 
         invariant ancestor(B, A) -> (valid(B) & valid(A))
+        invariant height(B, H) -> valid(B)
 
         invariant valid(B) -> exists R:round_t. round(B, R)
-        relation orphan(B:block_t)
-        definition orphan(B) = forall P:block_t. ~parent(B, P)
-        invariant valid(B) -> ~orphan(B)
+        relation parent_exists(B:block_t)
+        definition parent_exists(B) = exists P:block_t. parent(B, P)
+        invariant valid(B) -> parent_exists(B)
 
-        invariant ~valid(B) -> ~round(B, R)
-        invariant ~valid(B) -> ~parent(B, P)
-        invariant ~valid(B) -> ~ancestor(B, A)
+        invariant valid(B) -> exists H:height_t. height(B, H)
 
         invariant round(B, R1) & round(B, R2) -> R1 = R2
         invariant parent(B, P1) & parent(B, P2) -> P1 = P2
 
+        invariant height(B, H1) & height(B, H2) -> H1 = H2
+
         invariant parent(B, P) -> ancestor(B, P)
         invariant ancestor(A1, A2) & ancestor(A2, A3) -> ancestor(A1, A3)
         invariant ancestor(B, A1) & ancestor(B, A2) -> (A1 = A2 | ancestor(A1, A2) | ancestor(A2, A1))
-
-        invariant height(genesis) = 0
-        invariant parent(B, P) -> ((B = genesis & P = genesis) | height_t.succ(height(P), height(B)))
+        relation inbetween(D:block_t, A:block_t)
+        definition inbetween(D, A) = exists M:block_t. ancestor(D, M) & ancestor(M, A)
+        invariant (ancestor(D, A) & ~inbetween(D, A)) -> ((D = genesis & A = genesis) | parent(D, A))
+        invariant parent(B, P) -> ((B = genesis & P = genesis) | (exists P_h, B_h:height_t. height(B, B_h) & height(P, P_h) & height_t.succ(P_h, B_h)))
     }
 
     implementation {
@@ -75,35 +107,69 @@ isolate block_t = {
             round(B, R) := B = genesis & R = 0;
             parent(B, P) := B = genesis & P = genesis;
             ancestor(B, A) := B = genesis & A = genesis;
-            height(genesis) := 0;
+            height(B, H) := B = genesis & H = 0;
+        }
+
+        implement get_round(b:block_t) returns (r:round_t) {
+            if some b_r:round_t. round(b, b_r) {
+                r := b_r;
+            } else {
+            }
+        }
+
+        implement get_parent(b:block_t) returns (pB:block_t) {
+            if some b_pB:block_t. parent(b, b_pB) {
+                pB := b_pB;
+            } else {
+            }
+        }
+
+        implement get_height(b:block_t) returns (h:height_t) {
+            if some b_h:height_t. height(b, b_h) {
+                h := b_h;
+            } else {
+            }
         }
 
         implement block(r_c:round_t, pB:block_t) returns (b:block_t) {
             round(B, R) := round(B, R) | (B = b & R = r_c);
             parent(B, P) := parent(B, P) | (B = b & P = pB);
             ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
-            height(b) := height_t.next(height(pB));
+            height(B, H) := height(B, H) | B = b & H = height_t.next(get_height(pB));
         }
     }
 } with height_t
+export block_t.get_round
+export block_t.get_parent
+export block_t.get_height
 export block_t.block
 
 isolate quorum_t = {
     type this
     relation member(Q:quorum_t, N:node_t)
+}
 
-    specification {
-        axiom exists N:node_t. is_good(N) & member(Q, N)
-    }
-
+trusted isolate every_quorum_good = {
     private {
-        axiom [quorum_intersection_axiom] exists N:node_t. is_good(N) & member(Q1, N) & member(Q2, N)
+        axiom [every_quorum_good] exists N:node_t. is_good(N) & quorum_t.member(Q, N)
     }
 }
 
-# isolate cert_t = {
-    # type this
-    # relation block(C:cert_t, B:block_t)
+trusted isolate quorum_intersection_axiom = {
+    private {
+        axiom [quorum_intersection_axiom] exists N:node_t. is_good(N) & quorum_t.member(Q1, N) & quorum_t.member(Q2, N)
+    }
+}
+
+isolate qc_t = {
+    type this
+
+    relation block(QC:qc_t, B:block_t)
+
+    individual genesis : qc_t
+
+    action get_block(qc:qc_t) returns (b:block_t)
+}
         #block : block_t,
         ## every member of cert should have made rcvd_prepare() true for this round
         #round : round_t,
