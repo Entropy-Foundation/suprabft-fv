@@ -7,7 +7,6 @@ object process(id:node_t) = {
     individual locked : qc_t
     individual proposed : round_t
     individual r_c : round_t
-    individual timeout : round_t;
     individual timer : bool
     relation uncommitted(QC:qc_t);
     individual voted : round_t
@@ -26,7 +25,6 @@ object process(id:node_t) = {
         locked := qc_t.genesis;
         proposed := 0;
         r_c := 1;
-        timeout := 0;
         timer := false;
         uncommitted(QC) := false;
         voted := 0;
@@ -40,6 +38,145 @@ object process(id:node_t) = {
         received_qc(Qc) := false;
         received_timeout(T, Src) := false;
         received_tc(Tc) := false;
+    }
+
+    implement shim.proposal_n_handler.handle(m:msg) {
+        if proposal_n_t.valid(m.prop_n) {
+            if block_t.valid(proposal_n_t.get_block(m.prop_n)) {
+                received_proposal_n(m.prop_n, m.src) := true;
+            }
+        }
+    }
+
+    implement shim.proposal_f_handler.handle(m:msg) {
+        if proposal_f_t.valid(m.prop_f) {
+            if (global_view.valid_qc(proposal_f_t.get_qc(m.prop_f)) & global_view.valid_tc(proposal_f_t.get_tc(m.prop_f))) {
+                received_proposal_f(m.prop_f, m.src) := true;
+                received_qc(proposal_f_t.get_qc(m.prop_f)) := true;
+                received_tc(proposal_f_t.get_tc(m.prop_f)) := true;
+            }
+        }
+    }
+
+    implement shim.prepare_handler.handle(m:msg) {
+        if prepare_t.valid(m.prep) {
+            received_prepare(m.prep, m.src) := true;
+        }
+    }
+
+    export action aggregate_prepares(qc:cert_t) = {
+        require forall N:node_t. quorum_t.member(N, qc.cert) -> received_prepare(qc.block, N);
+
+        received_qc(qc) := true;
+    }
+
+    implement shim.qc_handler.handle(m:msg) {
+        if global_view.valid_qc(m.qc) {
+            received_qc(m.qc) := true;
+        }
+    }
+
+    implement shim.timeout_handler.handle(m:msg) {
+        if timeout_t.valid(m.t) {
+            if global_view.valid_qc(timeout_t.get_qc(m.t)) {
+                received_timeout(m.t, m.src) := true;
+                received_qc(timeout_t.get_qc(m.t)) := true;
+            }
+        }
+    }
+
+    export action aggregate_timeout(tc:timeout_cert_t) = {
+        require forall N:node_t. quorum_t.member(N, tc.cert) -> exists T:timeout_t. T.round = tc.round & rcvd_timeout(T, N) & tc.highestQC.round >= T.qc.round;
+        require exists N:node_t. exists T:timeout_t. quorum_t.member(N, tc.cert) & T.round = tc.round & rcvd_timeout(T, N) & tc.highestQC = T.qc;
+        require valid_qc(tc.highestQC);
+
+        rcvd_tc(tc) := true;
+    }
+
+    implement shim.tc_handler.handle(m:msg) {
+        if m.tc ~= timeout_cert_t.nil {
+            if valid_tc(m.tc) {
+                rcvd_tc(m.tc) := true;
+            }
+        }
+    }
+
+    action broadcast_proposal(p:proposal_t) = {
+        var m : msg;
+        m.kind := msg_kind.proposal;
+        m.prop := p;
+        m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    action broadcast_prepare(b:block_t) = {
+        var m : msg;
+        m.kind := msg_kind.prepare;
+        m.prep := b;
+    	m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    action broadcast_qc(qc:cert_t) = {
+        var m : msg;
+        m.kind := msg_kind.qc;
+        m.qc := qc;
+    	m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    action broadcast_timeout(t:timeout_t) = {
+        var m : msg;
+        m.kind := msg_kind.timeout;
+        m.t := t;
+        m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    action broadcast_tc(tc:timeout_cert_t) = {
+        var m : msg;
+        m.kind := msg_kind.tc;
+        m.tc := tc;
+    	m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    export action byzantine_send = {
+        require ~is_good(id);
+
+        var m : msg;
+        var dst : node_t;
+        if ~is_good(m.src) {
+            if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
+                call shim.send(id, dst, m);
+            }
+            if m.kind = msg_kind.prepare {
+                var r : round_t;
+                var bl: block_t;
+                call shim.send(id, dst, m);
+                call global_view.node_voted(m.src,m.prep,r,bl);
+            }
+            if m.kind = msg_kind.qc & valid_qc(m.qc) {
+                var ok : bool;
+                ok := true;
+                ok := ok & forall H:height_t. ~forest_store(m.qc,H);
+                if ok {
+                    call shim.send(id, dst, m);
+                }
+            }
+            if m.kind = msg_kind.timeout & valid_qc(m.t.qc) {
+                call shim.send(id, dst, m);
+                call global_view.node_timeout(m.src,m.t);
+            }
+            if m.kind = msg_kind.tc & valid_tc(m.tc) {
+                call shim.send(id, dst, m);
+            }
+        }
     }
 
     action proposeNormal(pB:block_t) = {
@@ -139,8 +276,24 @@ object process(id:node_t) = {
         call timeout(round_t.prev(r_c));
     }
 
-    # timeout sync
-    # tc processing
+    export action timeout_sync(timeout_small_quorum) = {
+        require quorum_member -> received_timeout
+        require quorum_member -> qc_processed()
+        require r >= round_t.prev(round_t.prev(r_c));
+
+        call timeout(r);
+        call advanceToRound(round_t.next(r));
+    }
+
+    export action tc_processing(tc:tc_t) = {
+        require quorum_member -> received_timeout
+        require quorum_member -> qc_processed()
+
+        call advanceToRound(round_t.next(round_t.next(tc_t.get_round(tc))));
+        if forall P:proposal_f_t. ~(proposal_f_t.get_round(P) = round_t.next(tc_t.get_round(tc)) & received_proposal_f(P, leader(proposal_f_t.get_round(P)))) {
+            call proposeFR(tc);
+        }
+    }
 
     export action proposal_f_processing(p:proposal_f_t) = {
         require proposal_f_t.valid(p);
@@ -155,660 +308,5 @@ object process(id:node_t) = {
         call proposeNormal(proposal_f_t.get_block(p));
         call vote(proposal_f_t.get_block(p));
     }
-
-    function blockchain (H:height_t) : block_t
-    individual chain_size : height_t
-    function blockchain_temp (H:height_t) : block_t
-
-    function valid_qc(Qc:cert_t) : bool
-    #definition valid_qc(Q:quorum_t, B:block_t) = forall N:node_t . quorum_t.member(N, Qc.cert) -> rcvd_prepare(Qc.block, N)
-    # this function checks that all members in Qc have voted for the block contained in Qc. It is done here by directly checking the node_has_voted relation. In actual implementation, this should be done by examining the contents of Qc.
-    definition valid_qc(Q:cert_t) = forall N:node_t. quorum_t.member(N,Q.cert) -> global_view.node_has_voted(N, Q.block)
-
-    function valid_tc(Tc:timeout_cert_t) : bool
-    definition valid_tc(Tc:timeout_cert_t) = (forall N:node_t. quorum_t.member(N, Tc.cert) -> exists T:timeout_t. T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC.round >= T.qc.round) & (exists N:node_t. exists T:timeout_t. quorum_t.member(N, Tc.cert) & T.round = Tc.round & global_view.node_sent_timeout(N, T) & Tc.highestQC = T.qc) & valid_qc(Tc.highestQC)
-
-    relation forest_store(Qc:cert_t,H:height_t)
-    relation forest_ancestor(Qd:cert_t,Hd:height_t,Qa:cert_t,Ha:height_t) #Qa is an ancestor of Qd
-    relation forest_strictAncestor(Qd:cert_t,Hd:height_t,Qa:cert_t,Ha:height_t)
-    relation forest_root(Q:cert_t,H:height_t)
-    relation forest_leaf(Q:cert_t,H:height_t)
-    relation forest_succ(Qd:cert_t,Hd:height_t,Qa:cert_t,Ha:height_t)
-    relation qc_processed(Q:cert_t)
-    #relation forest_root_child(Q:cert_t, H:height_t)
-
-    definition forest_strictAncestor(Qd, Hd, Qa, Ha) = forest_store(Qd, Hd) & forest_store(Qa, Ha) & forest_ancestor(Qd, Hd, Qa, Ha) & (Qd ~= Qa | Hd ~= Ha)
-
-    definition forest_root(Q, H) = forest_store(Q, H) & forall Qa:cert_t. forall Ha:height_t. forest_ancestor(Q, H, Qa, Ha) -> (Q = Qa & H = Ha)
-
-    definition forest_leaf(Q, H) = forest_store(Q, H) & forall Qd:cert_t. forall Hd:height_t. forest_ancestor(Qd, Hd, Q, H) -> (Qd = Q & Hd = H)
-
-    definition forest_succ(Qd, Hd, Qa, Ha) = forest_ancestor(Qd, Hd, Qa, Ha) & (Qd ~= Qa | Hd ~= Ha) & forall Qaa:cert_t. forall Haa:height_t. ((forest_ancestor(Qd, Hd, Qaa, Haa) & (Qd ~= Qaa | Hd ~= Haa)) -> forest_ancestor(Qa, Ha, Qaa, Haa))
-
-    relation forest_heights(Qf:cert_t, Hf:height_t, Ha:height_t)
-
-    definition forest_heights(Qf, Hf, Ha) = exists Qa:cert_t. forest_ancestor(Qf,Hf,Qa,Ha)
-
-    # These relations are used to store Qcs that are ancestors of currently locked QC, to implement 2-chain commit
-    relation commit_candidates(Q:cert_t, H:height_t)
-
-    # this is used to store the chain_size at which 2-chain commit is executed. It is used to write supporting invariants
-    individual chain_size_2cc : height_t
-    individual dc_basis_qc : cert_t
-    individual dc_basis_block : block_t
-    individual tip_of_chain_qc : cert_t
-    individual tip_of_chain_height : height_t
-    individual qp_when_adding_qc : cert_t
-    individual pred_of_chain_height : height_t
-
-    individual locked_height : height_t
-
-    after init {
-        locked := cert_t.nil;
-        locked.block := block_t.nil;
-        voted := voted_t.nil;
-        voted.block := block_t.nil;
-        r_c := 0;
-        locked_height := 0;
-
-        timed_out := false;
-
-        blockchain(H) := block_t.nil;
-        chain_size := 0;
-
-        rcvd_proposal(P, Src) := false;
-        rcvd_prepare(B, Src) := false;
-        rcvd_qc(Qc) := false;
-        rcvd_timeout(T, Src) := false;
-        rcvd_tc(Tc) := false;
-
-    	forest_store(Q, H) := false;
-    	forest_ancestor(Q1, H1, Q2, H2) := false;
-
-        qc_processed(Q) := false;
-        #forest_root_child(Q,H) := false;
-
-        commit_candidates(Q,H) := false;
-        chain_size_2cc := 0;
-        dc_basis_qc := cert_t.nil;
-        dc_basis_block := block_t.nil;
-        tip_of_chain_qc := cert_t.nil;
-        tip_of_chain_height := 0;
-        qp_when_adding_qc := cert_t.nil;
-        pred_of_chain_height := 0;
-
-        assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
-
-        assume forall B:block_t. B.round = round_t.next(0) if B ~= block_t.nil else 0;
-    }
-
-    implement shim.proposal_handler.handle(m:msg) {
-        if m.prop ~= proposal_t.nil {
-            if (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
-                rcvd_proposal(m.prop, m.src) := true;
-                if m.prop.qc ~= cert_t.nil {
-                    rcvd_qc(m.prop.qc) := true;
-                }
-                if m.prop.tc ~= timeout_cert_t.nil {
-                    rcvd_tc(m.prop.tc) := true;
-                }
-            }
-        }
-    }
-    implement shim.prepare_handler.handle(m:msg) {
-        # here we check the global view to make sure that sender of this message has really voted. in implementation, this has to be checked by examining the received message for authenticity
-        # if global_view.node_has_voted(m.src,m.prep) {
-        if m.prep ~= block_t.nil {
-            rcvd_prepare(m.prep, m.src) := true;
-        }
-    }
-    implement shim.qc_handler.handle(m:msg) {
-        if m.qc ~= cert_t.nil {
-            if valid_qc(m.qc) {
-                rcvd_qc(m.qc) := true;
-            }
-        }
-    }
-    implement shim.timeout_handler.handle(m:msg) {
-        # here we check global view to ensure that the sender of this message has really sent this timeout message. In implementation, this is done by checking the cryptographic authenticity of the message
-        if m.t ~= timeout_t.nil {
-            if m.t.qc ~= cert_t.nil & valid_qc(m.t.qc) {
-                rcvd_timeout(m.t, m.src) := true;
-            }
-        }
-    }
-    implement shim.tc_handler.handle(m:msg) {
-        if m.tc ~= timeout_cert_t.nil {
-            if valid_tc(m.tc) {
-                rcvd_tc(m.tc) := true;
-            }
-        }
-    }
-
-    action broadcast_proposal(p:proposal_t) = {
-        var m : msg;
-        m.kind := msg_kind.proposal;
-        m.prop := p;
-        m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    action broadcast_prepare(b:block_t) = {
-        var m : msg;
-        m.kind := msg_kind.prepare;
-        m.prep := b;
-    	m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    action broadcast_qc(qc:cert_t) = {
-        var m : msg;
-        m.kind := msg_kind.qc;
-        m.qc := qc;
-    	m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    action broadcast_timeout(t:timeout_t) = {
-        var m : msg;
-        m.kind := msg_kind.timeout;
-        m.t := t;
-        m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    action broadcast_tc(tc:timeout_cert_t) = {
-        var m : msg;
-        m.kind := msg_kind.tc;
-        m.tc := tc;
-    	m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    export action aggregate_prepares(qc:cert_t) = {
-        #action aggregate_prepares(qc:cert_t) = {
-        require forall N:node_t. quorum_t.member(N, qc.cert) -> rcvd_prepare(qc.block, N);
-
-        rcvd_qc(qc) := true;
-    }
-
-    export action aggregate_timeout(tc:timeout_cert_t) = {
-        require forall N:node_t. quorum_t.member(N, tc.cert) -> exists T:timeout_t. T.round = tc.round & rcvd_timeout(T, N) & tc.highestQC.round >= T.qc.round;
-        require exists N:node_t. exists T:timeout_t. quorum_t.member(N, tc.cert) & T.round = tc.round & rcvd_timeout(T, N) & tc.highestQC = T.qc;
-        require valid_qc(tc.highestQC);
-
-        rcvd_tc(tc) := true;
-    }
-
-    # We simulate the action of timer getting expired by having the environment call this action, in which we set the boolean timed_out to true
-    export action timer_expiry = {
-        require ~timed_out;
-
-        timed_out := true;
-    }
-
-    export action byzantine_send = {
-        require ~is_good(id);
-
-        var m : msg;
-        var dst : node_t;
-        if ~is_good(m.src) {
-            if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
-                call shim.send(id, dst, m);
-            }
-            if m.kind = msg_kind.prepare {
-                var r : round_t;
-                var bl: block_t;
-                call shim.send(id, dst, m);
-                call global_view.node_voted(m.src,m.prep,r,bl);
-            }
-            if m.kind = msg_kind.qc & valid_qc(m.qc) {
-                var ok : bool;
-                ok := true;
-                ok := ok & forall H:height_t. ~forest_store(m.qc,H);
-                if ok {
-                    call shim.send(id, dst, m);
-                }
-            }
-            if m.kind = msg_kind.timeout & valid_qc(m.t.qc) {
-                call shim.send(id, dst, m);
-                call global_view.node_timeout(m.src,m.t);
-            }
-            if m.kind = msg_kind.tc & valid_tc(m.tc) {
-                call shim.send(id, dst, m);
-            }
-        }
-    }
-
-    # Algorithm 1: SupraBFT Normal Path
-    action advanceToRound(r:round_t, b_r_1:block_t, qc:cert_t, tc_r_2:timeout_cert_t) = {
-        require ~is_good(id) | qc = cert_t.nil | rcvd_qc(qc);
-        require tc_r_2 = timeout_cert_t.nil | rcvd_tc(tc_r_2);
-        require b_r_1 ~= block_t.nil -> b_r_1.parent = block_t.hash(locked.block);
-        require forall B:block_t. forall R:round_t. (is_good(id) & global_view.node_has_locked_detail(id,B,R)) -> (B.round < locked.block.round | B = locked.block);
-
-        r_c := r;
-        timed_out := false;
-
-        if (b_r_1 ~= block_t.nil) {
-            call broadcast_prepare(b_r_1);
-	        call global_view.node_voted(id, b_r_1, r_c, locked.block);
-
-            voted.block := b_r_1;
-        }
-
-        if id = leader(r_c) {
-            var pb : block_t;
-            pb := b_r_1 if b_r_1 ~= block_t.nil & voted.block = b_r_1 else locked.block;
-            if tc_r_2 ~= timeout_cert_t.nil {
-                pb := tc_r_2.highestQC.block;
-            }
-            var b : block_t;
-            assert ~is_good(id) | block_t.hash(pb) ~= hash_t.nil;
-            assume b.parent = block_t.hash(pb);
-            b.round := r_c;
-            #var b := block_t.consBlock(block_t.hash(pb), r_c, id);
-            var p : proposal_t;
-            p.block := b;
-            p.qc := qc;
-            p.tc := tc_r_2;
-            call broadcast_proposal(p);
-        }
-    }
-
-    action tryLockAndCommit(qc:cert_t, hc:height_t, qp:cert_t) = {
-        require qc ~= cert_t.nil & rcvd_qc(qc);
-        require qc.block.parent ~= block_t.hash(block_t.nil);
-        require forest_store(qc,hc);
-
-        if round_t.succ(locked.block.round, qc.block.round) & qc.block.parent = block_t.hash(locked.block) {
-            #2-chain commit. Commit all uncommitted ancestors of locked, which is the parent of qc
-            blockchain_temp(H) := blockchain(H);
-            commit_candidates(Q,H) := chain_size <= H & H < hc & forest_ancestor(qc,hc,Q,H);
-            commit_candidates(qc,hc) := true;
-
-            chain_size_2cc := chain_size;
-            dc_basis_qc := qc;
-            dc_basis_block := qc.block;
-            tip_of_chain_qc := locked;
-            tip_of_chain_height := locked_height;
-            qp_when_adding_qc := qp;
-            if (0 < tip_of_chain_height)
-            {
-                pred_of_chain_height := height_t.prev(tip_of_chain_height);
-            }
-
-            blockchain(H) := *;
-            assume forall H:height_t. H < chain_size -> blockchain(H) = blockchain_temp(H);
-            assume forall H:height_t. ( chain_size <= H & H < hc) -> exists Q:cert_t. commit_candidates(Q,H) & Q.block = blockchain(H);
-            assume forall H:height_t. hc <= H -> blockchain(H) = block_t.nil;
-
-            chain_size := hc;
-            forest_store(Q,H) := Q=qc & H = hc;
-            forest_ancestor(Q1,H1,Q2,H2) := Q1 = qc & H1 = hc & Q2 = qc & H2 = hc;
-
-            # if some hc:height_t. forest_store(qc,hc)
-            # {
-            #     if some qr:cert_t. forest_ancestor(qc,hc,qr,chain_size) & forest_root(qr,chain_size) & qc ~= qr
-            #     {
-            #         blockchain(chain_size) := qr.block;
-            #         forest_store(Q,H) := forest_ancestor(qc,hc,Q,H);
-            #         forest_ancestor(Q1,H1,Q2,H2) := forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(qc,hc,Q1,H1) & forest_ancestor(qc,hc,Q2,H2);
-            #         forest_root_child(Q,H) := forest_succ(Q,H,qr,chain_size);
-            #         assert forall Q:cert_t. forall H:height_t. (forest_root_child(Q,H) & is_good(id)) -> (Q.block.parent = block_t.hash(qr.block) & height_t.succ(chain_size,H));
-            #         assert forall Q:cert_t. forall H:height_t. (forest_root_child(Q,H) & is_good(id)) -> (forall Qa:cert_t. forall Ha:height_t. forest_ancestor(Q,H,Qa,Ha) -> ( (Qa = qr & Ha=chain_size) | (Qa=Q & Ha = H)));
-            #         forest_store(qr,chain_size) := false;
-            #         forest_ancestor(Q,H,qr,chain_size) := false;
-            #         assert is_good(id) -> (forest_root(Q,H) <-> forest_root_child(Q,H));
-            #         chain_size := height_t.next(chain_size);
-            #         assert forall Q:cert_t. (forest_store(Q,chain_size) & is_good(id)) -> forest_root(Q,chain_size);
-            #         forest_root_child(Q,H) := false;
-            #     }
-            # }
-        }
-        if locked.block.round < qc.block.round {
-            locked := qc;
-            locked_height := hc;
-        }
-    }
-
-    export action process_prepareQC(qc:cert_t) = {
-        require rcvd_qc(qc);
-
-        var ok := true;
-        ok := ok & qc.block ~= block_t.nil;
-        ok := ok & qc.block.parent ~= block_t.hash(block_t.nil);
-        ok := ok & forall H:height_t. blockchain(H) ~= qc.block;
-        ok := ok & forall Q:cert_t. forall H:height_t. forest_store(Q,H) -> Q.block ~= qc.block;
-        ok := ok & forall Q:cert_t. qc_processed(Q) -> Q.block ~= qc.block;
-        if ok {
-            if some h:height_t. height_t.succ(h, chain_size) & qc.block.parent = block_t.hash(blockchain(h)) {
-                # this qc is a candidate for the child of the last committed block on the chain. start a new tree in the forest
-                forest_store(qc, chain_size) := true;
-                forest_ancestor(qc, chain_size, qc, chain_size) := true;
-                call broadcast_qc(qc);
-                call tryLockAndCommit(qc,chain_size,cert_t.nil);
-                call finished_prepareQC_processing(qc);
-                if locked = qc {
-                    assert ~is_good(id) | qc.block.round < r_c;
-                    call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
-                }
-                qc_processed(qc) := true;
-                call global_view.node_processed_qc(id,qc);
-            } else {
-                if some qp:cert_t. exists Hp:height_t. forest_store(qp, Hp) & qc.block.parent = block_t.hash(qp.block){
-                    # this qc is a candidate for the child of qp, which is in the forest at height Hp
-                    if some hp:height_t. forest_store(qp, hp) & qc.block.parent = block_t.hash(qp.block) {
-                        forest_store(qc, height_t.next(hp)) := true;
-                        forest_ancestor(qc, height_t.next(hp), qc, height_t.next(hp)) := true;
-                        forest_ancestor(qc, height_t.next(hp), qp, hp) := true;
-                        forest_ancestor(qc, height_t.next(hp), Q, H) := forest_ancestor(qp, hp, Q, H) | (Q=qc & H = height_t.next(hp));
-
-                        call broadcast_qc(qc);
-                        call tryLockAndCommit(qc,height_t.next(hp),qp);
-                        call finished_prepareQC_processing(qc);
-                        if locked = qc {
-                            assert ~is_good(id) | qc.block.round < r_c;
-                            call global_view.node_locked_quorum(id, qc.block, qc.cert, r_c);
-                        }
-                        qc_processed(qc) := true;
-                        call global_view.node_processed_qc(id,qc);
-                    }
-                } else {
-                    #wait for ancestor QCs
-                }
-            }
-        }
-    }
-
-    export action process_proposal(p:proposal_t) = {
-    #action process_proposal(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc ~= cert_t.nil;
-        require p.tc = timeout_cert_t.nil;
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & ~timed_out;
-        ok := ok & block_t.hash(p.qc.block) = locked.block.parent;
-        ok := ok & round_t.succ(locked.block.round, r_c);
-        ok := ok & p.block.parent = block_t.hash(locked.block);
-        if ok {
-            call advanceToRound(round_t.next(r_c), p.block, locked, timeout_cert_t.nil);
-        }
-    }
-
-    # Algorithm 2: SupraBFT Fallback Path
-    action timeout(r:round_t) = {
-        var t : timeout_t;
-        t.round := r;
-        t.qc := locked;
-        call broadcast_timeout(t);
-        call global_view.node_timeout(id, t);
-    }
-
-    export action fallback = {
-        require r_c > 0;
-
-        var ok := true;
-        ok := ok & timed_out;
-        ok := ok & ~round_t.succ(locked.block.round, r_c);
-        if ok {
-            call timeout(round_t.prev(r_c));
-        }
-    }
-
-    export action timeout_synchronisation(t:timeout_t) = {
-        # f + 1 unique timeout messages -> at least 1 honest timeout message
-        require exists N:node_t. is_good(N) & rcvd_timeout(t, N);
-        # this is bad, but do we really want another data structure storing every timeout message we sent
-        require forall T:timeout_t. T.round = t.round -> ~global_view.node_sent_timeout(id, T);
-        require ~timed_out;
-
-        call timer_expiry;
-        call timeout(t.round);
-    }
-
-    export action process_timeoutQC(tc:timeout_cert_t) = {
-        #action process_timeoutQC(tc:timeout_cert_t) = {
-        require rcvd_tc(tc);
-        require r_c > 0;
-        require round_t.prev(r_c) > 0;
-
-        var ok := true;
-        ok := ok & tc.round > round_t.prev(round_t.prev(r_c));
-        if ok {
-            call advanceToRound(round_t.next(round_t.next(tc.round)), block_t.nil, cert_t.nil, tc);
-        }
-    }
-
-    export action fallback_recovery(p:proposal_t) = {
-        #action fallback_recovery(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc = cert_t.nil;
-        require p.tc ~= timeout_cert_t.nil;
-        require 0 < p.block.round;
-        require 0 < round_t.prev(p.block.round);
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & ~timed_out;
-        ok := ok & p.tc.round = round_t.prev(round_t.prev(p.block.round));
-        ok := ok & valid_qc(p.tc.highestQC);
-        ok := ok & p.block.parent = block_t.hash(p.tc.highestQC.block);
-        ok := ok & p.block.parent = block_t.hash(locked.block);
-        if ok {
-            rcvd_qc(p.tc.highestQC) := true;
-            call advanceToRound(round_t.next(r_c), p.block, p.tc.highestQC, timeout_cert_t.nil)
-        }
-    }
-
-    action finished_prepareQC_processing(qc:cert_t) = {
-        require rcvd_qc(qc);
-        require ~is_good(id) | qc.block.parent = block_t.hash(block_t.nil) | exists Qc2:cert_t. qc_processed(Qc2) & block_t.hash(Qc2.block) = qc.block.parent;
-
-        var ok := true;
-        ok := ok & round_t.next(qc.block.round) > r_c;
-        if ok {
-            voted.block := qc.block;
-            if some qc2:cert_t. qc_processed(qc2) & block_t.hash(qc2.block) = qc.block.parent {
-                call advanceToRound(round_t.next(qc.block.round), block_t.nil, qc2, timeout_cert_t.nil);
-            }
-            else {
-                if qc.block.parent = block_t.hash(block_t.nil)
-                {
-                     call advanceToRound(round_t.next(qc.block.round), block_t.nil, cert_t.nil, timeout_cert_t.nil);
-                }
-            }
-        }
-    }
-
-    export action no_proposal = {
-        #action no_proposal = {
-        require exists Qc:cert_t. rcvd_qc(Qc) & locked.block.parent = block_t.hash(Qc.block);
-
-        var ok := true;
-        ok := ok & timed_out;
-        ok := ok & round_t.succ(locked.block.round, r_c);
-        if ok {
-            if some qc:cert_t. rcvd_qc(qc) & locked.block.parent = block_t.hash(qc.block) {
-                call advanceToRound(round_t.next(r_c), block_t.nil, qc, timeout_cert_t.nil);
-            }
-        }
-    }
-
-    export action leader_failed(p:proposal_t) = {
-        #action leader_failed(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc ~= cert_t.nil;
-        require p.tc = timeout_cert_t.nil;
-        require r_c > 0;
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & voted.block.round < round_t.prev(r_c);
-        ok := ok & block_t.hash(p.qc.block) = locked.block.parent;
-        ok := ok & p.block.parent = block_t.hash(locked.block);
-        if ok {
-            call advanceToRound(round_t.next(r_c), p.block, locked, timeout_cert_t.nil);
-        }
-    }
-
-    # Algorithm 3: SupraBFT Genesis
-    export action proposal_b0_correct(p:proposal_t) = {
-    #action proposal_b0_correct(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc = cert_t.nil;
-        require p.tc = timeout_cert_t.nil;
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & ~timed_out;
-        ok := ok & p.block.parent = block_t.hash(block_t.nil);
-        ok := ok & locked = cert_t.nil;
-        ok := ok & voted = voted_t.nil;
-        if ok {
-            call advanceToRound(round_t.next(r_c), p.block, cert_t.nil, timeout_cert_t.nil);
-        }
-    }
-
-    export action proposal_b0_late(p:proposal_t) = {
-        #action proposal_b0_late(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc = cert_t.nil;
-        require p.tc ~= timeout_cert_t.nil;
-	    require p.block.round > 0;
-	    require round_t.prev(p.block.round) > 0;
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & ~timed_out;
-        ok := ok & p.block.parent = block_t.hash(block_t.nil);
-        ok := ok & locked = cert_t.nil;
-        ok := ok & p.tc.round = round_t.prev(round_t.prev(p.block.round));
-        if ok {
-            call advanceToRound(round_t.next(r_c), p.block, cert_t.nil, p.tc);
-        }
-    }
-
-    export action proposal_b1_correct(p:proposal_t) = {
-    #action proposal_b1_correct(p:proposal_t) = {
-        require rcvd_proposal(p, leader(r_c));
-        require p.qc = cert_t.nil;
-        require p.tc = timeout_cert_t.nil;
-
-        var ok := true;
-        ok := ok & p.block.round = r_c;
-        ok := ok & ~timed_out;
-        ok := ok & p.block.parent = block_t.hash(locked.block);
-        if ok {
-            call advanceToRound(round_t.next(r_c), p.block, cert_t.nil, timeout_cert_t.nil);
-        }
-    }
-
-    export action b0_qc(qc:cert_t) = {
-        require rcvd_qc(qc);
-
-        var ok := true;
-        ok := ok & qc.block.parent = block_t.hash(block_t.nil);
-        ok := ok & qc.block ~= block_t.nil;
-        ok := ok & (locked = cert_t.nil | (locked.block.parent = block_t.hash(block_t.nil) & qc.block.round > locked.block.round));
-        ok := ok & forall Q:cert_t. qc_processed(Q) -> Q.block ~= qc.block;
-        if ok {
-            call broadcast_qc(qc);
-            locked := qc;
-            locked_height := 0;
-            forest_store(qc,0) := true;
-            forest_ancestor(qc,0,qc,0) := true;
-            call finished_prepareQC_processing(qc);
-            assert qc.block.round < r_c;
-            call global_view.node_locked_quorum(id,qc.block,qc.cert, r_c);
-            qc_processed(qc) := true;
-            call global_view.node_processed_qc(id,qc);
-        }
-    }
-
-    invariant forall B:block_t. forall N:node_t. rcvd_prepare(B, N) -> global_view.node_has_voted(N, B)
-
-    invariant forall T:timeout_t. forall N:node_t. rcvd_timeout(T, N) -> global_view.node_sent_timeout(N, T)
-
-	invariant forall B:block_t. (global_view.node_has_voted(id, B) & is_good(id)) -> r_c > B.round
-
-    invariant forall Qc:cert_t. rcvd_qc(Qc) -> valid_qc(Qc)
-
-    invariant forall Q:cert_t. qc_processed(Q) -> rcvd_qc(Q)
-
-    invariant forall Tc:timeout_cert_t. rcvd_tc(Tc) -> valid_tc(Tc)
-
-    invariant forall P:proposal_t. forall N:node_t. rcvd_proposal(P,N) -> ((P.tc ~= timeout_cert_t.nil -> rcvd_tc(P.tc)) & (P.qc ~= cert_t.nil -> rcvd_qc(P.qc)))
-
-    invariant forall N:node_t. ~rcvd_proposal(proposal_t.nil, N)
-
-    invariant forall N:node_t. ~rcvd_prepare(block_t.nil, N)
-
-    invariant forall N:node_t. ~rcvd_timeout(timeout_t.nil, N)
-
-    invariant ~rcvd_qc(cert_t.nil)
-
-    invariant ~rcvd_tc(timeout_cert_t.nil)
-
-    invariant (is_good(id) & locked.block ~= block_t.nil) -> locked.block.round < r_c
-
-	invariant (locked.block ~= block_t.nil & is_good(id)) -> (exists Rl:round_t. Rl <= r_c & global_view.node_has_locked_detail(id, locked.block,Rl))
-
-	invariant (locked.block ~= block_t.nil & is_good(id)) -> (global_view.node_has_locked(id, locked.block))
-
-    invariant ((locked = cert_t.nil | locked.block.parent = block_t.hash(block_t.nil)) & is_good(id)) -> chain_size=0
-
-    invariant forall H:height_t. (chain_size <= H & is_good(id)) -> (blockchain(H) = block_t.nil)
-
-	invariant forall H:height_t. (H < chain_size & is_good(id)) -> (blockchain(H) ~= block_t.nil)
-
-    invariant forall H:height_t. (is_good(id) & blockchain(H) ~= block_t.nil) -> exists Q:cert_t. (qc_processed(Q) & Q.block = blockchain(H))
-
-    invariant (locked ~= cert_t.nil & is_good(id)) -> forest_store(locked,locked_height)
-
-    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id))  -> (rcvd_qc(Q) & forest_ancestor(Q,H,Q,H) & Q.block ~= block_t.nil & qc_processed(Q))
-
-    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_ancestor(Qd,Hd,Qa,Ha) & is_good(id)) -> (forest_store(Qd,Hd) & forest_store(Qa,Ha))
-
-    invariant forall H:height_t. forall Hf:height_t. forall Qf:cert_t. (forest_store(Qf,Hf) & is_good(id)) -> Qf.block ~= blockchain(H)
-
-    invariant forall Hf:height_t. forall Qf:cert_t. (chain_size = 0 & forest_root(Qf,Hf) & is_good(id)) -> (Hf = 0 & Qf.block.parent = block_t.hash(block_t.nil))
-
-    invariant forall Hf:height_t. forall Qf:cert_t. (Hf = 0 & forest_root(Qf,Hf) & is_good(id)) -> (chain_size = 0 & Qf.block.parent = block_t.hash(block_t.nil))
-
-    #invariant forall Qf:cert_t. forall Hf:height_t. (is_good(id) & forest_store(Qf,Hf) & ~forest_root(Qf,Hf)) -> exists Qs:cert_t. exists Hs:height_t. forest_succ(Qf,Hf,Qs,Hs)
-
-    invariant forall Q:cert_t. forall H:height_t. (forest_store(Q,H) & is_good(id)) -> chain_size <= H
-
-    invariant forall Q:cert_t. (is_good(id) & forest_store(Q,chain_size) -> forest_root(Q,chain_size))
-
-    invariant forall Hf:height_t. forall Qf:cert_t. forall Hc:height_t. (forest_root(Qf,Hf) & is_good(id) & height_t.succ(Hc,chain_size)) -> (Hf = chain_size & Qf.block.parent = block_t.hash(blockchain(Hc)))
-
-    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_ancestor(Qd,Hd,Qa,Ha) & height_t.succ(Ha,Hd) & is_good(id)) -> Qd.block.parent = block_t.hash(Qa.block)
-
-    invariant forall Qd:cert_t. forall Qa:cert_t. forall Hd:height_t. forall Ha:height_t. (forest_store(Qd,Hd) & forest_store(Qa,Ha) & is_good(id)) -> (forest_succ(Qd,Hd,Qa,Ha) -> (Qd.block.parent = block_t.hash(Qa.block) & height_t.succ(Ha,Hd)))
-
-    invariant [blockchain_parent] forall H1:height_t. forall H2:height_t. (height_t.succ(H1, H2) & H2 < chain_size & is_good(id)) -> blockchain(H2).parent = block_t.hash(blockchain(H1))
-
-    invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & is_good(id)) -> forest_store(Q1,H1) & forest_store(Q2,H2)
-
-    invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_store(Q1,H1) & forest_store(Q2,H2) & Q1.block = Q2.block & is_good(id)) -> (Q1 = Q2 & H1=H2)
-
-    invariant forall Qd,Qa:cert_t. forall Hd,Ha:height_t. (forest_strictAncestor(Qd,Hd,Qa,Ha) & is_good(id)) -> Ha < Hd
-
-    invariant forall Q1:cert_t. forall Q2:cert_t. forall H1:height_t. forall H2:height_t. (forest_ancestor(Q1,H1,Q2,H2) & H1 = H2 & is_good(id)) -> (Q1 = Q2)
-
-    invariant forall Q1,Q2:cert_t. forall H1,H2:height_t. is_good(id) ->((forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q1,H1)) <-> (Q1 = Q2 & H1 = H2 & forest_store(Q1,H1) & forest_store(Q2,H2)))
-
-    invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q2,H2,Q3,H3) & is_good(id)) -> forest_ancestor(Q1,H1,Q3,H3)
-
-    invariant forall Q1,Q2,Q3: cert_t. forall H1,H2,H3:height_t. (forest_ancestor(Q1,H1,Q2,H2) & forest_ancestor(Q1,H1,Q3,H3) & is_good(id)) -> (forest_ancestor(Q2,H2,Q3,H3) | forest_ancestor(Q3,H3,Q2,H2))
 } # object validator
-} # module supraBFT
+} # module moonshot

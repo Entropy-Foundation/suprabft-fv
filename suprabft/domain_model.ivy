@@ -8,8 +8,8 @@ instance height_t : ubd_seq
 instance node_t : iterable
 relation is_good(N:node_t)
 
-# how to get fairness guarantee, needed for liveness?
 function leader(R:round_t) : node_t
+definition leader(r:round_t) = <<< r % `node_t.max` >>>
 
 isolate block_t = {
     type this
@@ -99,7 +99,7 @@ isolate block_t = {
         relation inbetween(D:block_t, A:block_t)
         definition inbetween(D, A) = exists M:block_t. ancestor(D, M) & ancestor(M, A)
         invariant (ancestor(D, A) & ~inbetween(D, A)) -> ((D = genesis & A = genesis) | parent(D, A))
-        invariant parent(B, P) -> ((B = genesis & P = genesis) | (exists P_h, B_h:height_t. height(B, B_h) & height(P, P_h) & height_t.succ(P_h, B_h)))
+        invariant parent(B, P) -> ((B = genesis & P = genesis) | (exists B_h, P_h:height_t. height(B, B_h) & height(P, P_h) & height_t.succ(P_h, B_h)))
     }
 
     implementation {
