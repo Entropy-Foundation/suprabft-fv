@@ -144,6 +144,64 @@ export block_t.get_parent
 export block_t.get_height
 export block_t.block
 
+isolate proposal_n_t = {
+    type this
+
+    relation block(P:proposal_n_t, B:block_t)
+
+    action get_block(p:proposal_n_t) returns (b:block_t)
+
+    action proposal_n(b:block_t) returns (p:proposal_n_t)
+
+    specification {
+        relation valid(P:proposal_n_t)
+
+        after init {
+            valid(P) := false;
+        }
+
+        before get_block {
+            require valid(p);
+        }
+
+        after get_block {
+            ensure valid(b);
+        }
+
+        before block {
+            require valid(b);
+            assume ~valid(p);
+        }
+
+        after block {
+            valid(P) := valid(P) | P = p;
+        }
+
+        invariant block(P, B) -> valid(P) & valid(B)
+        invariant block(P, B1) & block(P, B2) -> B1 = B2
+        invariant block(P1, B) & block(P2, B) -> P1 = P2
+    }
+
+    implementation {
+        after init {
+            block(P, B) := false;
+        }
+
+        implement get_block(p:proposal_n_t) returns (b:block_t) {
+            if some p_b:block_t. block(p, p_b) {
+                b := p_b;
+            } else {
+            }
+        }
+
+        implement proposal_n(b:block_t) returns (p:proposal_n_t) {
+            block(P, B) := block(P, B) | (P = p & B = b);
+        }
+    }
+}
+export proposal_n_t.get_block
+export proposal_n_t.proposal_n
+
 isolate quorum_t = {
     type this
     relation member(Q:quorum_t, N:node_t)
