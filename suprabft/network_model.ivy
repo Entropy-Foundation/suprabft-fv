@@ -5,17 +5,18 @@ include udp
 include domain_model
 
 object msg_kind = {
-    type this = {proposal, prepare, qc, timeout, tc}
+    type this = {proposal_n, proposal_f, prepare, qc, timeout, tc}
 }
 
 object msg = {
     type this = struct {
         kind : msg_kind,
-        prop : proposal_t,
-        prep : block_t,
-        qc : cert_t,
+        prop_n : proposal_n_t,
+        prop_f : proposal_f_t,
+        prep : prepare_t,
+        qc : qc_t,
         t : timeout_t,
-        tc : timeout_cert_t,
+        tc : tc_t,
         src : node_t
     }
 }
@@ -35,7 +36,8 @@ isolate shim = {
         }
     }
 
-    instance proposal_handler : handler(msg_kind.proposal)
+    instance proposal_n_handler : handler(msg_kind.proposal_n)
+    instance proposal_f_handler : handler(msg_kind.proposal_f)
     instance prepare_handler : handler(msg_kind.prepare)
     instance qc_handler : handler(msg_kind.qc)
     instance timeout_handler : handler(msg_kind.timeout)
@@ -61,8 +63,10 @@ isolate shim = {
     # Here we give an implementation of it that satisfies its specification:
     implementation {
         implement net.recv(dst:node_t ,m:msg) {
-            if m.kind = msg_kind.proposal {
-                call proposal_handler.handle(dst, m)
+            if m.kind = msg_kind.proposal_n {
+                call proposal_n_handler.handle(dst, m)
+            } else if m.kind = msg_kind.proposal_f {
+                call prepare_f_handler.handle(dst, m)
             } else if m.kind = msg_kind.prepare {
                 call prepare_handler.handle(dst, m)
             } else if m.kind = msg_kind.qc {

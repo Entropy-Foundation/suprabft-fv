@@ -27,7 +27,8 @@ object process(id:node_t) = {
     after init {
         locked := qc_t.genesis;
         proposed := 0;
-        r_c := 1;
+        r_c := *;
+        assume round_t.succ(0, r_c);
         timer := false;
         uncommitted(QC) := false;
         voted := 0;
