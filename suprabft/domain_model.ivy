@@ -138,7 +138,7 @@ isolate block_t = {
             height(B, H) := height(B, H) | B = b & H = height_t.next(get_height(pB));
         }
     }
-} with height_t
+}
 export block_t.get_round
 export block_t.get_parent
 export block_t.get_height
@@ -165,19 +165,19 @@ isolate proposal_n_t = {
         }
 
         after get_block {
-            ensure valid(b);
+            ensure block_t.valid(b);
         }
 
-        before block {
-            require valid(b);
+        before proposal_n {
+            require block_t.valid(b);
             assume ~valid(p);
         }
 
-        after block {
+        after proposal_n {
             valid(P) := valid(P) | P = p;
         }
 
-        invariant block(P, B) -> valid(P) & valid(B)
+        invariant block(P, B) -> valid(P) & block_t.valid(B)
         invariant block(P, B1) & block(P, B2) -> B1 = B2
         invariant block(P1, B) & block(P2, B) -> P1 = P2
     }
@@ -202,9 +202,80 @@ isolate proposal_n_t = {
 export proposal_n_t.get_block
 export proposal_n_t.proposal_n
 
-isolate quorum_t = {
+isolate prepare_t = {
     type this
+
+    relation block(P:prepare_t, B:block_t)
+
+    individual genesis : prepare_t
+
+    action get_block(p:prepare_t) returns (b:block_t)
+
+    action prepare(b:block_t) returns (p:prepare_t)
+
+    specification {
+        relation valid(P:prepare_t)
+
+        after init {
+            valid(P) := P = genesis;
+        }
+
+        before get_block {
+            require valid(p);
+        }
+
+        after get_block {
+            ensure block_t.valid(b);
+        }
+
+        before prepare {
+            require block_t.valid(b);
+            assume ~valid(p);
+        }
+
+        after prepare {
+            valid(P) := valid(P) | P = p;
+        }
+
+        invariant block(genesis, B) <-> B = block_t.genesis
+        invariant valid(genesis)
+
+        invariant block(P, B) -> valid(P) & block_t.valid(B)
+        invariant block(P, B1) & block(P, B2) -> B1 = B2
+    }
+
+    implementation {
+        after init {
+            block(P, B) := P = genesis & B = block_t.genesis;
+        }
+
+        implement get_block(p:prepare_t) returns (b:block_t) {
+            if some p_b:block_t. block(p, p_b) {
+                b := p_b;
+            } else {
+            }
+        }
+
+        implement prepare(b:block_t) returns (p:prepare_t) {
+            block(P, B) := block(P, B) | (P = p & B = b);
+        }
+    }
+} with block_t
+export prepare_t.get_block
+export prepare_t.prepare
+
+object quorum_t = {
+    type this
+
     relation member(Q:quorum_t, N:node_t)
+
+    individual genesis : quorum_t
+}
+
+trusted isolate genesis_quorum = {
+    private {
+        axiom [genesis_quorum] quorum_t.member(quorum_t.genesis, N)
+    }
 }
 
 trusted isolate every_quorum_good = {
@@ -223,11 +294,63 @@ isolate qc_t = {
     type this
 
     relation block(QC:qc_t, B:block_t)
+    relation prepare(QC:qc_t, P:prepare_t)
+    relation quorum(QC:qc_t, Q:quorum_t)
 
     individual genesis : qc_t
 
     action get_block(qc:qc_t) returns (b:block_t)
-}
+    action get_quorum(qc:qc_t) returns (q:quorum_t)
+
+    specification {
+        relation valid(QC:qc_t)
+        definition valid(QC) = (block(QC, B) -> block_t.valid(B)) & (prepare(QC, P) -> prepare_t.valid(P))
+
+        before get_block {
+            require valid(qc);
+        }
+
+        after get_block {
+            ensure block_t.valid(b);
+        }
+
+        before get_quorum {
+            require valid(qc);
+        }
+
+        invariant valid(genesis)
+        invariant block(genesis, B) <-> B = block_t.genesis
+    }
+
+    implementation {
+        after init {
+            block(QC, B) := QC = genesis & B = block_t.genesis;
+            prepare(QC, P) := QC = genesis & P = prepare_t.genesis;
+            quorum(QC, Q) := QC = genesis & Q = quorum_t.genesis;
+        }
+
+        implement get_block(qc:qc_t) returns (b:block_t) {
+            if some qc_b:block_t. block(qc, qc_b) {
+                b := qc_b;
+            } else {
+            }
+        }
+
+        implement get_quorum(qc:qc_t) returns (q:quorum_t) {
+            if some qc_q:quorum_t. quorum(qc, qc_q) {
+                q := qc_q;
+            } else {
+            }
+        }
+
+        implement qc() returns (qc:qc_t) {
+
+        }
+    }
+} with genesis_quorum.genesis_quorum
+export qc_t.get_block
+export qc_t.get_quorum
+export qc_t.qc
         #block : block_t,
         ## every member of cert should have made rcvd_prepare() true for this round
         #round : round_t,
