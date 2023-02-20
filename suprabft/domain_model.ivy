@@ -177,6 +177,7 @@ isolate proposal_n_t = {
         }
 
         invariant block(P, B) -> valid(P) & block_t.valid(B)
+        invariant valid(P) -> exists B:block_t. block(P, B)
         invariant block(P, B1) & block(P, B2) -> B1 = B2
         invariant block(P1, B) & block(P2, B) -> P1 = P2
     }
