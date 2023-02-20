@@ -287,12 +287,12 @@ object process(id:node_t) = {
         call broadcast_timeout(t);
     }
 
-    export action timeout_sync(timeout_small_quorum) = {
-        require quorum_member -> received_timeout
+    export action timeout_sync(tc_nonmaj:tc_nonmaj_t) = {
+        require quorum_t.member(tc_nonmaj_t.get_quorum(tc_nonmaj)) -> received_timeout
         require r >= round_t.prev(round_t.prev(r_c));
 
-        call timeout(r);
-        call advanceToRound(round_t.next(r));
+        var t := timeout_t.timeout(tc_nonmaj_t.get_round(tc_nonmaj), locked);
+        call broadcast_timeout(t);
     }
 
     export action tc_processing(tc:tc_t) = {
