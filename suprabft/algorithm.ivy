@@ -220,7 +220,7 @@ object process(id:node_t) = {
 
     action vote(b:block_t) = {
         if block_t.get_round(b) > r_v {
-            var p : prepare_t.prepare(b);
+            var p := prepare_t.prepare(b);
             call broadcast_prepare(p);
             r_v := block_t.get_round(b);
         }

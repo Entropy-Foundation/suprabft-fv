@@ -195,7 +195,11 @@ isolate proposal_n_t = {
         }
 
         implement proposal_n(b:block_t) returns (p:proposal_n_t) {
-            block(P, B) := block(P, B) | (P = p & B = b);
+            if some p_old:proposal_n_t. block(p_old, b) {
+                p := p_old;
+            } else {
+                block(P, B) := block(P, B) | (P = p & B = b);
+            }
         }
     }
 }
@@ -257,7 +261,11 @@ isolate prepare_t = {
         }
 
         implement prepare(b:block_t) returns (p:prepare_t) {
-            block(P, B) := block(P, B) | (P = p & B = b);
+            if some p_old:prepare_t. block(p_old, b) {
+                p := p_old;
+            } else {
+                block(P, B) := block(P, B) | (P = p & B = b);
+            }
         }
     }
 } with block_t
@@ -271,10 +279,8 @@ object quorum_t = {
     individual genesis : quorum_t
 }
 
-trusted isolate genesis_quorum = {
-    private {
-        axiom [genesis_quorum] quorum_t.member(quorum_t.genesis, N)
-    }
+isolate genesis_member = {
+    axiom quorum_t.member(quorum_t.genesis, N)
 }
 
 trusted isolate every_quorum_good = {
@@ -289,68 +295,25 @@ trusted isolate quorum_intersection_axiom = {
     }
 }
 
-# isolate qc_t = {
-    # type this
+isolate qc_t = {
+    type this
 
-    # relation block(QC:qc_t, B:block_t)
-    # relation prepare(QC:qc_t, P:prepare_t)
-    # relation quorum(QC:qc_t, Q:quorum_t)
+    relation block(QC:qc_t, B:block_t)
+    relation prepare(QC:qc_t, P:prepare_t)
+    relation quorum(QC:qc_t, Q:quorum_t)
 
-    # individual genesis : qc_t
+    individual genesis : qc_t
 
-    # action get_block(qc:qc_t) returns (b:block_t)
-    # action get_quorum(qc:qc_t) returns (q:quorum_t)
+    after init {
+        block(genesis, B) := B = block_t.genesis;
+        prepare(genesis, P) := P = prepare_t.genesis;
+        quorum(genesis, Q) := Q = quorum_t.genesis;
+    }
 
-    # specification {
-        # relation valid(QC:qc_t)
-        # definition valid(QC) = (block(QC, B) -> block_t.valid(B)) & (prepare(QC, P) -> prepare_t.valid(P))
-
-        # before get_block {
-            # require valid(qc);
-        # }
-
-        # after get_block {
-            # ensure block_t.valid(b);
-        # }
-
-        # before get_quorum {
-            # require valid(qc);
-        # }
-
-        # invariant valid(genesis)
-        # invariant block(genesis, B) <-> B = block_t.genesis
-    # }
-
-    # implementation {
-        # after init {
-            # block(QC, B) := QC = genesis & B = block_t.genesis;
-            # prepare(QC, P) := QC = genesis & P = prepare_t.genesis;
-            # quorum(QC, Q) := QC = genesis & Q = quorum_t.genesis;
-        # }
-
-        # implement get_block(qc:qc_t) returns (b:block_t) {
-            # if some qc_b:block_t. block(qc, qc_b) {
-                # b := qc_b;
-            # } else {
-            # }
-        # }
-
-        # implement get_quorum(qc:qc_t) returns (q:quorum_t) {
-            # if some qc_q:quorum_t. quorum(qc, qc_q) {
-                # q := qc_q;
-            # } else {
-            # }
-        # }
-
-        # implement qc() returns (qc:qc_t) {
-
-        # }
-    # }
-# } with genesis_quorum.genesis_quorum
-# export qc_t.get_block
-# export qc_t.get_quorum
-# export qc_t.qc
-
+    invariant block(genesis, B) <-> B = block_t.genesis
+    invariant prepare(genesis, P) <-> P = prepare_t.genesis
+    invariant quorum(genesis, Q) <-> Q = quorum_t.genesis
+}
 
         #block : block_t,
         ## every member of cert should have made rcvd_prepare() true for this round
