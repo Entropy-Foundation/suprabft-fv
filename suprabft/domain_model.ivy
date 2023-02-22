@@ -5,11 +5,11 @@ include ubd_seq
 instance round_t : ubd_seq
 instance height_t : ubd_seq
 
-instance node_t : iterable
-relation is_good(N:node_t)
+instance process_index_t : iterable
+relation is_good(N:process_index_t)
 
-function leader(R:round_t) : node_t
-definition leader(r:round_t) = <<< r % `node_t.max` >>>
+function leader(R:round_t) : process_index_t
+definition leader(r:round_t) = <<< r % `process_index_t.max` >>>
 
 isolate block_t = {
     type this
@@ -274,25 +274,31 @@ export prepare_t.get_block
 object quorum_t = {
     type this
 
-    relation member(Q:quorum_t, N:node_t)
+    relation member(Q:quorum_t, N:process_index_t)
 
     individual genesis : quorum_t
+}
+
+object quorum_fplusone_t = {
+    type this
+
+    relation member(Q:quorum_fplusone_t, N:process_index_t)
+}
+
+isolate every_quorum_fplusone_good = {
+    axiom exists N:process_index_t. is_good(N) & quorum_fplusone_t.member(Q, N)
 }
 
 isolate genesis_member = {
     axiom quorum_t.member(quorum_t.genesis, N)
 }
 
-trusted isolate every_quorum_good = {
-    private {
-        axiom [every_quorum_good] exists N:node_t. is_good(N) & quorum_t.member(Q, N)
-    }
+isolate every_quorum_good = {
+    axiom exists N:process_index_t. is_good(N) & quorum_t.member(Q, N)
 }
 
-trusted isolate quorum_intersection_axiom = {
-    private {
-        axiom [quorum_intersection_axiom] exists N:node_t. is_good(N) & quorum_t.member(Q1, N) & quorum_t.member(Q2, N)
-    }
+isolate quorum_intersection_axiom = {
+    axiom exists N:process_index_t. is_good(N) & quorum_t.member(Q1, N) & quorum_t.member(Q2, N)
 }
 
 isolate qc_t = {
@@ -304,70 +310,163 @@ isolate qc_t = {
 
     individual genesis : qc_t
 
-    after init {
-        block(genesis, B) := B = block_t.genesis;
-        prepare(genesis, P) := P = prepare_t.genesis;
-        quorum(genesis, Q) := Q = quorum_t.genesis;
+    specification {
+        invariant block(genesis, B) <-> B = block_t.genesis
+        invariant prepare(genesis, P) <-> P = prepare_t.genesis
+        invariant quorum(genesis, Q) <-> Q = quorum_t.genesis
     }
 
-    invariant block(genesis, B) <-> B = block_t.genesis
-    invariant prepare(genesis, P) <-> P = prepare_t.genesis
-    invariant quorum(genesis, Q) <-> Q = quorum_t.genesis
+    implementation {
+        after init {
+            block(genesis, B) := B = block_t.genesis;
+            prepare(genesis, P) := P = prepare_t.genesis;
+            quorum(genesis, Q) := Q = quorum_t.genesis;
+        }
+    }
 }
 
-        #block : block_t,
-        ## every member of cert should have made rcvd_prepare() true for this round
-        #round : round_t,
-        #cert : quorum_t
-    #}
-    #individual nil : cert_t
+isolate timeout_t = {
+    type this
 
-    #specification {
-        #axiom forall Qc:cert_t. Qc = nil <-> Qc.block = block_t.nil
-        #axiom forall Qc:cert_t. Qc ~= nil <-> Qc.round ~= nil.round
-        #axiom forall N:node_t. quorum_t.member(N, nil.cert)
-    #}
-#}
+    relation round(T:timeout_t, R:round_t)
+    relation qc(T:timeout_t, QC:qc_t)
 
-#isolate timeout_t = {
-    #type this = struct {
-        #round : round_t,
-        #qc : cert_t
-    #}
-    #individual nil : timeout_t
+    action get_round(t:timeout_t) returns (r:round_t)
+    action get_qc(t:timeout_t) returns (q:qc_t)
 
-    #specification {
-        #axiom forall T:timeout_t. T ~= nil <-> T.round ~= nil.round
-        #axiom forall T:timeout_t. T = nil <-> T.qc = cert_t.nil
-    #}
-#}
+    action timeout(r:round_t, q:qc_t) returns (t:timeout_t)
 
-#isolate timeout_cert_t = {
-    #type this = struct {
-        #round : round_t,
-        #cert : quorum_t,
-        #highestQC : cert_t
-    #}
-    #individual nil : timeout_cert_t
+    implementation {
+        after init {
+            round(T, R) := false;
+            qc(T, QC) := false;
+        }
 
-    #specification {
-        #axiom forall Tc:timeout_cert_t. Tc ~= nil <-> Tc.round ~= nil.round
-        #axiom forall N:node_t. quorum_t.member(N, nil.cert)
-        #axiom forall Tc:timeout_cert_t. Tc = nil <-> Tc.highestQC = cert_t.nil
-    #}
-#}
+        implement get_round(t:timeout_t) returns (r:round_t) {
+            if some t_r:round_t. round(t, t_r) {
+                r := t_r;
+            } else {
+            }
+        }
 
-#isolate proposal_t = {
-    #type this = struct {
-        #block : block_t,
-        #qc : cert_t,
-        #tc : timeout_cert_t
-    #}
-    #individual nil : proposal_t
+        implement get_qc(t:timeout_t) returns (q:qc_t) {
+            if some t_q:qc_t. qc(t, t_q) {
+                q := t_q;
+            } else {
+            }
+        }
 
-    #specification {
-        #axiom forall P:proposal_t. P = nil <-> P.block = block_t.nil
-        #axiom nil.qc = cert_t.nil
-        #axiom nil.tc = timeout_cert_t.nil
-    #}
-#}
+        implement timeout(r:round_t, q:qc_t) returns (t:timeout_t) {
+            if some t_old:timeout_t. round(t_old, r) & qc(t_old, q) {
+                t := t_old;
+            } else {
+                round(T, R) := round(T, R) | (T = t & R = r);
+                qc(T, QC) := qc(T, QC) | (T = t & QC = q);
+            }
+        }
+    }
+}
+export timeout_t.get_round
+export timeout_t.get_qc
+
+isolate tc_fplusone_t = {
+    type this
+
+    relation round(TC_FPLUSONE:tc_fplusone_t, B:block_t)
+    relation timeout(TC_FPLUSONE:tc_fplusone_t, T:timeout_t)
+    relation quorum_fplusone(TC_FPLUSONE:tc_fplusone_t, Q_FPLUSONE:quorum_fplusone_t)
+}
+
+isolate tc_t = {
+    type this
+
+    relation round(TC:tc_t, B:block_t)
+    relation timeout(TC:tc_t, T:timeout_t)
+    relation quorum(TC:tc_t, Q:quorum_t)
+}
+
+isolate proposal_f_t = {
+    type this
+
+    relation block(P:proposal_f_t, B:block_t)
+    relation qc(P:proposal_f_t, QC:qc_t)
+    relation tc(P:proposal_f_t, TC:tc_t)
+
+    action get_block(p:proposal_f_t) returns (b:block_t)
+    action get_qc(p:proposal_f_t) returns (qc:qc_t)
+    action get_tc(p:proposal_f_t) returns (qc:tc_t)
+
+    action proposal_f(b:block_t, qc:qc_t, tc:tc_t) returns (p:proposal_f_t)
+
+    specification {
+        relation valid(P:proposal_f_t)
+
+        after init {
+            valid(P) := false;
+        }
+
+        before get_block {
+            require valid(p);
+        }
+
+        after get_block {
+            ensure block_t.valid(b);
+        }
+
+        before proposal_f {
+            require block_t.valid(b);
+            assume ~valid(p);
+        }
+
+        after proposal_f {
+            valid(P) := valid(P) | P = p;
+        }
+
+        invariant block(P, B) -> valid(P) & block_t.valid(B)
+        invariant valid(P) -> exists B:block_t. block(P, B)
+        invariant block(P, B1) & block(P, B2) -> B1 = B2
+        invariant block(P1, B) & block(P2, B) -> P1 = P2
+    }
+
+    implementation {
+        after init {
+            block(P, B) := false;
+            qc(P, QC) := false;
+            tc(P, TC) := false;
+        }
+
+        implement get_block(p:proposal_f_t) returns (b:block_t) {
+            if some p_b:block_t. block(p, p_b) {
+                b := p_b;
+            } else {
+            }
+        }
+
+        implement get_qc(p:proposal_f_t) returns (q:qc_t) {
+            if some p_q:qc_t. qc(p, p_q) {
+                q := p_q;
+            } else {
+            }
+        }
+
+        implement get_tc(p:proposal_f_t) returns (t:tc_t) {
+            if some p_t:tc_t. tc(p, p_t) {
+                t := p_t;
+            } else {
+            }
+        }
+
+        implement proposal_f(b:block_t, q:qc_t, t:tc_t) returns (p:proposal_f_t) {
+            if some p_old:proposal_f_t. block(p_old, b) & qc(p_old, q) & tc(p_old, t) {
+                p := p_old;
+            } else {
+                block(P, B) := block(P, B) | (P = p & B = b);
+                qc(P, QC) := qc(P, QC) | (P = p & QC = q);
+                tc(P, TC) := tc(P, TC) | (P = p & TC = t);
+            }
+        }
+    }
+}
+export proposal_f_t.get_block
+export proposal_f_t.get_qc
+export proposal_f_t.get_tc

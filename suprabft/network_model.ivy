@@ -17,18 +17,18 @@ object msg = {
         qc : qc_t,
         t : timeout_t,
         tc : tc_t,
-        src : node_t
+        src : process_index_t
     }
 }
 
-instance net : udp_simple(node_t, msg)
+instance net : udp_simple(process_index_t, msg)
 
 isolate shim = {
     # In order not repeat the same code for each handler, we use a handler
     # module parameterized by the type of message it will handle. Below we
     # instantiate this module for the five types of messages of SupraBFT
     module handler(p_kind) = {
-        action handle(dst:node_t, m:msg)
+        action handle(dst:process_index_t, m:msg)
         object spec = {
             before handle {
                 assert sent(m, dst) & m.kind = p_kind
@@ -43,10 +43,10 @@ isolate shim = {
     instance timeout_handler : handler(msg_kind.timeout)
     instance tc_handler : handler(msg_kind.tc)
 
-    relation sent(M:msg, N:node_t)
+    relation sent(M:msg, N:process_index_t)
 
-    action broadcast(src:node_t, m:msg)
-    action send(src:node_t,dst:node_t, m:msg)
+    action broadcast(src:process_index_t, m:msg)
+    action send(src:process_index_t,dst:process_index_t, m:msg)
 
     specification {
         after init {
@@ -62,7 +62,7 @@ isolate shim = {
 
     # Here we give an implementation of it that satisfies its specification:
     implementation {
-        implement net.recv(dst:node_t ,m:msg) {
+        implement net.recv(dst:process_index_t ,m:msg) {
             if m.kind = msg_kind.proposal_n {
                 call proposal_n_handler.handle(dst, m)
             } else if m.kind = msg_kind.proposal_f {
@@ -80,7 +80,7 @@ isolate shim = {
 
         # broadcast sends to all nodes, including the sender.
         implement broadcast {
-            var iter := node_t.iter.create(0);
+            var iter := process_index_t.iter.create(0);
             while ~iter.is_end
             invariant net.spec.sent(M,D) -> sent(M,D) {
                 var n := iter.val;
@@ -98,4 +98,4 @@ isolate shim = {
         }
     }
 # to prove that the shim implementation satisfies the shim specification, we rely on the specification of net and node.
-} with net.spec, node_t
+} with net.spec, process_index_t
