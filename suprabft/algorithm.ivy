@@ -3,12 +3,12 @@
 include domain_model
 
 module supraBFT(global_view) = {
-object process(id:process_index_t) = {
+object process_algo(id:process_index_t) = {
     individual locked : qc_t
     individual r_p : round_t
     individual r_c : round_t
     individual timer : bool
-    relation uncommitted(QC:qc_t);
+    relation uncommitted(QC:qc_t)
     individual r_v : round_t
 
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
@@ -21,6 +21,8 @@ object process(id:process_index_t) = {
 
     function blockchain(H:height_t) : block_t
     individual chain_size : height_t
+
+    function temp_blockchain(H:height_t) : block_t
 
     after init {
         locked := qc_t.genesis;
@@ -65,8 +67,11 @@ object process(id:process_index_t) = {
         }
     }
 
-    # rewrite this
     export action aggregate_prepares(qc:qc_t) = {
+        # the requirement for aggregation is strictly stronger than global_view.valid_qc, avoid rewriting all that here
+        require global_view.valid_qc(qc);
+        require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
+
         received_qc(qc) := true;
     }
 
@@ -77,11 +82,9 @@ object process(id:process_index_t) = {
     }
 
     implement shim.timeout_handler.handle(m:msg) {
-        if timeout_t.valid(m.t) {
-            if global_view.valid_qc(timeout_t.get_qc(m.t)) {
-                received_timeout(m.t, m.src) := true;
-                received_qc(timeout_t.get_qc(m.t)) := true;
-            }
+        if global_view.valid_qc(timeout_t.get_qc(m.t)) {
+            received_timeout(m.t, m.src) := true;
+            received_qc(timeout_t.get_qc(m.t)) := true;
         }
     }
 
@@ -155,46 +158,49 @@ object process(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-   # rewrite this
-    export action byzantine_send = {
-        require ~is_good(id);
+    # rewrite this
+    # export action byzantine_send = {
+        # require ~is_good(id);
 
-        var m : msg;
-        var dst : process_index_t;
-        if ~is_good(m.src) {
-            if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
-                call shim.send(id, dst, m);
-            }
-            if m.kind = msg_kind.prepare {
-                var r : round_t;
-                var bl: block_t;
-                call shim.send(id, dst, m);
-                call global_view.node_voted(m.src,m.prep,r,bl);
-            }
-            if m.kind = msg_kind.qc & valid_qc(m.qc) {
-                var ok : bool;
-                ok := true;
-                ok := ok & forall H:height_t. ~forest_store(m.qc,H);
-                if ok {
-                    call shim.send(id, dst, m);
-                }
-            }
-            if m.kind = msg_kind.timeout & valid_qc(m.t.qc) {
-                call shim.send(id, dst, m);
-                call global_view.process_index_timeout(m.src,m.t);
-            }
-            if m.kind = msg_kind.tc & valid_tc(m.tc) {
-                call shim.send(id, dst, m);
-            }
-        }
-    }
+        # var m : msg;
+        # var dst : process_index_t;
+        # if ~is_good(m.src) {
+            # if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
+                # call shim.send(id, dst, m);
+            # }
+            # if m.kind = msg_kind.prepare {
+                # var r : round_t;
+                # var bl: block_t;
+                # call shim.send(id, dst, m);
+                # call global_view.node_voted(m.src,m.prep,r,bl);
+            # }
+            # if m.kind = msg_kind.qc & valid_qc(m.qc) {
+                # var ok : bool;
+                # ok := true;
+                # ok := ok & forall H:height_t. ~forest_store(m.qc,H);
+                # if ok {
+                    # call shim.send(id, dst, m);
+                # }
+            # }
+            # if m.kind = msg_kind.timeout & valid_qc(m.t.qc) {
+                # call shim.send(id, dst, m);
+                # call global_view.process_index_timeout(m.src,m.t);
+            # }
+            # if m.kind = msg_kind.tc & valid_tc(m.tc) {
+                # call shim.send(id, dst, m);
+            # }
+        # }
+    # }
 
     action commit(b:block_t) = {
         if forall B:block_t. (block_t.ancestor(b, B) & block_t.ancestor(B, blockchain(chain_size))) -> uncommitted(B) {
-            blockchain(H) := blockchain(H) if H <= chain_size else *;
-            assume H > chain_size & H < block_t.get_height(b) -> ancestor(b, blockchain(H)) & (block_t.get_height(blockchain(H)) = H);
+            temp_blockchain(H) := *;
+            assume H <= chain_size -> temp_blockchain(H) = blockchain(H);
+            assume H > chain_size & H < block_t.get_height(b) -> ancestor(b, temp_blockchain(H)) & (block_t.get_height(temp_blockchain(H)) = H);
             chain_size := block_t.get_height(b);
-            blockchain(chain_size) := b;
+            temp_blockchain(chain_size) := b;
+
+            blockchain(H) := temp_blockchain(H);
 
             uncommitted(QC) := uncommitted(QC) if (block_t.get_height(qc_t.get_block(QC)) > chain_size) & block_t.ancestor(qc_t.get_block(QC), b) else false;
         }

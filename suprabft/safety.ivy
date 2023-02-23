@@ -1,0 +1,14 @@
+#lang ivy1.8
+
+include domain_model
+include network_model
+include algorithm
+include global_view
+
+isolate global_view_used_here = {
+	instantiate global_view
+}
+
+isolate local_view_used_here = {
+	instantiate supraBFT(global_view_used_here)
+}

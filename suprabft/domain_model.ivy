@@ -372,9 +372,9 @@ export timeout_t.get_qc
 isolate tc_fplusone_t = {
     type this
 
-    relation round(TC_FPLUSONE:tc_fplusone_t, B:block_t)
-    relation timeout(TC_FPLUSONE:tc_fplusone_t, T:timeout_t)
-    relation quorum_fplusone(TC_FPLUSONE:tc_fplusone_t, Q_FPLUSONE:quorum_fplusone_t)
+    relation round(TC:tc_fplusone_t, B:block_t)
+    relation timeout(TC:tc_fplusone_t, T:timeout_t)
+    relation quorum_fplusone(TC:tc_fplusone_t, Q:quorum_fplusone_t)
 }
 
 isolate tc_t = {
