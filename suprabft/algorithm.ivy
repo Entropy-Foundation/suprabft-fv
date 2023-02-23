@@ -14,9 +14,10 @@ object process(id:process_index_t) = {
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
     relation received_proposal_f(P:proposal_f_t, Src:process_index_t)
     relation received_prepare(P:prepare_t, Src:process_index_t)
-    relation received_qc(Qc:qc_t)
+    relation received_qc(QC:qc_t)
     relation received_timeout(T:timeout_t, Src:process_index_t)
-    relation received_tc(Tc:tc_t)
+    relation received_tc(TC:tc_t)
+    relation received_tc_fplusone(TC:tc_fplusone_t)
 
     function blockchain(H:height_t) : block_t
     individual chain_size : height_t
@@ -32,10 +33,11 @@ object process(id:process_index_t) = {
 
         received_proposal_n(P, Src) := false;
         received_proposal_f(P, Src) := false;
-        received_prepare(P, Src) := false;
-        received_qc(Qc) := false;
+        received_prepare(P, Src) := P = prepare_t.genesis;
+        received_qc(QC) := QC = qc_t.genesis;
         received_timeout(T, Src) := false;
-        received_tc(Tc) := false;
+        received_tc(TC) := false;
+        received_tc_fplusone(TC) := false;
 
         blockchain(0) := block_t.genesis;
         chain_size := 0;
@@ -84,7 +86,7 @@ object process(id:process_index_t) = {
     }
 
     # rewrite this
-    export action aggregate_timeouts_fplusone(tc_fplusone:tc_fplusone_t) = {
+    export action aggregate_timeouts_fplusone(tc:tc_fplusone_t) = {
         received_tc_fplusone(tc) := true;
     }
 
@@ -287,11 +289,11 @@ object process(id:process_index_t) = {
         call broadcast_timeout(t);
     }
 
-    export action timeout_sync(tc_fplusone:tc_fplusone_t) = {
-        require received_tc_fplusone(tc_fplusone);
+    export action timeout_sync(tc:tc_fplusone_t) = {
+        require received_tc_fplusone(tc);
 
         require r >= round_t.prev(round_t.prev(r_c));
-        var t := timeout_t.timeout(tc_fplusone_t.get_round(tc_fplusone), locked);
+        var t := timeout_t.timeout(tc_fplusone_t.get_round(tc), locked);
         call broadcast_timeout(t);
     }
 

@@ -3,90 +3,42 @@
 include domain_model
 
 module global_view = {
-	relation node_has_voted_detail(N:node_t, B:block_t, R:round_t, Bl:block_t) #node N has voted for block B in round R, when it had locked the block Bl
+	relation node_voted(N:process_index_t, B:block_t)
+	relation node_committed(N:process_index_t, B:block_t)
+	relation node_sent_timeout(N:process_index_t, T:timeout_t)
 
-	relation node_has_voted(N:node_t, B:block_t)
+	action vote(n:process_index_t, b:block_t)
+	action commit(n:process_index_t, b:block_t)
+	action timeout(n:process_index_t, t:timeout_t)
 
-	relation node_has_locked_detail(N:node_t, B:block_t, R:round_t)
-	relation node_has_locked(N:node_t, B:block_t) # node N has received quorum for block B
+	relation valid_qc(QC:qc_t)
+	definition valid_qc(QC) = (qc_t.block(QC, B1) & qc_t.block(QC, B2) -> B1 = B2) &
+				(qc_t.prepare(QC, P1) & qc_t.prepare(QC, P2) -> P1 = P2) &
+				(qc_t.prepare(QC, P) -> prepare_t.valid(P)) &
+				(qc_t.prepare(QC, P) & prepare_t.block(P, B) -> qc_t.block(QC, B)) &
+				(qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2) -> Q1 = Q2) &
+				(qc_t.quorum(QC, Q) & quorum_t.member(Q, N) & qc_t.block(QC, B) -> node_voted(N, B))
 
-	relation node_sent_timeout(N:node_t, T:timeout_t) # node N has sent a timeout message T
-
-	relation node_has_locked_recently(N:node_t, B:block_t, R:round_t)
-
-	definition node_has_locked_recently(N:node_t, B:block_t, R:round_t) = exists Rl:round_t. forall Rs:round_t. forall Br:block_t. (Rl < R & gv.node_has_locked_detail(N,B,Rl) & ((Rl < Rs & Rs < R) -> ~gv.node_has_locked_detail(N,Br,Rs)) & ((gv.node_has_locked_detail(N,Br,Rl) & Br ~= B) -> Br.round < B.round))
-
-	relation node_has_processed_qc(N:node_t, Qc:cert_t)
-
-	relation quorum_of_votes(Bc:block_t, Bp:block_t)
-	relation quorum_of_recent_locks(Bp:block_t, R:round_t)
-
-	action node_voted(n:node_t, b:block_t, r:round_t, bl:block_t)
-	action node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t)
-	action node_timeout(n:node_t, t:timeout_t)
-	action node_processed_qc(n:node_t, qc:cert_t)
-
-	after init {
-		node_has_voted_detail(N, B, R, Bl) := false;
-		node_has_voted(N,B) := false;
-		node_has_locked_detail(N, B, R) := false;
-		node_has_locked(N,B) := false;
-		node_sent_timeout(N, T) := false;
-		node_has_processed_qc(N,Q) := false;
-		quorum_of_votes(Bc, Bp) := false;
-		quorum_of_recent_locks(B,R) := false;
-		quorum_of_recent_locks(block_t.nil,R) := true;
-
-        assume forall B:block_t. B.parent = block_t.hash(block_t.nil) if B ~= block_t.nil else hash_t.nil;
-
-        assume forall B:block_t. B.round = round_t.next(0) if B ~= block_t.nil else 0;
+	specification {
 	}
 
-	before node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
-		require is_good(n) -> (forall B:block_t. (node_has_voted(n,B) & is_good(n)) -> b.round > B.round);
-		require is_good(n) -> b.parent = block_t.hash(bl);
-		require (is_good(n) & bl ~= block_t.nil) -> node_has_locked_recently(n,bl,r);
-		require (is_good(n) & bl = block_t.nil) -> (node_has_locked_detail(n,B,R) -> B = block_t.nil);
-		require is_good(n) -> round_t.succ(b.round,r);
-	}
-
-	before node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
-		require forall N:node_t. quorum_t.member(N, q) -> node_has_voted(N, b);
-		require ~is_good(n) | forall Rs:round_t. forall B1,B2:block_t. r < Rs -> ~node_has_voted_detail(n,B1,Rs,B2);
-		require ~is_good(n) | b.round < r;
-		require ~is_good(n) | forall B:block_t. forall R:round_t. node_has_locked_detail(n,B,R) -> B.round < b.round
-	}
-
-	before node_timeout(n:node_t, t:timeout_t) {
-		require (t.qc.block ~= block_t.nil & is_good(n)) -> node_has_locked(n, t.qc.block);
-	}
-
-	before node_processed_qc(n:node_t, qc:cert_t) {
-		require qc.block ~= block_t.nil;
-		require forall N:node_t. quorum_t.member(N, qc.cert) -> node_has_voted(N, qc.block);
-	}
-
-	implement node_voted(n:node_t, b:block_t, r:round_t, bl:block_t) {
-		node_has_voted_detail(n, b, r, bl) := true;
-		node_has_voted(n,b) := true;
-
-		if (exists Q:quorum_t. exists R:round_t. round_t.succ(b.round,R) &  b.parent=block_t.hash(bl) & forall N1:node_t. ((quorum_t.member(N1,Q) & is_good(N1)) -> (gv.node_has_voted_detail(N1,b,R,bl))))
-		{
-			quorum_of_votes(b,bl) := true;
+	implementation {
+		after init {
+			node_voted(N, B) := B = block_t.genesis;
+			node_committed(N, B) := B = block_t.genesis;
+			node_sent_timeout(N, B) := false;
 		}
-	}
 
-	implement node_locked_quorum(n:node_t, b:block_t, q:quorum_t, r:round_t) {
-		node_has_locked_detail(n, b, r) := true;
-		node_has_locked(n,b) := true;
-		quorum_of_recent_locks(B,R) := exists Q:quorum_t. forall N:node_t. ((quorum_t.member(N,Q) & is_good(N) & B~= block_t.nil) -> node_has_locked_recently(N,B,R))
-	}
+		implement vote(n:process_index_t, b:block_t) {
+			node_voted(n, b) := true;
+		}
 
-	implement node_timeout(n:node_t, t:timeout_t) {
-		node_sent_timeout(n, t) := true;
-	}
+		implement commit(n:process_index_t, b:block_t) {
+			node_committed(n, b) := true;
+		}
 
-	implement node_processed_qc(n:node_t, qc:cert_t) {
-		node_has_processed_qc(n,qc) := true;
+		implement timeout(n:process_index_t, t:timeout_t) {
+			node_sent_timeout(n, t) := true;
+		}
 	}
 }
