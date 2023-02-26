@@ -7,8 +7,8 @@ include global_view
 
 isolate global_view_used_here = {
 	instantiate global_view
-}
+} with block_t, prepare_t
 
-isolate local_view_used_here = {
-	instantiate supraBFT(global_view_used_here)
-}
+# isolate local_view_used_here = {
+	# instantiate supraBFT(global_view_used_here)
+# }

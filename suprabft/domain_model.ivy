@@ -11,6 +11,16 @@ relation is_good(N:process_index_t)
 function leader(R:round_t) : process_index_t
 definition leader(r:round_t) = <<< r % `process_index_t.max` >>>
 
+# There are two ways to access a type's member. Example
+# [block_t.parent(b, p)] is a relation that is set to true when [p] is the parent of [b].
+# [block_t.get_parent(b)] is an action that gives us the parent of a valid block [b]. It
+# uses the [if some] syntax to get a parent from the [parent] relation.
+#
+# These are used as per convenience in [algorithm.ivy] and other files. We have some
+# invariants set up here that relate the two.
+#
+# Note that actions where validity can only be determined with global view information are
+# placed there. For example, [global_view.get_qc_block] instead of [qc_t.get_block].
 isolate block_t = {
     type this
 

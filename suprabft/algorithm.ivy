@@ -193,16 +193,19 @@ object process_algo(id:process_index_t) = {
     # }
 
     action commit(b:block_t) = {
-        if forall B:block_t. (block_t.ancestor(b, B) & block_t.ancestor(B, blockchain(chain_size))) -> uncommitted(B) {
+        if forall B:block_t. forall QC:qc_t. (block_t.ancestor(b, B) & block_t.ancestor(B, blockchain(chain_size)) & qc_t.block(QC, B)) -> uncommitted(QC) {
             temp_blockchain(H) := *;
             assume H <= chain_size -> temp_blockchain(H) = blockchain(H);
-            assume H > chain_size & H < block_t.get_height(b) -> ancestor(b, temp_blockchain(H)) & (block_t.get_height(temp_blockchain(H)) = H);
+            assume H > chain_size & H < block_t.get_height(b) ->
+                    block_t.ancestor(b, temp_blockchain(H)) &
+                    block_t.height(temp_blockchain(H), H) &
+                    (exists QC:qc_t. qc_t.block(QC, temp_blockchain(H)) & uncommitted(QC));
             chain_size := block_t.get_height(b);
             temp_blockchain(chain_size) := b;
 
             blockchain(H) := temp_blockchain(H);
 
-            uncommitted(QC) := uncommitted(QC) if (block_t.get_height(qc_t.get_block(QC)) > chain_size) & block_t.ancestor(qc_t.get_block(QC), b) else false;
+            uncommitted(QC) := uncommitted(QC) if qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b) else false;
         }
     }
 
@@ -235,17 +238,17 @@ object process_algo(id:process_index_t) = {
     }
 
     action tryLock(qc:qc_t) = {
-        if block_t.get_round(qc_t.get_block(qc)) > block_t.get_round(qc_t.get_block(locked)) {
+        if block_t.get_round(global_view.get_qc_block(qc)) > block_t.get_round(global_view.get_qc_block(locked)) {
             locked := qc;
         }
     }
 
     action tryCommit(qc:qc_t) = {
-        if some qcp:qc_t. uncommitted(qcp) & round_t.next(block_t.get_round(qc_t.get_block(qcp))) = block_t.get_round(qc_t.get_block(qc)) & qc_t.get_block(qcp) = block_t.get_parent(qc_t.get_block(qc)) {
-            call commit(qc_t.get_block(qcp));
+        if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qcp, B1) & qc_t.block(qc, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
+            call commit(global_view.get_qc_block(qcp));
         } else {}
-        if some qcp:qc_t. uncommitted(qcp) & round_t.next(block_t.get_round(qc_t.get_block(qc))) = block_t.get_round(qc_t.get_block(qcp)) & qc_t.get_block(qc) = block_t.get_parent(qc_t.get_block(qcp)) {
-            call commit(qc_t.get_block(qc));
+        if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qc, B1) & qc_t.block(qcp, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
+            call commit(global_view.get_qc_block(qc));
         } else {}
     }
 
@@ -253,12 +256,12 @@ object process_algo(id:process_index_t) = {
         require received_qc(qc);
 
         uncommitted(QC) := uncommitted(QC) | QC = qc;
-        r_v := block_t.get_round(qc_t.get_block(qc)) if block_t.get_round(qc_t.get_block(qc)) > r_v else r_v;
-        call proposeNormal(qc_t.get_block(qc));
+        r_v := block_t.get_round(global_view.get_qc_block(qc)) if block_t.get_round(global_view.get_qc_block(qc)) > r_v else r_v;
+        call proposeNormal(global_view.get_qc_block(qc));
         call tryLock(qc);
         call tryCommit(qc);
         call broadcast_qc(qc);
-        call advanceToRound(round_t.next(round_t.next(block_t.get_round(qc_t.get_block(qc)))));
+        call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.get_qc_block(qc)))));
     }
 
     export action proposal_n_processing(p:proposal_n_t) = {
@@ -266,7 +269,7 @@ object process_algo(id:process_index_t) = {
 
         require ~timer;
         require block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
-        require block_t.get_parent(proposal_n_t.get_block(p)) = qc_t.get_block(locked);
+        require block_t.get_parent(proposal_n_t.get_block(p)) = global_view.get_qc_block(locked);
 
         call proposeNormal(proposal_n_t.get_block(p));
         call vote(proposal_n_t.get_block(p));
@@ -280,7 +283,7 @@ object process_algo(id:process_index_t) = {
 
         if ok {
             var qcp := global_view.maxQC(locked, global_view.getMaxQC(tc));
-            var b := block_t.block(r_c, qc_t.get_block(qcp));
+            var b := block_t.block(r_c, global_view.get_qc_block(qcp));
             var p := proposal_f_t.proposal_f(b, qcp, tc);
             call broadcast_proposal_f(p);
             r_p := r_c;
@@ -318,7 +321,7 @@ object process_algo(id:process_index_t) = {
         require ~timer;
         require block_t.get_round(proposal_f_t.get_block(p)) = round_t.prev(r_c);
         require tc_t.get_round(proposal_f_t.get_tc(p)) = round_t.prev(round_t.prev(block_t.get_round(proposal_f_t.get_block(p))));
-        require block_t.get_parent(proposal_f_t.get_block(p)) = qc_t.get_block(global_view.maxQC(proposal_f_t.get_qc(p), tc_t.getMaxQC(proposal_f_t.get_tc(p))));
+        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.get_qc_block(global_view.maxQC(proposal_f_t.get_qc(p), tc_t.getMaxQC(proposal_f_t.get_tc(p))));
 
         call proposeNormal(proposal_f_t.get_block(p));
         call vote(proposal_f_t.get_block(p));
