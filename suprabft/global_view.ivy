@@ -8,16 +8,19 @@ module global_view = {
 	relation node_committed(N:process_index_t, B:block_t)
 	relation node_sent_timeout(N:process_index_t, T:timeout_t)
 
-	action vote(n:process_index_t, b:block_t)
+	action vote(n:process_index_t, b:block_t, r:round_t)
 	action lock(n:process_index_t, b:block_t)
 	action commit(n:process_index_t, b:block_t)
 	action timeout(n:process_index_t, t:timeout_t)
 
+	action vote_normal(n:process_index_t, b:block_t, r:round_t, pB:block_t)
+	action vote_fallback_recovery(n:process_index_t, b:block_t)
+
 	# In the real world, we would assess the validity of certificates using signatures. For the IVy model,
 	# we use the fact that the global view has access to this information and can tell us whether the QC is
 	# actually constructible from the information currently floating around in the network
-	relation valid_qc(QC:qc_t)
-	definition valid_qc(QC) =
+	relation qc_valid(QC:qc_t)
+	definition qc_valid(QC) =
 				~(exists B1,B2:block_t. B1 ~= B2 & qc_t.block(QC, B1) & qc_t.block(QC, B2)) &
 				~(exists P1,P2:prepare_t. P1 ~= P2  & qc_t.prepare(QC, P1) & qc_t.prepare(QC, P2)) &
 				~(exists Q1,Q2:quorum_t. Q1 ~= Q2 & qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2)) &
@@ -25,17 +28,79 @@ module global_view = {
 				(forall P:prepare_t,B:block_t. qc_t.prepare(QC, P) & prepare_t.block(P, B) -> qc_t.block(QC, B)) &
 				(forall Q:quorum_t,N:process_index_t,B:block_t. qc_t.quorum(QC, Q) & quorum_t.member(Q, N) & qc_t.block(QC, B) -> node_voted(N, B))
 
-	action get_qc_block(qc:qc_t) returns (b:block_t)
+	export action qc_get_block(qc:qc_t) returns (b:block_t)
+	export action qc_maxQC(qc1:qc_t, qc2:qc_t) returns (qc:qc_t)
 
-	relation valid_tc(TC:tc_t)
+	relation timeout_valid(T:timeout_t)
+	definition timeout_valid(T) = timeout_t.was_constructed(T) &
+				(forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
+
+	export action timeout_get_qc(t:timeout_t) returns (qc:qc_t)
+
+	relation tc_fplusone_valid(TC:tc_fplusone_t)
+	# definition tc_fplusone_valid(TC) =
+
+	relation tc_valid(TC:tc_t)
+	# definition tc_valid(TC) =
+				# ~(exists R1,R2:round_t. R1 ~= R2 & tc_t.round(TC, R1) & tc_t.round(TC, R2)) &
+				# ~(exists Q1,Q2:quorum_t. Q1 ~= Q2 & tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2)) &
+				# (forall T:timeout_t. R:round_t. tc_t.timeout(TC, T) -> tc_t.was_constructed(T)) &
+				# (forall T:timeout_t. tc_t.timeout(QC, T) -> node_sent_timeout())
+
+	export action tc_getMaxQC(tc:tc_t) returns (qc:qc_t)
 
 	specification {
-		before get_qc_block {
-			require valid_qc(qc);
+		before vote_normal {
+			require block_t.valid(b);
+			require is_good(n) -> round_t.succ(block_t.get_round(b), r);
+			require is_good(n) -> block_t.get_parent(b) = pB;
 		}
 
-		after get_qc_block {
+		before vote_fallback_recovery {
+			require block_t.valid(b);
+
+		}
+
+		before vote {
+			require is_good(n) -> (forall T:timeout_t. forall R:round_t. (timeout_t.round(T, R) & node_sent_timeout(n, T)) -> R < r);
+			require is_good(n) -> (forall B:block_t. forall R:round_t. (block_t.round(B, R) & node_voted(n, B)) -> R < r);
+		}
+
+		before qc_get_block {
+			require qc_valid(qc);
+		}
+
+		after qc_get_block {
 			ensure block_t.valid(b);
+		}
+
+		before qc_maxQC {
+			require qc_valid(qc1);
+			require qc_valid(qc2);
+		}
+
+		after qc_maxQC {
+			ensure qc = qc1 | qc = qc2;
+			ensure block_t.get_round(qc_get_block(qc)) >= block_t.get_round(qc_get_block(qc1));
+			ensure block_t.get_round(qc_get_block(qc)) >= block_t.get_round(qc_get_block(qc2));
+		}
+
+		before timeout_get_qc {
+			require timeout_valid(t);
+		}
+
+		after timeout_get_qc {
+			ensure qc_valid(qc);
+		}
+
+		before tc_getMaxQC {
+			require tc_valid(tc);
+			assume exists T:timeout_t. timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, qc);
+			assume forall T:timeout_t. forall QC:qc_t. forall B:block_t. forall R:round_t. (timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, QC) & qc_t.block(QC, B) & block_t.round(B, R)) -> block_t.get_round(qc_get_block(qc)) >= R;
+		}
+
+		after tc_getMaxQC {
+			ensure qc_valid(qc);
 		}
 	}
 
@@ -45,6 +110,14 @@ module global_view = {
 			node_committed(N, B) := B = block_t.genesis;
 			node_sent_timeout(N, B) := false;
 		}
+
+		implement vote_normal(n:process_index_t, b:block_t, r:round_t, pB:block_t) {
+			call vote(n, b, r);
+		}
+
+		# implement vote_fallback_recovery() {
+			# call vote()
+		# }
 
 		implement vote(n:process_index_t, b:block_t) {
 			node_voted(n, b) := true;
@@ -62,11 +135,29 @@ module global_view = {
 			node_sent_timeout(n, t) := true;
 		}
 
-		implement get_qc_block(qc:qc_t) returns (b:block_t) {
-		    if some qc_b:block_t. qc_t.block(qc, qc_b) {
-                b := qc_b;
-            } else {
-            }
-        }
+		implement qc_get_block(qc:qc_t) returns (b:block_t) {
+			if some qc_b:block_t. qc_t.block(qc, qc_b) {
+				b := qc_b;
+			} else {
+			}
+		}
+
+		implement qc_maxQC(qc1:qc_t, qc2:qc_t) returns (qc:qc_t) {
+			if block_t.get_round(qc_get_block(qc1)) > block_t.get_round(qc_get_block(qc2)) {
+				qc := qc1;
+			} else {
+				qc := qc2;
+			}
+		}
+
+		implement timeout_get_qc(t:timeout_t) returns (qc:qc_t) {
+			if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
+				qc := t_qc;
+			} else {
+			}
+		}
+
+		implement tc_getMaxQC(tc:tc_t) returns (qc:qc_t) {
+		}
 	}
 }

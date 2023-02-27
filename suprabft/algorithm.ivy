@@ -53,7 +53,7 @@ object process_algo(id:process_index_t) = {
 
     implement shim.proposal_f_handler.handle(m:msg) {
         if proposal_f_t.valid(m.prop_f) {
-            if (global_view.valid_qc(proposal_f_t.get_qc(m.prop_f)) & global_view.valid_tc(proposal_f_t.get_tc(m.prop_f))) {
+            if (global_view.qc_valid(proposal_f_t.get_qc(m.prop_f)) & global_view.valid_tc(proposal_f_t.get_tc(m.prop_f))) {
                 received_proposal_f(m.prop_f, m.src) := true;
                 received_qc(proposal_f_t.get_qc(m.prop_f)) := true;
                 received_tc(proposal_f_t.get_tc(m.prop_f)) := true;
@@ -68,21 +68,21 @@ object process_algo(id:process_index_t) = {
     }
 
     export action aggregate_prepares(qc:qc_t) = {
-        # the requirement for aggregation is strictly stronger than global_view.valid_qc, avoid rewriting all that here
-        require global_view.valid_qc(qc);
+        # the requirement for aggregation is strictly stronger than global_view.qc_valid, avoid rewriting all that here
+        require global_view.qc_valid(qc);
         require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
 
         received_qc(qc) := true;
     }
 
     implement shim.qc_handler.handle(m:msg) {
-        if global_view.valid_qc(m.qc) {
+        if global_view.qc_valid(m.qc) {
             received_qc(m.qc) := true;
         }
     }
 
     implement shim.timeout_handler.handle(m:msg) {
-        if global_view.valid_qc(timeout_t.get_qc(m.t)) {
+        if global_view.qc_valid(timeout_t.get_qc(m.t)) {
             received_timeout(m.t, m.src) := true;
             received_qc(timeout_t.get_qc(m.t)) := true;
         }
@@ -165,7 +165,7 @@ object process_algo(id:process_index_t) = {
         # var m : msg;
         # var dst : process_index_t;
         # if ~is_good(m.src) {
-            # if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> valid_qc(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
+            # if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> qc_valid(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
                 # call shim.send(id, dst, m);
             # }
             # if m.kind = msg_kind.prepare {
@@ -174,7 +174,7 @@ object process_algo(id:process_index_t) = {
                 # call shim.send(id, dst, m);
                 # call global_view.node_voted(m.src,m.prep,r,bl);
             # }
-            # if m.kind = msg_kind.qc & valid_qc(m.qc) {
+            # if m.kind = msg_kind.qc & qc_valid(m.qc) {
                 # var ok : bool;
                 # ok := true;
                 # ok := ok & forall H:height_t. ~forest_store(m.qc,H);
@@ -182,7 +182,7 @@ object process_algo(id:process_index_t) = {
                     # call shim.send(id, dst, m);
                 # }
             # }
-            # if m.kind = msg_kind.timeout & valid_qc(m.t.qc) {
+            # if m.kind = msg_kind.timeout & qc_valid(m.t.qc) {
                 # call shim.send(id, dst, m);
                 # call global_view.process_index_timeout(m.src,m.t);
             # }
@@ -206,6 +206,14 @@ object process_algo(id:process_index_t) = {
             blockchain(H) := temp_blockchain(H);
 
             uncommitted(QC) := uncommitted(QC) if qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b) else false;
+
+            var temp_chain_size := block_t.get_height(b);
+            while chain_size > temp_chain_size
+            decreases chain_size - temp_chain_size
+            {
+                call global_view.commit(id, blockchain(temp_chain_size));
+                temp_chain_size := height_t.next(temp_chain_size);
+            }
         }
     }
 
@@ -234,21 +242,29 @@ object process_algo(id:process_index_t) = {
             var p := prepare_t.prepare(b);
             call broadcast_prepare(p);
             r_v := block_t.get_round(b);
+
+            if round_t.succ(block_t.get_round(b), r_c) {
+                call global_view.vote_normal(id, b, r_c, global_view.qc_get_block(locked));
+            } else {
+                call global_view.vote_fallback_recovery(id, b);
+            }
         }
     }
 
     action tryLock(qc:qc_t) = {
-        if block_t.get_round(global_view.get_qc_block(qc)) > block_t.get_round(global_view.get_qc_block(locked)) {
+        if block_t.get_round(global_view.qc_get_block(qc)) > block_t.get_round(global_view.qc_get_block(locked)) {
             locked := qc;
+
+            call global_view.lock(id, global_view.qc_get_block(qc));
         }
     }
 
     action tryCommit(qc:qc_t) = {
         if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qcp, B1) & qc_t.block(qc, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
-            call commit(global_view.get_qc_block(qcp));
+            call commit(global_view.qc_get_block(qcp));
         } else {}
         if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qc, B1) & qc_t.block(qcp, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
-            call commit(global_view.get_qc_block(qc));
+            call commit(global_view.qc_get_block(qc));
         } else {}
     }
 
@@ -256,12 +272,12 @@ object process_algo(id:process_index_t) = {
         require received_qc(qc);
 
         uncommitted(QC) := uncommitted(QC) | QC = qc;
-        r_v := block_t.get_round(global_view.get_qc_block(qc)) if block_t.get_round(global_view.get_qc_block(qc)) > r_v else r_v;
-        call proposeNormal(global_view.get_qc_block(qc));
+        r_v := block_t.get_round(global_view.qc_get_block(qc)) if block_t.get_round(global_view.qc_get_block(qc)) > r_v else r_v;
+        call proposeNormal(global_view.qc_get_block(qc));
         call tryLock(qc);
         call tryCommit(qc);
         call broadcast_qc(qc);
-        call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.get_qc_block(qc)))));
+        call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
     }
 
     export action proposal_n_processing(p:proposal_n_t) = {
@@ -269,7 +285,7 @@ object process_algo(id:process_index_t) = {
 
         require ~timer;
         require block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
-        require block_t.get_parent(proposal_n_t.get_block(p)) = global_view.get_qc_block(locked);
+        require block_t.get_parent(proposal_n_t.get_block(p)) = global_view.qc_get_block(locked);
 
         call proposeNormal(proposal_n_t.get_block(p));
         call vote(proposal_n_t.get_block(p));
@@ -282,8 +298,8 @@ object process_algo(id:process_index_t) = {
         ok := ok & r_p < r_c;
 
         if ok {
-            var qcp := global_view.maxQC(locked, global_view.getMaxQC(tc));
-            var b := block_t.block(r_c, global_view.get_qc_block(qcp));
+            var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
+            var b := block_t.block(r_c, global_view.qc_get_block(qcp));
             var p := proposal_f_t.proposal_f(b, qcp, tc);
             call broadcast_proposal_f(p);
             r_p := r_c;
@@ -321,7 +337,7 @@ object process_algo(id:process_index_t) = {
         require ~timer;
         require block_t.get_round(proposal_f_t.get_block(p)) = round_t.prev(r_c);
         require tc_t.get_round(proposal_f_t.get_tc(p)) = round_t.prev(round_t.prev(block_t.get_round(proposal_f_t.get_block(p))));
-        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.get_qc_block(global_view.maxQC(proposal_f_t.get_qc(p), tc_t.getMaxQC(proposal_f_t.get_tc(p))));
+        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.qc_get_block(global_view.qc_maxQC(proposal_f_t.get_qc(p), global_view.tc_getMaxQC(proposal_f_t.get_tc(p))));
 
         call proposeNormal(proposal_f_t.get_block(p));
         call vote(proposal_f_t.get_block(p));

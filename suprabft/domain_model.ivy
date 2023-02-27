@@ -342,9 +342,34 @@ isolate timeout_t = {
     relation qc(T:timeout_t, QC:qc_t)
 
     action get_round(t:timeout_t) returns (r:round_t)
-    action get_qc(t:timeout_t) returns (q:qc_t)
 
     action timeout(r:round_t, q:qc_t) returns (t:timeout_t)
+
+    specification {
+        relation was_constructed(T:timeout_t)
+
+        after init {
+            was_constructed(T) := false;
+        }
+
+        before get_round {
+            require was_constructed(t);
+        }
+
+        before timeout {
+            assume ~was_constructed(t);
+        }
+
+        after timeout {
+            was_constructed(T) := was_constructed(T) | T = t;
+        }
+
+        invariant round(T, R) -> was_constructed(T)
+        invariant was_constructed(T) -> exists R:round_t. round(T, R)
+        invariant was_constructed(T) -> exists QC:qc_t. qc(T, QC)
+        invariant round(T, R1) & round(T, R2) -> R1 = R2
+        invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
+    }
 
     implementation {
         after init {
@@ -355,13 +380,6 @@ isolate timeout_t = {
         implement get_round(t:timeout_t) returns (r:round_t) {
             if some t_r:round_t. round(t, t_r) {
                 r := t_r;
-            } else {
-            }
-        }
-
-        implement get_qc(t:timeout_t) returns (q:qc_t) {
-            if some t_q:qc_t. qc(t, t_q) {
-                q := t_q;
             } else {
             }
         }
@@ -377,7 +395,6 @@ isolate timeout_t = {
     }
 }
 export timeout_t.get_round
-export timeout_t.get_qc
 
 isolate tc_fplusone_t = {
     type this

@@ -6,9 +6,16 @@ include algorithm
 include global_view
 
 isolate global_view_used_here = {
-	instantiate global_view
-} with block_t, prepare_t
+    instantiate global_view
+
+    # enforce vote rule
+
+    # enforce lock rule
+
+    # enforce commit rule
+
+} with round_t, block_t, prepare_t
 
 # isolate local_view_used_here = {
-	# instantiate supraBFT(global_view_used_here)
-# }
+    # instantiate supraBFT(global_view_used_here)
+# } with height_t
