@@ -194,9 +194,12 @@ object process_algo(id:process_index_t) = {
 
     action commit(b:block_t) = {
         if forall B:block_t. forall QC:qc_t. (block_t.ancestor(b, B) & block_t.ancestor(B, blockchain(chain_size)) & qc_t.block(QC, B)) -> uncommitted(QC) {
-            var temp_chain_size := block_t.get_height(b);
-            while temp_chain_size > chain_size
-            decreases temp_chain_size - chain_size
+            var temp_chain_size := chain_size;
+
+            var b_height := block_t.get_height(b);
+            while b_height > chain_size
+            invariant exists B_temp:block_t. forall H:height_t. height_t.succ(chain_size, H) & block_t.height(B_temp, H) & (b = B_temp | (block_t.ancestor(b, B_temp) & block_t.parent(B_temp, blockchain(chain_size)))) & (exists QC:qc_t. qc_t.block(QC, B_temp) & uncommitted(QC))
+            decreases b_height - chain_size
             {
                 if some b_temp:block_t. forall H:height_t. height_t.succ(chain_size, H) & block_t.height(b_temp, H) & (b = b_temp | (block_t.ancestor(b, b_temp) & block_t.parent(b_temp, blockchain(chain_size)))) & (exists QC:qc_t. qc_t.block(QC, b_temp) & uncommitted(QC)) {
                     chain_size := height_t.next(chain_size);
@@ -207,7 +210,6 @@ object process_algo(id:process_index_t) = {
 
             uncommitted(QC) := uncommitted(QC) if qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b) else false;
 
-            temp_chain_size := block_t.get_height(b);
             while chain_size > temp_chain_size
             decreases chain_size - temp_chain_size
             {
