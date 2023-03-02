@@ -16,6 +16,6 @@ isolate global_view_used_here = {
 
 } with round_t, block_t, prepare_t
 
-# isolate local_view_used_here = {
-    # instantiate supraBFT(global_view_used_here)
-# } with height_t
+isolate local_view_used_here = {
+    instantiate supraBFT(global_view_used_here)
+} with height_t

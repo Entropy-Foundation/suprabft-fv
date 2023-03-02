@@ -399,15 +399,15 @@ export timeout_t.get_round
 isolate tc_fplusone_t = {
     type this
 
-    relation round(TC:tc_fplusone_t, B:block_t)
+    relation round(TC:tc_fplusone_t, R:round_t)
     relation timeout(TC:tc_fplusone_t, T:timeout_t)
-    relation quorum_fplusone(TC:tc_fplusone_t, Q:quorum_fplusone_t)
+    relation quorum(TC:tc_fplusone_t, Q:quorum_fplusone_t)
 }
 
 isolate tc_t = {
     type this
 
-    relation round(TC:tc_t, B:block_t)
+    relation round(TC:tc_t, R:round_t)
     relation timeout(TC:tc_t, T:timeout_t)
     relation quorum(TC:tc_t, Q:quorum_t)
 }
@@ -420,20 +420,18 @@ isolate proposal_f_t = {
     relation tc(P:proposal_f_t, TC:tc_t)
 
     action get_block(p:proposal_f_t) returns (b:block_t)
-    action get_qc(p:proposal_f_t) returns (qc:qc_t)
-    action get_tc(p:proposal_f_t) returns (qc:tc_t)
 
     action proposal_f(b:block_t, qc:qc_t, tc:tc_t) returns (p:proposal_f_t)
 
     specification {
-        relation valid(P:proposal_f_t)
+        relation was_constructed(P:proposal_f_t)
 
         after init {
-            valid(P) := false;
+            was_constructed(P) := false;
         }
 
         before get_block {
-            require valid(p);
+            require was_constructed(p);
         }
 
         after get_block {
@@ -442,17 +440,20 @@ isolate proposal_f_t = {
 
         before proposal_f {
             require block_t.valid(b);
-            assume ~valid(p);
+            assume ~was_constructed(p);
         }
 
         after proposal_f {
-            valid(P) := valid(P) | P = p;
+            was_constructed(P) := was_constructed(P) | P = p;
         }
 
-        invariant block(P, B) -> valid(P) & block_t.valid(B)
-        invariant valid(P) -> exists B:block_t. block(P, B)
+        invariant block(P, B) -> was_constructed(P) & block_t.valid(B)
+        invariant was_constructed(P) -> exists B:block_t. block(P, B)
+        invariant was_constructed(P) -> exists QC:qc_t. qc(P, QC)
+        invariant was_constructed(P) -> exists TC:tc_t. tc(P, TC)
         invariant block(P, B1) & block(P, B2) -> B1 = B2
-        invariant block(P1, B) & block(P2, B) -> P1 = P2
+        invariant qc(P, QC1) & qc(P, QC2) -> QC1 = QC2
+        invariant tc(P, TC1) & tc(P, TC2) -> TC1 = TC2
     }
 
     implementation {
@@ -469,20 +470,6 @@ isolate proposal_f_t = {
             }
         }
 
-        implement get_qc(p:proposal_f_t) returns (q:qc_t) {
-            if some p_q:qc_t. qc(p, p_q) {
-                q := p_q;
-            } else {
-            }
-        }
-
-        implement get_tc(p:proposal_f_t) returns (t:tc_t) {
-            if some p_t:tc_t. tc(p, p_t) {
-                t := p_t;
-            } else {
-            }
-        }
-
         implement proposal_f(b:block_t, q:qc_t, t:tc_t) returns (p:proposal_f_t) {
             if some p_old:proposal_f_t. block(p_old, b) & qc(p_old, q) & tc(p_old, t) {
                 p := p_old;
@@ -495,5 +482,3 @@ isolate proposal_f_t = {
     }
 }
 export proposal_f_t.get_block
-export proposal_f_t.get_qc
-export proposal_f_t.get_tc

@@ -22,8 +22,6 @@ object process_algo(id:process_index_t) = {
     function blockchain(H:height_t) : block_t
     individual chain_size : height_t
 
-    function temp_blockchain(H:height_t) : block_t
-
     after init {
         locked := qc_t.genesis;
         r_p := 0;
@@ -52,12 +50,10 @@ object process_algo(id:process_index_t) = {
     }
 
     implement shim.proposal_f_handler.handle(m:msg) {
-        if proposal_f_t.valid(m.prop_f) {
-            if (global_view.qc_valid(proposal_f_t.get_qc(m.prop_f)) & global_view.valid_tc(proposal_f_t.get_tc(m.prop_f))) {
-                received_proposal_f(m.prop_f, m.src) := true;
-                received_qc(proposal_f_t.get_qc(m.prop_f)) := true;
-                received_tc(proposal_f_t.get_tc(m.prop_f)) := true;
-            }
+        if global_view.proposal_f_valid(m.prop_f) {
+            received_proposal_f(m.prop_f, m.src) := true;
+            received_qc(global_view.proposal_f_get_qc(m.prop_f)) := true;
+            received_tc(global_view.proposal_f_get_tc(m.prop_f)) := true;
         }
     }
 
@@ -67,8 +63,8 @@ object process_algo(id:process_index_t) = {
         }
     }
 
+    # the requirement for aggregation is strictly stronger than global_view.qc_valid, avoid rewriting all that here
     export action aggregate_prepares(qc:qc_t) = {
-        # the requirement for aggregation is strictly stronger than global_view.qc_valid, avoid rewriting all that here
         require global_view.qc_valid(qc);
         require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
 
@@ -82,24 +78,28 @@ object process_algo(id:process_index_t) = {
     }
 
     implement shim.timeout_handler.handle(m:msg) {
-        if global_view.qc_valid(timeout_t.get_qc(m.t)) {
+        if global_view.timeout_valid(m.t) {
             received_timeout(m.t, m.src) := true;
-            received_qc(timeout_t.get_qc(m.t)) := true;
+            received_qc(global_view.timeout_get_qc(m.t)) := true;
         }
     }
 
-    # rewrite this
     export action aggregate_timeouts_fplusone(tc:tc_fplusone_t) = {
+        require global_view.tc_fplusone_valid(tc);
+        require tc_fplusone_t.quorum(TC, Q) & tc_fplusone_t.timeout(TC, T) & quorum_fplusone_t.member(Q, N) -> received_timeout(T, N);
+
         received_tc_fplusone(tc) := true;
     }
 
-    # rewrite this
     export action aggregate_timeouts(tc:tc_t) = {
+        require global_view.tc_valid(tc);
+        require tc_t.quorum(TC, Q) & tc_t.timeout(TC, T) & quorum_t.member(Q, N) -> received_timeout(T, N);
+
         received_tc(tc) := true;
     }
 
     implement shim.tc_handler.handle(m:msg) {
-        if global_view.valid_tc(m.tc) {
+        if global_view.tc_valid(m.tc) {
             received_tc(m.tc) := true;
         }
     }
@@ -194,20 +194,20 @@ object process_algo(id:process_index_t) = {
 
     action commit(b:block_t) = {
         if forall B:block_t. forall QC:qc_t. (block_t.ancestor(b, B) & block_t.ancestor(B, blockchain(chain_size)) & qc_t.block(QC, B)) -> uncommitted(QC) {
-            temp_blockchain(H) := *;
-            assume H <= chain_size -> temp_blockchain(H) = blockchain(H);
-            assume H > chain_size & H < block_t.get_height(b) ->
-                    block_t.ancestor(b, temp_blockchain(H)) &
-                    block_t.height(temp_blockchain(H), H) &
-                    (exists QC:qc_t. qc_t.block(QC, temp_blockchain(H)) & uncommitted(QC));
-            chain_size := block_t.get_height(b);
-            temp_blockchain(chain_size) := b;
-
-            blockchain(H) := temp_blockchain(H);
+            var temp_chain_size := block_t.get_height(b);
+            while temp_chain_size > chain_size
+            decreases temp_chain_size - chain_size
+            {
+                if some b_temp:block_t. forall H:height_t. height_t.succ(chain_size, H) & block_t.height(b_temp, H) & (b = b_temp | (block_t.ancestor(b, b_temp) & block_t.parent(b_temp, blockchain(chain_size)))) & (exists QC:qc_t. qc_t.block(QC, b_temp) & uncommitted(QC)) {
+                    chain_size := height_t.next(chain_size);
+                    blockchain(chain_size) := b_temp;
+                } else {
+                }
+            }
 
             uncommitted(QC) := uncommitted(QC) if qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b) else false;
 
-            var temp_chain_size := block_t.get_height(b);
+            temp_chain_size := block_t.get_height(b);
             while chain_size > temp_chain_size
             decreases chain_size - temp_chain_size
             {
@@ -246,7 +246,7 @@ object process_algo(id:process_index_t) = {
             if round_t.succ(block_t.get_round(b), r_c) {
                 call global_view.vote_normal(id, b, r_c, global_view.qc_get_block(locked));
             } else {
-                call global_view.vote_fallback_recovery(id, b);
+                # call global_view.vote_fallback_recovery(id, b);
             }
         }
     }
@@ -283,17 +283,20 @@ object process_algo(id:process_index_t) = {
     export action proposal_n_processing(p:proposal_n_t) = {
         require received_proposal_n(p, leader(round_t.prev(r_c)));
 
-        require ~timer;
-        require block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
-        require block_t.get_parent(proposal_n_t.get_block(p)) = global_view.qc_get_block(locked);
+        var ok := true;
+        ok := ok & ~timer;
+        ok := ok & block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
+        ok := ok & block_t.get_parent(proposal_n_t.get_block(p)) = global_view.qc_get_block(locked);
 
-        call proposeNormal(proposal_n_t.get_block(p));
-        call vote(proposal_n_t.get_block(p));
+        if ok {
+            call proposeNormal(proposal_n_t.get_block(p));
+            call vote(proposal_n_t.get_block(p));
+        }
     }
 
     action proposeFR(tc:tc_t) = {
         var ok := true;
-        ok := ok & tc_t.get_round(tc) = round_t.prev(round_t.prev(r_c));
+        ok := ok & global_view.tc_get_round(tc) = round_t.prev(round_t.prev(r_c));
         ok := ok & leader(r_c) = id;
         ok := ok & r_p < r_c;
 
@@ -317,16 +320,16 @@ object process_algo(id:process_index_t) = {
     export action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
 
-        require r >= round_t.prev(round_t.prev(r_c));
-        var t := timeout_t.timeout(tc_fplusone_t.get_round(tc), locked);
+        require global_view.tc_fplusone_get_round(tc) >= round_t.prev(round_t.prev(r_c));
+        var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
         call broadcast_timeout(t);
     }
 
     export action tc_processing(tc:tc_t) = {
         require received_tc(tc);
 
-        call advanceToRound(round_t.next(round_t.next(tc_t.get_round(tc))));
-        if forall P:proposal_f_t. ~(proposal_f_t.get_round(P) = round_t.next(tc_t.get_round(tc)) & received_proposal_f(P, leader(proposal_f_t.get_round(P)))) {
+        call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
+        if forall P:proposal_f_t. ~(received_proposal_f(P, leader(round_t.next(global_view.tc_get_round(tc))))) {
             call proposeFR(tc);
         }
     }
@@ -336,8 +339,8 @@ object process_algo(id:process_index_t) = {
 
         require ~timer;
         require block_t.get_round(proposal_f_t.get_block(p)) = round_t.prev(r_c);
-        require tc_t.get_round(proposal_f_t.get_tc(p)) = round_t.prev(round_t.prev(block_t.get_round(proposal_f_t.get_block(p))));
-        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.qc_get_block(global_view.qc_maxQC(proposal_f_t.get_qc(p), global_view.tc_getMaxQC(proposal_f_t.get_tc(p))));
+        require global_view.tc_get_round(global_view.proposal_f_get_tc(p)) = round_t.prev(round_t.prev(block_t.get_round(proposal_f_t.get_block(p))));
+        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.qc_get_block(global_view.qc_maxQC(global_view.proposal_f_get_qc(p), global_view.tc_getMaxQC(global_view.proposal_f_get_tc(p))));
 
         call proposeNormal(proposal_f_t.get_block(p));
         call vote(proposal_f_t.get_block(p));
