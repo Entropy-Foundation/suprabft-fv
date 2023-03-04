@@ -1,6 +1,7 @@
 #lang ivy1.8
 
 include domain_model
+include network_model
 
 module supraBFT(global_view) = {
 object process_algo(id:process_index_t) = {
@@ -248,7 +249,7 @@ object process_algo(id:process_index_t) = {
             if round_t.succ(block_t.get_round(b), r_c) {
                 call global_view.vote_normal(id, b, r_c, global_view.qc_get_block(locked));
             } else {
-                # call global_view.vote_fallback_recovery(id, b);
+                call global_view.vote_fallback_recovery(id, b);
             }
         }
     }
@@ -297,6 +298,9 @@ object process_algo(id:process_index_t) = {
     }
 
     action proposeFR(tc:tc_t) = {
+        assert r_c > 0;
+        assert round_t.next(r_c) > 0;
+
         var ok := true;
         ok := ok & global_view.tc_get_round(tc) = round_t.prev(round_t.prev(r_c));
         ok := ok & leader(r_c) = id;

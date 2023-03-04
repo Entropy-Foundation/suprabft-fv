@@ -8,13 +8,11 @@ module global_view = {
     relation process_committed(N:process_index_t, B:block_t)
     relation process_sent_timeout(N:process_index_t, T:timeout_t)
 
-    action vote(n:process_index_t, b:block_t, r:round_t)
+    action vote_normal(n:process_index_t, b:block_t, r_c:round_t, pB:block_t)
+    action vote_fallback_recovery(n:process_index_t, b:block_t, r_c:round_t)
     action lock(n:process_index_t, b:block_t)
     action commit(n:process_index_t, b:block_t)
     action timeout(n:process_index_t, t:timeout_t)
-
-    action vote_normal(n:process_index_t, b:block_t, r:round_t, pB:block_t)
-    action vote_fallback_recovery(n:process_index_t, b:block_t)
 
     # In the real world, we would assess the validity of certificates using signatures. For the IVy model,
     # we use the fact that the global view has access to this information and can tell us whether the QC is
@@ -69,18 +67,17 @@ module global_view = {
     specification {
         before vote_normal {
             require block_t.valid(b);
-            require is_good(n) -> round_t.succ(block_t.get_round(b), r);
+            require is_good(n) -> round_t.succ(block_t.get_round(b), r_c);
             require is_good(n) -> block_t.get_parent(b) = pB;
+            require is_good(n) -> (forall T:timeout_t. forall R:round_t. (timeout_t.round(T, R) & process_sent_timeout(n, T)) -> R < r_c);
+            require is_good(n) -> (forall B:block_t. forall R:round_t. (block_t.round(B, R) & process_voted(n, B)) -> R < r_c);
         }
 
         before vote_fallback_recovery {
             require block_t.valid(b);
 
-        }
-
-        before vote {
-            require is_good(n) -> (forall T:timeout_t. forall R:round_t. (timeout_t.round(T, R) & process_sent_timeout(n, T)) -> R < r);
-            require is_good(n) -> (forall B:block_t. forall R:round_t. (block_t.round(B, R) & process_voted(n, B)) -> R < r);
+            require is_good(n) -> (forall T:timeout_t. forall R:round_t. (timeout_t.round(T, R) & process_sent_timeout(n, T)) -> R < r_c);
+            require is_good(n) -> (forall B:block_t. forall R:round_t. (block_t.round(B, R) & process_voted(n, B)) -> R < r_c);
         }
 
         before qc_get_block {
@@ -143,6 +140,12 @@ module global_view = {
         after proposal_f_get_tc {
             ensure tc_valid(tc);
         }
+
+        invariant process_voted(N, block_t.genesis)
+        invariant process_committed(N, block_t.genesis)
+
+        invariant process_voted(N, B) -> block_t.valid(B)
+        invariant process_committed(N, B) -> block_t.valid(B)
     }
 
     implementation {
@@ -152,16 +155,15 @@ module global_view = {
             process_sent_timeout(N, B) := false;
         }
 
-        implement vote_normal(n:process_index_t, b:block_t, r:round_t, pB:block_t) {
-            call vote(n, b, r);
+        implement vote_normal(n:process_index_t, b:block_t, r_c:round_t, pB:block_t) {
+            process_voted(n, b) := true;
         }
 
-        # implement vote_fallback_recovery() {
-            # call vote()
-        # }
-
-        implement vote(n:process_index_t, b:block_t) {
+        implement vote_fallback_recovery(n:process_index_t, b:block_t, r_c:round_t) {
             process_voted(n, b) := true;
+        }
+
+        implement vote(n:process_index_t, b:block_t, r:round_t) {
         }
 
         implement lock(n:process_index_t, b:block_t) {

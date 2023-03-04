@@ -7,15 +7,8 @@ include global_view
 
 isolate global_view_used_here = {
     instantiate global_view
-
-    # enforce vote rule
-
-    # enforce lock rule
-
-    # enforce commit rule
-
-} with round_t, block_t, prepare_t
+} with block_t, prepare_t, genesis_member, timeout_t, proposal_f_t
 
 isolate local_view_used_here = {
     instantiate supraBFT(global_view_used_here)
-} with height_t
+} with global_view_used_here, round_t, block_t, proposal_n_t, prepare_t, proposal_f_t
