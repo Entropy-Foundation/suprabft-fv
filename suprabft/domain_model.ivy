@@ -82,7 +82,7 @@ isolate block_t = {
         invariant parent(genesis, P) <-> P = genesis
 
         invariant ancestor(genesis, A) <-> A = genesis
-        invariant height(genesis, 0)
+        invariant height(B, 0) <-> B = genesis
 
         invariant valid(genesis)
         invariant round(B, R) -> valid(B)
@@ -158,6 +158,8 @@ isolate proposal_n_t = {
 
     relation block(P:proposal_n_t, B:block_t)
 
+    individual genesis : proposal_n_t
+
     action get_block(p:proposal_n_t) returns (b:block_t)
 
     action proposal_n(b:block_t) returns (p:proposal_n_t)
@@ -166,7 +168,7 @@ isolate proposal_n_t = {
         relation valid(P:proposal_n_t)
 
         after init {
-            valid(P) := false;
+            valid(P) := P = genesis;
         }
 
         before get_block {
@@ -186,6 +188,9 @@ isolate proposal_n_t = {
             valid(P) := valid(P) | P = p;
         }
 
+        invariant block(genesis, B) <-> B = block_t.genesis
+        invariant valid(genesis)
+
         invariant block(P, B) -> valid(P) & block_t.valid(B)
         invariant valid(P) -> exists B:block_t. block(P, B)
         invariant block(P, B1) & block(P, B2) -> B1 = B2
@@ -194,7 +199,7 @@ isolate proposal_n_t = {
 
     implementation {
         after init {
-            block(P, B) := false;
+            block(P, B) := P = genesis & B = block_t.genesis;
         }
 
         implement get_block(p:proposal_n_t) returns (b:block_t) {
@@ -212,7 +217,7 @@ isolate proposal_n_t = {
             }
         }
     }
-}
+} with block_t
 export proposal_n_t.get_block
 
 isolate prepare_t = {
@@ -281,15 +286,7 @@ isolate prepare_t = {
 } with block_t
 export prepare_t.get_block
 
-object quorum_t = {
-    type this
-
-    relation member(Q:quorum_t, N:process_index_t)
-
-    individual genesis : quorum_t
-}
-
-object quorum_fplusone_t = {
+isolate quorum_fplusone_t = {
     type this
 
     relation member(Q:quorum_fplusone_t, N:process_index_t)
@@ -297,6 +294,14 @@ object quorum_fplusone_t = {
 
 isolate every_quorum_fplusone_good = {
     axiom exists N:process_index_t. is_good(N) & quorum_fplusone_t.member(Q, N)
+}
+
+isolate quorum_t = {
+    type this
+
+    relation member(Q:quorum_t, N:process_index_t)
+
+    individual genesis : quorum_t
 }
 
 isolate genesis_member = {

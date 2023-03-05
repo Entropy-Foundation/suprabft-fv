@@ -32,7 +32,7 @@ object process_algo(id:process_index_t) = {
         uncommitted(QC) := false;
         r_v := 0;
 
-        received_proposal_n(P, Src) := false;
+        received_proposal_n(P, Src) := P = proposal_n_t.genesis & Src = leader(0);
         received_proposal_f(P, Src) := false;
         received_prepare(P, Src) := P = prepare_t.genesis;
         received_qc(QC) := QC = qc_t.genesis;
@@ -230,6 +230,8 @@ object process_algo(id:process_index_t) = {
             var p := proposal_n_t.proposal_n(b);
             call broadcast_proposal_n(p);
             r_p := r_c;
+
+            call global_view.propose(id, b);
         }
     }
 
@@ -246,11 +248,7 @@ object process_algo(id:process_index_t) = {
             call broadcast_prepare(p);
             r_v := block_t.get_round(b);
 
-            if round_t.succ(block_t.get_round(b), r_c) {
-                call global_view.vote_normal(id, b, r_c, global_view.qc_get_block(locked));
-            } else {
-                call global_view.vote_fallback_recovery(id, b);
-            }
+            call global_view.vote(id, b);
         }
     }
 
