@@ -7,7 +7,13 @@ include global_view
 
 isolate global_view_used_here = {
     instantiate global_view
-} with round_t, block_t, prepare_t, genesis_member, timeout_t, proposal_f_t
+
+    # dummy invariant needed to make sure that the parent_exists definition is used within this isolate
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+
+    invariant forall N:process_index_t. forall B1,B2:block_t. forall R:round_t. is_good(N) & process_voted(N, B1) & process_voted(N, B2) & block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+    invariant forall N1,N2:process_index_t. forall B1,B2:block_t. forall R:round_t. is_good(N1) & is_good(N2) & process_committed(N1, B1) & process_committed(N2, B2) & block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+} with round_t, block_t, prepare_t, genesis_member, every_quorum_good, quorum_intersection_axiom, timeout_t, proposal_f_t
 
 isolate local_view_used_here = {
     instantiate supraBFT(global_view_used_here)
