@@ -209,7 +209,7 @@ object process_algo(id:process_index_t) = {
                 }
             }
 
-            uncommitted(QC) := uncommitted(QC) if qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b) else false;
+            uncommitted(QC) := uncommitted(QC) & qc_t.block(QC, B) & (block_t.height(B, H) -> H > chain_size) & block_t.ancestor(B, b);
 
             while chain_size > temp_chain_size
             decreases chain_size - temp_chain_size
