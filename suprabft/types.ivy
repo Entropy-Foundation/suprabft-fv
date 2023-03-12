@@ -9,7 +9,6 @@ instance process_index_t : iterable
 relation is_good(N:process_index_t)
 
 function leader(R:round_t) : process_index_t
-definition leader(r:round_t) = <<< r % `process_index_t.max` >>>
 
 # There are two ways to access a type's member. Example
 # [block_t.parent(b, p)] is a relation that is set to true when [p] is the parent of [b].
@@ -20,7 +19,7 @@ definition leader(r:round_t) = <<< r % `process_index_t.max` >>>
 # invariants set up here that relate the two.
 #
 # Note that actions where validity can only be determined with global view information are
-# placed there. For example, [global_view.get_qc_block] instead of [qc_t.get_block].
+# placed there. For example, [global_view.qc_get_block] instead of [qc_t.get_block].
 isolate block_t = {
     type this
 
@@ -47,7 +46,6 @@ isolate block_t = {
 
         if some b_r:round_t. round(b, b_r) {
             r := b_r;
-        } else {
         }
 
         ensure round(b, r);
@@ -58,7 +56,6 @@ isolate block_t = {
 
         if some b_pB:block_t. parent(b, b_pB) {
             pB := b_pB;
-        } else {
         }
 
         ensure parent(b, pB);
@@ -69,7 +66,6 @@ isolate block_t = {
 
         if some b_h:height_t. height(b, b_h) {
             h := b_h;
-        } else {
         }
 
         ensure height(b, h);
@@ -87,39 +83,45 @@ isolate block_t = {
         valid(B) := valid(B) | B = b;
     }
 
+    invariant valid(genesis)
     invariant round(genesis, 0)
     invariant parent(genesis, P) <-> P = genesis
-
     invariant ancestor(genesis, A) <-> A = genesis
     invariant height(B, 0) <-> B = genesis
 
-    invariant valid(genesis)
-    invariant round(B, R) -> valid(B)
-    invariant parent(B, P) -> (valid(B) & valid(P))
+    invariant parent(B, B) <-> B = genesis
+    invariant ancestor(B, B) <-> B = genesis
 
-    invariant ancestor(B, A) -> (valid(B) & valid(A))
+    invariant round(B, R) -> valid(B)
+    invariant parent(B, P) -> valid(B) & valid(P)
+    invariant ancestor(B, A) -> valid(B) & valid(A)
     invariant height(B, H) -> valid(B)
 
     invariant valid(B) -> exists R:round_t. round(B, R)
     relation parent_exists(B:block_t)
     definition parent_exists(B) = exists P:block_t. parent(B, P)
     invariant valid(B) -> parent_exists(B)
-
     invariant valid(B) -> exists H:height_t. height(B, H)
 
     invariant round(B, R1) & round(B, R2) -> R1 = R2
     invariant parent(B, P1) & parent(B, P2) -> P1 = P2
-
     invariant height(B, H1) & height(B, H2) -> H1 = H2
-
-    invariant parent(B, P) -> ancestor(B, P)
-    invariant ancestor(A1, A2) & ancestor(A2, A3) -> ancestor(A1, A3)
-    invariant ancestor(B, A1) & ancestor(B, A2) -> (A1 = A2 | ancestor(A1, A2) | ancestor(A2, A1))
-    relation inbetween(D:block_t, A:block_t)
-    definition inbetween(D, A) = exists M:block_t. ancestor(D, M) & ancestor(M, A)
-    invariant (ancestor(D, A) & ~inbetween(D, A)) -> ((D = genesis & A = genesis) | parent(D, A))
-    invariant parent(B, P) -> ((B = genesis & P = genesis) | (exists B_h, P_h:height_t. height(B, B_h) & height(P, P_h) & height_t.succ(P_h, B_h)))
 } with height_t
+
+isolate ancestor_transitive_closure_block = {
+    invariant block_t.parent(B, P) -> block_t.ancestor(B, P)
+    invariant block_t.ancestor(A1, A2) & block_t.ancestor(A2, A3) -> block_t.ancestor(A1, A3)
+    invariant block_t.ancestor(B, A1) & block_t.ancestor(B, A2) -> A1 = A2 | block_t.ancestor(A1, A2) | block_t.ancestor(A2, A1)
+    relation inbetween(D:block_t, A:block_t)
+    definition inbetween(D, A) = exists M:block_t. block_t.ancestor(D, M) & block_t.ancestor(M, A)
+    invariant block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
+    invariant block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
+} with block_t
+
+isolate parent_same_implications = {
+    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) -> block_t.height(B2, H)
+    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.ancestor(B1, A) -> block_t.ancestor(B2, A)
+} with block_t, ancestor_transitive_closure_block
 
 isolate proposal_n_t = {
     type this
@@ -141,7 +143,6 @@ isolate proposal_n_t = {
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
-        } else {
         }
 
         ensure block(p, b);
@@ -160,11 +161,13 @@ isolate proposal_n_t = {
         valid(P) := valid(P) | P = p;
     }
 
-    invariant block(genesis, B) <-> B = block_t.genesis
     invariant valid(genesis)
+    invariant block(genesis, B) <-> B = block_t.genesis
 
     invariant block(P, B) -> valid(P) & block_t.valid(B)
+
     invariant valid(P) -> exists B:block_t. block(P, B)
+
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
 } with block_t
@@ -189,7 +192,6 @@ isolate prepare_t = {
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
-        } else {
         }
 
         ensure block(p, b);
@@ -208,12 +210,15 @@ isolate prepare_t = {
         valid(P) := valid(P) | P = p;
     }
 
-    invariant block(genesis, B) <-> B = block_t.genesis
     invariant valid(genesis)
+    invariant block(genesis, B) <-> B = block_t.genesis
+
+    invariant block(P, B) -> valid(P) & block_t.valid(B)
 
     invariant valid(P) -> exists B:block_t. block(P, B)
-    invariant block(P, B) -> valid(P) & block_t.valid(B)
+
     invariant block(P, B1) & block(P, B2) -> B1 = B2
+    invariant block(P1, B) & block(P2, B) -> P1 = P2
 } with block_t
 
 isolate quorum_fplusone_t = {
@@ -286,7 +291,6 @@ isolate timeout_t = {
 
         if some t_r:round_t. round(t, t_r) {
             r := t_r;
-        } else {
         }
 
         ensure round(t, r);
@@ -306,8 +310,11 @@ isolate timeout_t = {
     }
 
     invariant round(T, R) -> was_constructed(T)
+    invariant qc(T, QC) -> was_constructed(T)
+
     invariant was_constructed(T) -> exists R:round_t. round(T, R)
     invariant was_constructed(T) -> exists QC:qc_t. qc(T, QC)
+
     invariant round(T, R1) & round(T, R2) -> R1 = R2
     invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
 }
@@ -350,7 +357,6 @@ isolate proposal_f_t = {
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
-        } else {
         }
 
         ensure block(p, b);
@@ -372,10 +378,14 @@ isolate proposal_f_t = {
     }
 
     invariant block(P, B) -> was_constructed(P) & block_t.valid(B)
+    invariant qc(P, QC) -> was_constructed(P)
+    invariant tc(P, TC) -> was_constructed(P)
+
     invariant was_constructed(P) -> exists B:block_t. block(P, B)
     invariant was_constructed(P) -> exists QC:qc_t. qc(P, QC)
     invariant was_constructed(P) -> exists TC:tc_t. tc(P, TC)
+
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant qc(P, QC1) & qc(P, QC2) -> QC1 = QC2
     invariant tc(P, TC1) & tc(P, TC2) -> TC1 = TC2
-}
+} with block_t

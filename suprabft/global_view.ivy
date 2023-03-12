@@ -1,6 +1,6 @@
 #lang ivy1.8
 
-include domain_model
+include types
 
 module global_view = {
     relation process_proposed(N:process_index_t, B:block_t)
@@ -17,9 +17,9 @@ module global_view = {
                 (exists B:block_t. qc_t.block(QC, B)) &
                 (exists P:prepare_t. qc_t.prepare(QC, P)) &
                 (exists Q:quorum_t. qc_t.quorum(QC, Q)) &
-                ~(exists B1,B2:block_t. B1 ~= B2 & qc_t.block(QC, B1) & qc_t.block(QC, B2)) &
-                ~(exists P1,P2:prepare_t. P1 ~= P2  & qc_t.prepare(QC, P1) & qc_t.prepare(QC, P2)) &
-                ~(exists Q1,Q2:quorum_t. Q1 ~= Q2 & qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2)) &
+                (forall B1,B2:block_t. qc_t.block(QC, B1) & qc_t.block(QC, B2) -> B1 = B2) &
+                (forall P1,P2:prepare_t. qc_t.prepare(QC, P1) & qc_t.prepare(QC, P2) -> P1 = P2) &
+                (forall Q1,Q2:quorum_t. qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2) -> Q1 = Q2) &
                 (forall P:prepare_t. qc_t.prepare(QC, P) -> prepare_t.valid(P)) &
                 (forall P:prepare_t,B:block_t. qc_t.prepare(QC, P) & prepare_t.block(P, B) -> qc_t.block(QC, B)) &
                 (forall Q:quorum_t,N:process_index_t,B:block_t. qc_t.quorum(QC, Q) & quorum_t.member(Q, N) & qc_t.block(QC, B) -> process_voted(N, B))
@@ -32,21 +32,23 @@ module global_view = {
     definition tc_fplusone_valid(TC) =
                 (exists R:round_t. tc_fplusone_t.round(TC, R)) &
                 (exists Q:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q)) &
-                ~(exists R1,R2:round_t. R1 ~= R2 & tc_fplusone_t.round(TC, R1) & tc_fplusone_t.round(TC, R2)) &
-                ~(exists Q1,Q2:quorum_fplusone_t. Q1 ~= Q2 & tc_fplusone_t.quorum(TC, Q1) & tc_fplusone_t.quorum(TC, Q2)) &
+                (forall R1,R2:round_t. tc_fplusone_t.round(TC, R1) & tc_fplusone_t.round(TC, R2) -> R1 = R2) &
+                (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q1) & tc_fplusone_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_fplusone_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_fplusone_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_fplusone_t.round(TC, R)) &
-                (forall Q:quorum_fplusone_t,N:process_index_t. tc_fplusone_t.quorum(TC, Q) & quorum_fplusone_t.member(Q, N) -> (exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & process_sent_timeout(N, T)))
+                (forall Q:quorum_fplusone_t,N:process_index_t. tc_fplusone_t.quorum(TC, Q) & quorum_fplusone_t.member(Q, N) ->
+                        (exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & process_sent_timeout(N, T)))
 
     relation tc_valid(TC:tc_t)
     definition tc_valid(TC) =
                 (exists R:round_t. tc_t.round(TC, R)) &
                 (exists Q:quorum_t. tc_t.quorum(TC, Q)) &
-                ~(exists R1,R2:round_t. R1 ~= R2 & tc_t.round(TC, R1) & tc_t.round(TC, R2)) &
-                ~(exists Q1,Q2:quorum_t. Q1 ~= Q2 & tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2)) &
+                (forall R1,R2:round_t. tc_t.round(TC, R1) & tc_t.round(TC, R2) -> R1 = R2) &
+                (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                (forall Q:quorum_t,N:process_index_t. tc_t.quorum(TC, Q) & quorum_t.member(Q, N) -> (exists T:timeout_t. tc_t.timeout(TC,T) & process_sent_timeout(N, T)))
+                (forall Q:quorum_t,N:process_index_t. tc_t.quorum(TC, Q) & quorum_t.member(Q, N) ->
+                        (exists T:timeout_t. tc_t.timeout(TC,T) & process_sent_timeout(N, T)))
 
     relation proposal_f_valid(P:proposal_f_t)
     definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) &
@@ -57,31 +59,41 @@ module global_view = {
         process_proposed(N, B) := N = leader(0) & B = block_t.genesis;
         process_voted(N, B) := B = block_t.genesis;
         process_locked(N, B) := B = block_t.genesis;
-        process_committed(N, B) := B = block_t.genesis;
+        process_committed(N, B) := false;
         process_sent_timeout(N, B) := false;
     }
 
     export action propose(n:process_index_t, b:block_t) = {
         require block_t.valid(b);
-        require n = leader(block_t.get_round(b));
+        require forall R:round_t. block_t.round(b, R) -> n = leader(R);
 
         process_proposed(n, b) := true;
     }
 
     export action vote(n:process_index_t, b:block_t) = {
         require block_t.valid(b);
+        require forall B:block_t. block_t.parent(b, PB) -> process_locked(n, PB);
+        require forall B:block_t. forall R1,R2:round_t. process_voted(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
 
         process_voted(n, b) := true;
     }
 
-    export action lock(n:process_index_t, b:block_t) = {
+    export action lock(n:process_index_t, b:block_t, qc:qc_t) = {
         require block_t.valid(b);
+        require qc_valid(qc);
+        require qc_t.block(qc, b);
+        require forall B:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
+        require forall B:block_t. forall R1,R2:round_t. process_locked(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
 
         process_locked(n, b) := true;
     }
 
     export action commit(n:process_index_t, b:block_t) = {
         require block_t.valid(b);
+        require exists N:process_index_t. is_good(N) & process_locked(N, b);
+        require forall PB:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
+        require forall B:block_t. forall R1,R2:round_t. process_committed(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
+        require forall B:block_t. forall H1,H2:height_t. process_committed(n, B) & block_t.height(B, H1) & block_t.height(b, H2) -> H1 < H2;
 
         process_committed(n, b) := true;
     }
@@ -97,7 +109,6 @@ module global_view = {
 
         if some qc_b:block_t. qc_t.block(qc, qc_b) {
             b := qc_b;
-        } else {
         }
 
         ensure qc_t.block(qc, b);
@@ -107,15 +118,15 @@ module global_view = {
         require qc_valid(qc1);
         require qc_valid(qc2);
 
-        if block_t.get_round(qc_get_block(qc1)) > block_t.get_round(qc_get_block(qc2)) {
+        if forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc1, B1) & block_t.round(B1, R1) & qc_t.block(qc2, B2) & block_t.round(B2, R2) -> R1 > R2 {
             qc := qc1;
         } else {
             qc := qc2;
         }
 
         ensure qc = qc1 | qc = qc2;
-        ensure block_t.get_round(qc_get_block(qc)) >= block_t.get_round(qc_get_block(qc1));
-        ensure block_t.get_round(qc_get_block(qc)) >= block_t.get_round(qc_get_block(qc2));
+        ensure forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & block_t.round(B1, R1) & qc_t.block(qc1, B2) & block_t.round(B2, R2) -> R1 >= R2;
+        ensure forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & block_t.round(B1, R1) & qc_t.block(qc2, B2) & block_t.round(B2, R2) -> R1 >= R2;
     }
 
     export action timeout_get_qc(t:timeout_t) returns (qc:qc_t) = {
@@ -123,7 +134,6 @@ module global_view = {
 
         if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
             qc := t_qc;
-        } else {
         }
 
         ensure timeout_t.qc(t, qc);
@@ -134,7 +144,6 @@ module global_view = {
 
         if some tc_r:round_t. tc_fplusone_t.round(tc, tc_r) {
             r := tc_r;
-        } else {
         }
 
         ensure tc_fplusone_t.round(tc, r);
@@ -145,7 +154,6 @@ module global_view = {
 
         if some tc_r:round_t. tc_t.round(tc, tc_r) {
             r := tc_r;
-        } else {
         }
 
         ensure tc_t.round(tc, r);
@@ -154,7 +162,8 @@ module global_view = {
     export action tc_getMaxQC(tc:tc_t) returns (qc:qc_t) = {
         require tc_valid(tc);
         assume exists T:timeout_t. timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, qc);
-        assume forall T:timeout_t. forall QC:qc_t. forall B:block_t. forall R:round_t. (timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, QC) & qc_t.block(QC, B) & block_t.round(B, R)) -> block_t.get_round(qc_get_block(qc)) >= R;
+        assume forall T:timeout_t. forall QC:qc_t. forall B1,B2:block_t. forall R1,R2:round_t. timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, QC) &
+                qc_t.block(QC, B1) & block_t.round(B1, R1) & qc_t.block(qc, B2) & block_t.round(B2, R2) -> R2 >= R1;
 
         ensure qc_valid(qc);
     }
@@ -164,7 +173,6 @@ module global_view = {
 
         if some p_qc:qc_t. proposal_f_t.qc(p, p_qc) {
             qc := p_qc;
-        } else {
         }
 
         ensure proposal_f_t.qc(p, qc);
@@ -175,16 +183,16 @@ module global_view = {
 
         if some p_tc:tc_t. proposal_f_t.tc(p, p_tc) {
             tc := p_tc;
-        } else {
         }
 
         ensure proposal_f_t.tc(p, tc);
     }
 
+    invariant qc_valid(qc_t.genesis)
+
     invariant process_proposed(N, block_t.genesis) <-> N = leader(0)
     invariant process_voted(N, block_t.genesis)
     invariant process_locked(N, block_t.genesis)
-    invariant process_committed(N, block_t.genesis)
 
     invariant process_proposed(N, B) -> block_t.valid(B)
     invariant process_voted(N, B) -> block_t.valid(B)

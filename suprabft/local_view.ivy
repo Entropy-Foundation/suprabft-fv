@@ -1,21 +1,22 @@
 #lang ivy1.8
 
-include domain_model
-include network_model
+include types
+include network
 
 module supraBFT(global_view) = {
-object process_algo(id:process_index_t) = {
+object local_view(id:process_index_t) = {
     individual commit_mode : bool
     individual commit_mode_broadcasted_qc : bool
     individual commit_mode_advancedToRound : bool
-    individual commit_mode_qc : qc_t
+    individual commit_mode_block : block_t
     individual last_committed : block_t
 
     individual locked : qc_t
     individual r_p : round_t
     individual r_c : round_t
     individual timer : bool
-    relation uncommitted(QC:qc_t)
+    # simplified, no need to store QCs here for our purposes
+    relation uncommitted(B:block_t)
     individual r_v : round_t
 
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
@@ -28,14 +29,17 @@ object process_algo(id:process_index_t) = {
 
     after init {
         commit_mode := false;
-        last_committed := block_t.genesis;
+        commit_mode_block := *;
+        assume ~block_t.valid(commit_mode_block);
+        last_committed := *;
+        assume ~block_t.valid(last_committed);
 
         locked := qc_t.genesis;
         r_p := 0;
         r_c := *;
         assume round_t.succ(0, r_c);
         timer := false;
-        uncommitted(QC) := false;
+        uncommitted(B) := false;
         r_v := 0;
 
         received_proposal_n(P, Src) := P = proposal_n_t.genesis & Src = leader(0);
@@ -115,8 +119,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_proposal_n(p:proposal_n_t) = {
-        require ~commit_mode;
-
         var m : msg;
         m.kind := msg_kind.proposal_n;
         m.prop_n := p;
@@ -126,8 +128,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_proposal_f(p:proposal_f_t) = {
-        require ~commit_mode;
-
         var m : msg;
         m.kind := msg_kind.proposal_f;
         m.prop_f := p;
@@ -137,8 +137,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_prepare(p:prepare_t) = {
-        require ~commit_mode;
-
         var m : msg;
         m.kind := msg_kind.prepare;
         m.prep := p;
@@ -148,8 +146,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_qc(q:qc_t) = {
-        require ~commit_mode | (commit_mode & ~commit_mode_broadcasted_qc & ~commit_mode_advancedToRound);
-
         var m : msg;
         m.kind := msg_kind.qc;
         m.qc := q;
@@ -163,8 +159,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_timeout(t:timeout_t) = {
-        require ~commit_mode;
-
         var m : msg;
         m.kind := msg_kind.timeout;
         m.t := t;
@@ -174,8 +168,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action broadcast_tc(t:tc_t) = {
-        require ~commit_mode;
-
         var m : msg;
         m.kind := msg_kind.tc;
         m.tc := t;
@@ -220,25 +212,25 @@ object process_algo(id:process_index_t) = {
 
     export action commit = {
         require commit_mode & commit_mode_broadcasted_qc & commit_mode_advancedToRound;
-        if some qc:qc_t. uncommitted(qc) &
-                        forall B1,B2:block_t (qc_t.block(qc, B1) & qc_t.block(commit_mode_qc, B2)) ->
-                                (block_t.ancestor(B2, B1) & block_t.parent(B1, last_committed)) {
-            last_committed := qc_get_block(qc);
-            uncommitted(QC) := uncommitted(QC) & (forall B:block_t. qc_t.block(QC, B) -> block_t.ancestor(B, last_committed));
+
+        if some b:block_t. (b = commit_mode_block & (commit_mode_block = block_t.genesis | block_t.parent(commit_mode_block, last_committed))) |
+                (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed)) {
+            last_committed := b;
+            uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
 
             call global_view.commit(id, last_committed);
         }
 
-        if qc_t.block(commit_mode_qc, last_committed) {
+        if commit_mode_block = last_committed {
             commit_mode := false;
+            commit_mode_block := *;
+            assume ~block_t.valid(commit_mode_block);
         }
     }
 
     action proposeNormal(pB:block_t) = {
-        require ~commit_mode;
-
         var ok := true;
-        ok := ok & block_t.get_round(pB) = round_t.prev(r_c);
+        ok := ok & forall R:round_t. block_t.round(pB, R) -> round_t.succ(R, r_c);
         ok := ok & leader(r_c) = id;
         ok := ok & r_p < r_c;
         if ok {
@@ -252,8 +244,6 @@ object process_algo(id:process_index_t) = {
     }
 
     action advanceToRound(r:round_t) = {
-        require ~commit_mode | (commit_mode & commit_mode_broadcasted_qc & ~commit_mode_advancedToRound);
-
         if r > r_c {
             r_c := r;
             timer := false;
@@ -265,9 +255,7 @@ object process_algo(id:process_index_t) = {
     }
 
     action vote(b:block_t) = {
-        require ~commit_mode;
-
-        if block_t.get_round(b) > r_v {
+        if forall R:round_t. block_t.round(b, R) -> R > r_v {
             var p := prepare_t.prepare(b);
             call broadcast_prepare(p);
             r_v := block_t.get_round(b);
@@ -277,36 +265,35 @@ object process_algo(id:process_index_t) = {
     }
 
     action tryLock(qc:qc_t) = {
-        require ~commit_mode;
-
-        if block_t.get_round(global_view.qc_get_block(qc)) > block_t.get_round(global_view.qc_get_block(locked)) {
+        if forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & qc_t.block(locked, B2) & block_t.round(B1, R1) & block_t.round(B2, R2) -> R1 > R2 {
             locked := qc;
 
-            call global_view.lock(id, global_view.qc_get_block(qc));
+            call global_view.lock(id, global_view.qc_get_block(qc), qc);
         }
     }
 
-    action tryCommit(qc:qc_t) = {
-        require ~commit_mode;
+    action tryCommit(b:block_t) = {
+        if some bp:block_t. uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> block_t.parent(b, bp) & round_t.succ(R1, R2) {
+            commit_mode_block := bp;
 
-        if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qcp, B1) & qc_t.block(qc, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
-            commit_mode_qc := qcp;
-
-            if forall B:block_t. forall QC:qc_t. (block_t.ancestor(global_view.qc_get_block(commit_mode_qc), B) & block_t.ancestor(B, last_committed) & qc_t.block(QC, B)) -> uncommitted(QC) {
+            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B)) {
                 commit_mode := true;
                 commit_mode_broadcasted_qc := false;
                 commit_mode_advancedToRound := false;
             }
-        } else {}
-        if some qcp:qc_t. uncommitted(qcp) & (forall B1,B2:block_t. (qc_t.block(qc, B1) & qc_t.block(qcp, B2)) -> ((exists R1,R2:round_t. round_t.succ(R1, R2) & block_t.round(B1, R1) & block_t.round(B2, R2)) & block_t.parent(B2, B1))) {
-            commit_mode_qc := qc;
+        }
+        if some bp:block_t. uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> block_t.parent(bp, b) & round_t.succ(R2, R1) {
+            commit_mode_block := b;
 
-            if forall B:block_t. forall QC:qc_t. (block_t.ancestor(global_view.qc_get_block(commit_mode_qc), B) & block_t.ancestor(B, last_committed) & qc_t.block(QC, B)) -> uncommitted(QC) {
+            # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
+            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B)) {
                 commit_mode := true;
                 commit_mode_broadcasted_qc := false;
                 commit_mode_advancedToRound := false;
             }
-        } else {}
+        }
     }
 
     export action qc_processing(qc:qc_t) = {
@@ -314,11 +301,13 @@ object process_algo(id:process_index_t) = {
 
         require received_qc(qc);
 
-        uncommitted(QC) := uncommitted(QC) | QC = qc;
-        r_v := block_t.get_round(global_view.qc_get_block(qc)) if block_t.get_round(global_view.qc_get_block(qc)) > r_v else r_v;
-        call proposeNormal(global_view.qc_get_block(qc));
+        var b_qc := global_view.qc_get_block(qc);
+
+        uncommitted(b_qc) := true;
+        r_v := block_t.get_round(b_qc) if forall R:round_t. block_t.round(b_qc, R) -> R > r_v else r_v;
+        call proposeNormal(b_qc);
         call tryLock(qc);
-        call tryCommit(qc);
+        call tryCommit(b_qc);
         call broadcast_qc(qc);
         call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
     }
@@ -330,9 +319,8 @@ object process_algo(id:process_index_t) = {
 
         var ok := true;
         ok := ok & ~timer;
-        ok := ok & block_t.get_round(proposal_n_t.get_block(p)) = round_t.prev(r_c);
-        ok := ok & block_t.get_parent(proposal_n_t.get_block(p)) = global_view.qc_get_block(locked);
-
+        ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
+        ok := ok & forall B1,B2:block_t. proposal_n_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(locked, B2);
         if ok {
             call proposeNormal(proposal_n_t.get_block(p));
             call vote(proposal_n_t.get_block(p));
@@ -340,13 +328,8 @@ object process_algo(id:process_index_t) = {
     }
 
     action proposeFR(tc:tc_t) = {
-        require ~commit_mode;
-        # makes sure round_t.prev(round_t.prev(r_c)) makes sense
-        assert r_c > 0;
-        assert round_t.next(r_c) > 0;
-
         var ok := true;
-        ok := ok & global_view.tc_get_round(tc) = round_t.prev(round_t.prev(r_c));
+        ok := ok & forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> round_t.succ(R2, r_c);
         ok := ok & leader(r_c) = id;
         ok := ok & r_p < r_c;
 
@@ -362,21 +345,26 @@ object process_algo(id:process_index_t) = {
     export action timeout = {
         require ~commit_mode;
 
-        require ~timer;
-        timer := true;
+        if ~timer {
+            timer := true;
 
-        var t := timeout_t.timeout(round_t.prev(r_c), locked);
-        call broadcast_timeout(t);
+            var t := timeout_t.timeout(round_t.prev(r_c), locked);
+            call broadcast_timeout(t);
+
+            call global_view.timeout(id, t);
+        }
     }
 
     export action timeout_sync(tc:tc_fplusone_t) = {
         require ~commit_mode;
 
         require received_tc_fplusone(tc);
+        require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & tc_fplusone_t.round(tc, R2) -> R1 < R2;
 
-        require global_view.tc_fplusone_get_round(tc) >= round_t.prev(round_t.prev(r_c));
         var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
         call broadcast_timeout(t);
+
+        call global_view.timeout(id, t);
     }
 
     export action tc_processing(tc:tc_t) = {
@@ -385,7 +373,7 @@ object process_algo(id:process_index_t) = {
         require received_tc(tc);
 
         call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
-        if forall P:proposal_f_t. ~(received_proposal_f(P, leader(round_t.next(global_view.tc_get_round(tc))))) {
+        if forall P:proposal_f_t. forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> ~received_proposal_f(P, leader(R2)) {
             call proposeFR(tc);
         }
     }
@@ -395,13 +383,34 @@ object process_algo(id:process_index_t) = {
 
         require received_proposal_f(p, leader(round_t.prev(r_c)));
 
-        require ~timer;
-        require block_t.get_round(proposal_f_t.get_block(p)) = round_t.prev(r_c);
-        require global_view.tc_get_round(global_view.proposal_f_get_tc(p)) = round_t.prev(round_t.prev(block_t.get_round(proposal_f_t.get_block(p))));
-        require block_t.get_parent(proposal_f_t.get_block(p)) = global_view.qc_get_block(global_view.qc_maxQC(global_view.proposal_f_get_qc(p), global_view.tc_getMaxQC(global_view.proposal_f_get_tc(p))));
-
-        call proposeNormal(proposal_f_t.get_block(p));
-        call vote(proposal_f_t.get_block(p));
+        var qcp := global_view.qc_maxQC(global_view.proposal_f_get_qc(p), global_view.tc_getMaxQC(global_view.proposal_f_get_tc(p)));
+        var ok := true;
+        ok := ok & ~timer;
+        ok := ok & forall B:block_t. forall R:round_t. proposal_f_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
+        ok := ok & forall TC:tc_t. forall B:block_t. forall R1,R2,R3:round_t. proposal_f_t.tc(p, TC) & tc_t.round(TC, R1) & round_t.succ(R1, R2) &
+                proposal_f_t.block(p, B) & block_t.round(B, R3) -> round_t.succ(R2, R3);
+        ok := ok & forall B1,B2:block_t. proposal_f_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(qcp, B2);
+        if ok {
+            call proposeNormal(proposal_f_t.get_block(p));
+            call vote(proposal_f_t.get_block(p));
+        }
     }
-} # object process_algo
+
+    invariant r_c > 0
+
+    invariant received_proposal_n(P, N) -> proposal_n_t.valid(P)
+    invariant received_proposal_f(P, N) -> global_view.proposal_f_valid(P)
+    invariant received_prepare(P, N) -> prepare_t.valid(P)
+    invariant received_qc(QC) -> global_view.qc_valid(QC)
+    invariant received_timeout(T, N) -> global_view.timeout_valid(T)
+    invariant received_tc(TC) -> global_view.tc_valid(TC)
+    invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
+
+    invariant global_view.qc_valid(locked)
+    invariant commit_mode -> block_t.valid(commit_mode_block)
+    invariant commit_mode -> uncommitted(commit_mode_block)
+    invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.valid(last_committed))
+    invariant commit_mode & block_t.valid(last_committed) & received_qc(QC) & qc_t.block(QC, B) & block_t.ancestor(commit_mode_block, B) &
+            block_t.ancestor(B, last_committed) -> uncommitted(B)
+} # object local_view
 } # module supraBFT

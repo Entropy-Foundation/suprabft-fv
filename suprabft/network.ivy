@@ -2,7 +2,7 @@
 
 include udp
 
-include domain_model
+include types
 
 object msg_kind = {
     type this = {proposal_n, proposal_f, prepare, qc, timeout, tc}
