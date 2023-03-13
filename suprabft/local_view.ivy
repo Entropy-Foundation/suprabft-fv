@@ -410,7 +410,9 @@ object local_view(id:process_index_t) = {
     invariant commit_mode -> block_t.valid(commit_mode_block)
     invariant commit_mode -> uncommitted(commit_mode_block)
     invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.valid(last_committed))
-    invariant commit_mode & block_t.valid(last_committed) & received_qc(QC) & qc_t.block(QC, B) & block_t.ancestor(commit_mode_block, B) &
-            block_t.ancestor(B, last_committed) -> uncommitted(B)
+    # invariant commit_mode & block_t.valid(last_committed) & ancestor_transitive_closure_block.inbetween(commit_mode_block, last_committed) ->
+            # uncommitted(commit_mode_block)
+    # invariant commit_mode & block_t.valid(last_committed) & received_qc(QC) & qc_t.block(QC, B) & block_t.ancestor(commit_mode_block, B) &
+            # block_t.ancestor(B, last_committed) -> uncommitted(B)
 } # object local_view
 } # module supraBFT
