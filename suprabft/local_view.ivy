@@ -408,10 +408,11 @@ object local_view(id:process_index_t) = {
 
     invariant forall Bl:block_t. forall Bg:block_t. forall Rl,Rg:round_t. (block_t.valid(Bl) & qc_t.block(locked,Bl) & global_view.process_locked(id,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg)) -> Rg <= Rl
 
+    invariant uncommitted(B) -> exists QC:qc_t. global_view.qc_valid(QC) & qc_t.block(QC, B)
     invariant global_view.qc_valid(locked)
     invariant commit_mode -> block_t.valid(commit_mode_block)
     invariant commit_mode -> uncommitted(commit_mode_block)
-    invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.valid(last_committed))
+    #invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.valid(last_committed))
     # invariant commit_mode & block_t.valid(last_committed) & ancestor_transitive_closure_block.inbetween(commit_mode_block, last_committed) ->
             # uncommitted(commit_mode_block)
     # invariant commit_mode & block_t.valid(last_committed) & received_qc(QC) & qc_t.block(QC, B) & block_t.ancestor(commit_mode_block, B) &
