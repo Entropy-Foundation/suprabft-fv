@@ -91,7 +91,7 @@ module global_view = {
     action commit(n:process_index_t, b:block_t) = {
         require block_t.valid(b);
         require exists QC:qc_t. qc_valid(QC) & qc_t.block(QC, b);
-        require is_good(n) -> forall PB:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
+        require b ~= block_t.genesis -> forall PB:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
         require forall B:block_t. forall R1,R2:round_t. process_committed(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
         require forall B:block_t. forall H1,H2:height_t. process_committed(n, B) & block_t.height(B, H1) & block_t.height(b, H2) -> H1 < H2;
 
