@@ -411,7 +411,7 @@ object local_view(id:process_index_t) = {
 
     invariant forall Bl:block_t. forall Bg:block_t. forall Rl,Rg:round_t. (block_t.valid(Bl) & qc_t.block(locked,Bl) & global_view.process_locked(id,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg)) -> Rg <= Rl
 
-    invariant forall B,P:block_t. forall Rb,Rp:round_t. (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rb < Rp
+    invariant forall B,P:block_t. forall Rb,Rp:round_t. (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rp < Rb
 
     invariant forall B:block_t. uncommitted(B) -> ~global_view.process_committed(id,B)
 
