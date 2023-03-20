@@ -33,6 +33,10 @@ isolate same_round_same_block_across_nodes = {
             block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
 } with block_t, prepare_t, quorum_intersection_axiom, timeout_t, proposal_f_t, global_view_used_here
 
+isolate voted_block_parent_locked = {
+    invariant forall B,PB:block_t. is_good(N) & global_view_used_here.process_voted(N,B) & block_t.parent(B,PB) -> global_view_used_here.process_locked(N,PB)
+} with block_t,prepare_t,timeout_t,proposal_f_t,global_view_used_here
+
 isolate safety = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
@@ -50,5 +54,8 @@ isolate local_view_used_here = {
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
 
     #attribute macro_finder=false
-} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,
-        proposal_f_t, global_view_used_here
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_used_here
+
+isolate later_vote_later_parent = {
+    invariant (is_good(N) & global_view_used_here.process_voted(N,B1) & global_view_used_here.process_voted(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.parent(B1,PB1) & block_t.parent(B2,PB2) & block_t.round(PB1,PR1) & block_t.round(PB2,PR2) & R1 < R2) -> PR1 < PR2
+} with voted_block_parent_locked,local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t
