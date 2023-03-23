@@ -283,7 +283,7 @@ object local_view(id:process_index_t) = {
                 commit_mode_advancedToRound := false;
             }
         }
-        if some bp:block_t. uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> block_t.parent(bp, b) & round_t.succ(R2, R1) {
+        else if some bp:block_t. block_t.parent(bp, b) & uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R2, R1) {
             commit_mode_block := b;
 
             # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block

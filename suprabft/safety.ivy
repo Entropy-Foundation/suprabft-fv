@@ -63,19 +63,21 @@ isolate local_view_used_here = {
 isolate last_committed_quorum = {
     invariant ancestor_transitive_closure_block.inbetween(D,A) | ~ancestor_transitive_closure_block.inbetween(D,A)
 
-    # relation quorum_of_votes(B:block_t)
+    relation quorum_of_votes(B:block_t)
 
-    # definition quorum_of_votes(B:block_t) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> global_view_used_here.process_voted(N,B)
+    definition quorum_of_votes(B:block_t) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> global_view_used_here.process_voted(N,B)
 
-    # invariant forall N:process_index_t. block_t.valid(local_view_used_here.local_view(N).last_committed) -> quorum_of_votes(local_view_used_here.local_view(N).last_committed)
+    invariant local_view_used_here.local_view(N).uncommitted(B) -> quorum_of_votes(B)
 
-    # invariant block_t.valid(local_view_used_here.local_view(N).commit_mode_block) -> exists B:block_t. local_view_used_here.local_view(N).uncommitted(B) & block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block)
+    #invariant forall N:process_index_t. block_t.valid(local_view_used_here.local_view(N).last_committed) -> quorum_of_votes(local_view_used_here.local_view(N).last_committed)
 
-    invariant local_view_used_here.local_view(N).commit_mode -> (exists B:block_t. block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block) & local_view_used_here.local_view(N).uncommitted(B))
+    invariant block_t.valid(local_view_used_here.local_view(N).commit_mode_block) -> exists B:block_t. forall Rc,Rp:round_t. local_view_used_here.local_view(N).uncommitted(B) & block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block) & (block_t.round(B,Rc) & block_t.round(local_view_used_here.local_view(N).commit_mode_block,Rp) -> round_t.succ(Rp,Rc))
 
-    invariant local_view_used_here.local_view(N).commit_mode -> (local_view_used_here.local_view(N).commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block, B) & block_t.ancestor(B, local_view_used_here.local_view(N).last_committed) -> local_view_used_here.local_view(N).uncommitted(B)))
+    #invariant local_view_used_here.local_view(N).commit_mode -> (exists B:block_t. block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block) & local_view_used_here.local_view(N).uncommitted(B))
 
-    invariant forall N:process_index_t. (block_t.valid(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & block_t.ancestor(B,local_view_used_here.local_view(N).last_committed) & (B = local_view_used_here.local_view(N).commit_mode_block | block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block,B))) -> (exists Bc:block_t. block_t.parent(Bc,B) & local_view_used_here.local_view(N).uncommitted(Bc) & block_t.ancestor(Bc,local_view_used_here.local_view(N).last_committed))
+    #invariant local_view_used_here.local_view(N).commit_mode -> (local_view_used_here.local_view(N).commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block, B) & block_t.ancestor(B, local_view_used_here.local_view(N).last_committed) -> local_view_used_here.local_view(N).uncommitted(B)))
 
-    #invariant forall N:process_index_t. block_t.valid(local_view_used_here.local_view(N).last_committed) & (local_view_used_here.local_view(N).last_committed ~= block_t.genesis) -> (exists B:block_t. block_t.parent(B,local_view_used_here.local_view(N).last_committed) & quorum_of_votes(B))
+    #invariant forall N:process_index_t. (block_t.valid(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & block_t.ancestor(B,local_view_used_here.local_view(N).last_committed) & (B = local_view_used_here.local_view(N).commit_mode_block | block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block,B)) & local_view_used_here.local_view(N).commit_mode) -> (exists Bc:block_t. block_t.parent(Bc,B) & local_view_used_here.local_view(N).uncommitted(Bc) & block_t.ancestor(Bc,local_view_used_here.local_view(N).last_committed))
+
+    invariant forall N:process_index_t. (block_t.valid(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~ local_view_used_here.local_view(N).commit_mode) -> (exists B:block_t. forall Rc,Rp:round_t. block_t.parent(B,local_view_used_here.local_view(N).last_committed) & quorum_of_votes(B) & (block_t.round(B,Rc) & block_t.round(local_view_used_here.local_view(N).last_committed,Rp) -> round_t.succ(Rp,Rc)))
 } with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,ancestor_transitive_closure_block
