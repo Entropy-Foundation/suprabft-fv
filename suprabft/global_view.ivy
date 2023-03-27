@@ -53,7 +53,7 @@ module global_view = {
                 (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q1) & tc_fplusone_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_fplusone_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_fplusone_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_fplusone_t.round(TC, R)) &
-                (forall Q:quorum_fplusone_t,N:process_index_t. tc_fplusone_t.quorum(TC, Q) -> (quorum_fplusone_t.member(Q, N) <->
+                (forall Q:quorum_fplusone_t,N:process_index_t. tc_fplusone_t.quorum(TC, Q) -> (quorum_fplusone_t.member(Q, N) ->
                         exists T:timeout_t. tc_fplusone_t.timeout(TC, T) & process_sent_timeout(N, T)))
 
     relation tc_valid(TC:tc_t)
@@ -64,7 +64,7 @@ module global_view = {
                 (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                (forall Q:quorum_t,N:process_index_t. tc_t.quorum(TC, Q) -> (quorum_t.member(Q, N) <->
+                (forall Q:quorum_t,N:process_index_t. tc_t.quorum(TC, Q) -> (quorum_t.member(Q, N) ->
                         exists T:timeout_t. tc_t.timeout(TC,T) & process_sent_timeout(N, T)))
 
     relation proposal_f_valid(P:proposal_f_t)
