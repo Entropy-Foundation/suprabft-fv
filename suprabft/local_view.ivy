@@ -176,40 +176,6 @@ object local_view(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    # rewrite this
-    # export action byzantine_send = {
-        # require ~is_good(id);
-
-        # var m : msg;
-        # var dst : process_index_t;
-        # if ~is_good(m.src) {
-            # if m.kind = msg_kind.proposal & (m.prop.qc ~= cert_t.nil -> qc_valid(m.prop.qc)) & (m.prop.tc ~= timeout_cert_t.nil -> valid_tc(m.prop.tc)) {
-                # call shim.send(id, dst, m);
-            # }
-            # if m.kind = msg_kind.prepare {
-                # var r : round_t;
-                # var bl: block_t;
-                # call shim.send(id, dst, m);
-                # call global_view.node_voted(m.src,m.prep,r,bl);
-            # }
-            # if m.kind = msg_kind.qc & qc_valid(m.qc) {
-                # var ok : bool;
-                # ok := true;
-                # ok := ok & forall H:height_t. ~forest_store(m.qc,H);
-                # if ok {
-                    # call shim.send(id, dst, m);
-                # }
-            # }
-            # if m.kind = msg_kind.timeout & qc_valid(m.t.qc) {
-                # call shim.send(id, dst, m);
-                # call global_view.process_index_timeout(m.src,m.t);
-            # }
-            # if m.kind = msg_kind.tc & valid_tc(m.tc) {
-                # call shim.send(id, dst, m);
-            # }
-        # }
-    # }
-
     export action commit = {
         require commit_mode & commit_mode_broadcasted_qc & commit_mode_advancedToRound;
 
@@ -273,7 +239,7 @@ object local_view(id:process_index_t) = {
     }
 
     action tryCommit(b:block_t) = {
-        if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2) {
+        if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2)) {
             commit_mode_block := bp;
 
             if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
@@ -283,7 +249,8 @@ object local_view(id:process_index_t) = {
                 commit_mode_advancedToRound := false;
             }
         }
-        else if some bp:block_t. block_t.parent(bp, b) & uncommitted(bp) & forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R2, R1) {
+        else if some bp:block_t. block_t.parent(bp, b) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) ->
+                round_t.succ(R2, R1)) {
             commit_mode_block := b;
 
             # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
