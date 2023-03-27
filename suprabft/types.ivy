@@ -237,10 +237,6 @@ isolate quorum_t = {
     relation member(Q:quorum_t, N:process_index_t)
 
     individual genesis : quorum_t
-
-    relation quorum_of_votes(B:block_t)
-
-    definition quorum_of_votes(B:block_t) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> global_view_used_here.process_voted(N,B)
 }
 
 isolate genesis_member = {
