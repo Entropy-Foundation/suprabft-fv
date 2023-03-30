@@ -119,22 +119,27 @@ isolate block_t = {
 } with height_t, round_t
 
 isolate ancestor_transitive_closure_block = {
-    invariant block_t.parent(B, P) -> block_t.ancestor(B, P)
-    invariant block_t.ancestor(A1, A2) & block_t.ancestor(A2, A3) -> block_t.ancestor(A1, A3)
-    invariant block_t.ancestor(B, A1) & block_t.ancestor(B, A2) -> A1 = A2 | block_t.ancestor(A1, A2) | block_t.ancestor(A2, A1)
+    invariant [i1] block_t.parent(B, P) -> block_t.ancestor(B, P)
+    invariant [i2] block_t.ancestor(A1, A2) & block_t.ancestor(A2, A3) -> block_t.ancestor(A1, A3)
+    invariant [i4] block_t.ancestor(B, A1) & block_t.ancestor(B, A2) -> A1 = A2 | block_t.ancestor(A1, A2) | block_t.ancestor(A2, A1)
     relation inbetween(D:block_t, A:block_t)
     definition inbetween(D, A) = exists M:block_t. block_t.ancestor(D, M) & block_t.ancestor(M, A)
-    invariant block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
-    invariant block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
-    invariant block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
+    invariant [i5] block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
+    invariant [i3] block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
+    invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
 } with block_t, height_t
 
 isolate parent_same_implications = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
-    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
+
     invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.ancestor(B1, A) -> block_t.ancestor(B2, A)
 
     attribute macro_finder=false
+} with block_t, ancestor_transitive_closure_block.i1, ancestor_transitive_closure_block.i2, ancestor_transitive_closure_block.i3, ancestor_transitive_closure_block.i4, ancestor_transitive_closure_block.inbetween, height_t
+
+isolate parent_same_implications_height = {
+    invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
+    #invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
 } with block_t, ancestor_transitive_closure_block, height_t
 
 isolate proposal_n_t = {

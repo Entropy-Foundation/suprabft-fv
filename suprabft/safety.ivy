@@ -48,7 +48,7 @@ isolate safety = {
     # invariant is_good(N) & global_view_used_here.process_committed(N, B) & block_t.ancestor(B, A) -> global_view_used_here.process_committed(N, A)
     # invariant is_good(N1) & is_good(N2) & global_view_used_here.process_committed(N1, B1) & global_view_used_here.process_committed(N2, B2) &
             # block_t.height(B1, H1) & block_t.height(B2, H2) & H1 > H2 -> block_t.ancestor(B1, B2)
-} with height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, prepare_t, every_quorum_good, quorum_intersection_axiom, timeout_t,
+} with height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, prepare_t, every_quorum_good, quorum_intersection_axiom, timeout_t,
         proposal_f_t, global_view_used_here, genesis_starts_the_chain, same_round_same_block_across_nodes
 
 isolate local_view_used_here = {
@@ -58,11 +58,11 @@ isolate local_view_used_here = {
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
 
     #attribute macro_finder=false
-} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_used_here
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_used_here
 
 isolate parent_test = {
     invariant block_t.parent(B1,B2) -> B2 = block_t.genesis
-} with block_t,ancestor_transitive_closure_block,parent_same_implications,round_t,height_t
+} with block_t,ancestor_transitive_closure_block,parent_same_implications,parent_same_implications_height, round_t,height_t
 
 isolate quorum_votes_def = {
     relation quorum_of_votes(B:block_t)
