@@ -23,7 +23,7 @@ function leader(R:round_t) : process_index_t
 isolate block_t = {
     type this
 
-    relation valid(B:block_t)
+    relation cstd(B:block_t)
 
     relation round(B:block_t, R:round_t)
     relation parent(B:block_t, P:block_t)
@@ -33,7 +33,7 @@ isolate block_t = {
     individual genesis : block_t
 
     after init {
-        valid(B) := B = genesis;
+        cstd(B) := B = genesis;
 
         round(B, R) := B = genesis & R = 0;
         parent(B, P) := B = genesis & P = genesis;
@@ -42,7 +42,7 @@ isolate block_t = {
     }
 
     export action get_round(b:block_t) returns (r:round_t) = {
-        require valid(b);
+        require cstd(b);
 
         if some b_r:round_t. round(b, b_r) {
             r := b_r;
@@ -52,7 +52,7 @@ isolate block_t = {
     }
 
     export action get_parent(b:block_t) returns (pB:block_t) = {
-        require valid(b);
+        require cstd(b);
 
         if some b_pB:block_t. parent(b, b_pB) {
             pB := b_pB;
@@ -62,7 +62,7 @@ isolate block_t = {
     }
 
     export action get_height(b:block_t) returns (h:height_t) = {
-        require valid(b);
+        require cstd(b);
 
         if some b_h:height_t. height(b, b_h) {
             h := b_h;
@@ -72,19 +72,26 @@ isolate block_t = {
     }
 
     export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
-        require valid(pB);
-        assume ~valid(b);
+        require cstd(pB);
+        require round(pB,R) -> R < r_c;
+        assume ~cstd(b);
 
-        round(B, R) := round(B, R) | (B = b & R = r_c);
-        parent(B, P) := parent(B, P) | (B = b & P = pB);
-        ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
+        #round(B, R) := round(B, R) | (B = b & R = r_c);
+        #parent(B, P) := parent(B, P) | (B = b & P = pB);
+        #ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
         height(B, H) := height(B, H) | B = b & H = height_t.next(get_height(pB));
 
-        valid(B) := valid(B) | B = b;
+        cstd(b) := true;
+        
+        round(b,r_c) := true;
+        parent(b,pB) := true;
+        ancestor(b,pB) := true;
+        ancestor(b,B) := ancestor(pB,B) | B = pB;
+
     }
 
-    invariant valid(genesis)
-    invariant round(genesis, 0)
+    invariant cstd(genesis)
+    invariant round(B, 0) <-> B = genesis
     invariant parent(genesis, P) <-> P = genesis
     invariant ancestor(genesis, A) <-> A = genesis
     invariant height(B, 0) <-> B = genesis
@@ -92,21 +99,24 @@ isolate block_t = {
     invariant parent(B, B) <-> B = genesis
     invariant ancestor(B, B) <-> B = genesis
 
-    invariant round(B, R) -> valid(B)
-    invariant parent(B, P) -> valid(B) & valid(P)
-    invariant ancestor(B, A) -> valid(B) & valid(A)
-    invariant height(B, H) -> valid(B)
+    invariant round(B, R) -> cstd(B)
+    invariant parent(B, P) -> cstd(B) & cstd(P)
+    invariant ancestor(B, A) -> cstd(B) & cstd(A)
+    invariant height(B, H) -> cstd(B)
 
-    invariant valid(B) -> exists R:round_t. round(B, R)
+    invariant cstd(B) -> exists R:round_t. round(B, R)
     relation parent_exists(B:block_t)
     definition parent_exists(B) = exists P:block_t. parent(B, P)
-    invariant valid(B) -> parent_exists(B)
-    invariant valid(B) -> exists H:height_t. height(B, H)
+    invariant cstd(B) -> parent_exists(B)
+    invariant cstd(B) -> exists H:height_t. height(B, H)
 
     invariant round(B, R1) & round(B, R2) -> R1 = R2
     invariant parent(B, P1) & parent(B, P2) -> P1 = P2
     invariant height(B, H1) & height(B, H2) -> H1 = H2
-} with height_t
+
+    invariant (parent(B,P) & round(B,Rb) & round(P,Rp) & B ~= genesis) -> Rp < Rb
+    invariant (parent(B,P) & height(B,Hb) & height(P,Hp) & B ~= genesis) -> height_t.succ(Hp,Hb)
+} with height_t, round_t
 
 isolate ancestor_transitive_closure_block = {
     invariant block_t.parent(B, P) -> block_t.ancestor(B, P)
@@ -115,13 +125,17 @@ isolate ancestor_transitive_closure_block = {
     relation inbetween(D:block_t, A:block_t)
     definition inbetween(D, A) = exists M:block_t. block_t.ancestor(D, M) & block_t.ancestor(M, A)
     invariant block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
+    invariant block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
     invariant block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
-} with block_t
+} with block_t, height_t
 
 isolate parent_same_implications = {
-    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) -> block_t.height(B2, H)
+    invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
+    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
     invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.ancestor(B1, A) -> block_t.ancestor(B2, A)
-} with block_t, ancestor_transitive_closure_block
+
+    attribute macro_finder=false
+} with block_t, ancestor_transitive_closure_block, height_t
 
 isolate proposal_n_t = {
     type this
@@ -139,7 +153,7 @@ isolate proposal_n_t = {
     }
 
     export action get_block(p:proposal_n_t) returns (b:block_t) = {
-        require valid(p);
+        #require cstd(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
@@ -149,7 +163,7 @@ isolate proposal_n_t = {
     }
 
     export action proposal_n(b:block_t) returns (p:proposal_n_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         assume ~valid(p);
 
         if some p_old:proposal_n_t. block(p_old, b) {
@@ -164,7 +178,7 @@ isolate proposal_n_t = {
     invariant valid(genesis)
     invariant block(genesis, B) <-> B = block_t.genesis
 
-    invariant block(P, B) -> valid(P) & block_t.valid(B)
+    invariant block(P, B) -> valid(P) & block_t.cstd(B)
 
     invariant valid(P) -> exists B:block_t. block(P, B)
 
@@ -198,7 +212,7 @@ isolate prepare_t = {
     }
 
     export action prepare(b:block_t) returns (p:prepare_t) = {
-        require block_t.valid(b);
+        #require block_t.cstd(b);
         assume ~valid(p);
 
         if some p_old:prepare_t. block(p_old, b) {
@@ -213,7 +227,7 @@ isolate prepare_t = {
     invariant valid(genesis)
     invariant block(genesis, B) <-> B = block_t.genesis
 
-    invariant block(P, B) -> valid(P) & block_t.valid(B)
+    invariant block(P, B) -> valid(P) & block_t.cstd(B)
 
     invariant valid(P) -> exists B:block_t. block(P, B)
 
@@ -363,7 +377,7 @@ isolate proposal_f_t = {
     }
 
     export action proposal_f(b:block_t, q:qc_t, t:tc_t) returns (p:proposal_f_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         assume ~was_constructed(p);
 
         if some p_old:proposal_f_t. block(p_old, b) & qc(p_old, q) & tc(p_old, t) {
@@ -377,7 +391,7 @@ isolate proposal_f_t = {
         was_constructed(P) := was_constructed(P) | P = p;
     }
 
-    invariant block(P, B) -> was_constructed(P) & block_t.valid(B)
+    invariant block(P, B) -> was_constructed(P) & block_t.cstd(B)
     invariant qc(P, QC) -> was_constructed(P)
     invariant tc(P, TC) -> was_constructed(P)
 

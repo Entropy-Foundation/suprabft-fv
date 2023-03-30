@@ -12,7 +12,7 @@ module global_view = {
 
     # export action byzantine_propose(n:process_index_t, r_c:round_t, pB:block_t) = {
         # require ~is_good(n);
-        # require block_t.valid(pB);
+        # require block_t.cstd(pB);
         # require n = leader(r_c);
 
         # var b := block_t.block(r_c, pB)
@@ -21,7 +21,7 @@ module global_view = {
 
     # export action byzantine_vote(n:process_index_t, b:block_t) = {
         # require ~is_good(n);
-        # require block_t.valid(b);
+        # require block_t.cstd(b);
 
         # process_voted(n, b) := true;
     # }
@@ -81,14 +81,14 @@ module global_view = {
     }
 
     action propose(n:process_index_t, b:block_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         require forall R:round_t. block_t.round(b, R) -> n = leader(R);
 
         process_proposed(n, b) := true;
     }
 
     action vote(n:process_index_t, b:block_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         require forall P:block_t. block_t.parent(b, P) -> process_locked(n, P);
         require forall PB,LB:block_t. forall PR,LR:round_t. block_t.parent(b, PB) & block_t.round(PB, PR) & process_locked(n, LB) & block_t.round(LB, LR) -> LR <= PR;
         require forall B:block_t. forall R1,R2:round_t. process_voted(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
@@ -97,7 +97,7 @@ module global_view = {
     }
 
     action lock(n:process_index_t, b:block_t, qc:qc_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         require qc_valid(qc);
         require qc_t.block(qc, b);
         #require forall B:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
@@ -107,7 +107,7 @@ module global_view = {
     }
 
     action commit(n:process_index_t, b:block_t) = {
-        require block_t.valid(b);
+        require block_t.cstd(b);
         require exists QC:qc_t. qc_valid(QC) & qc_t.block(QC, b);
         require b ~= block_t.genesis -> forall PB:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
         require forall B:block_t. forall R1,R2:round_t. process_committed(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
@@ -212,9 +212,9 @@ module global_view = {
     invariant process_voted(N, block_t.genesis)
     invariant process_locked(N, block_t.genesis)
 
-    invariant process_proposed(N, B) -> block_t.valid(B)
-    invariant process_voted(N, B) -> block_t.valid(B)
-    invariant process_locked(N, B) -> block_t.valid(B)
-    invariant process_committed(N, B) -> block_t.valid(B)
+    invariant process_proposed(N, B) -> block_t.cstd(B)
+    invariant process_voted(N, B) -> block_t.cstd(B)
+    invariant process_locked(N, B) -> block_t.cstd(B)
+    invariant process_committed(N, B) -> block_t.cstd(B)
     invariant process_sent_timeout(N, T) -> timeout_valid(T)
 }
