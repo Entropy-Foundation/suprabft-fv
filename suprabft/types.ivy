@@ -158,7 +158,7 @@ isolate proposal_n_t = {
     }
 
     export action get_block(p:proposal_n_t) returns (b:block_t) = {
-        #require cstd(p);
+        require valid(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
@@ -217,7 +217,7 @@ isolate prepare_t = {
     }
 
     export action prepare(b:block_t) returns (p:prepare_t) = {
-        #require block_t.cstd(b);
+        require block_t.cstd(b);
         assume ~valid(p);
 
         if some p_old:prepare_t. block(p_old, b) {
