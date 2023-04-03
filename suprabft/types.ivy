@@ -35,6 +35,7 @@ isolate block_t = {
     individual unused : block_t
 
     after init {
+        assume genesis ~= unused;
         cstd(B) := B = genesis;
         cstd(unused) := false;
 
@@ -94,6 +95,7 @@ isolate block_t = {
 
     }
 
+    invariant genesis ~= unused
     invariant cstd(genesis)
     invariant ~cstd(unused)
     invariant round(B, 0) <-> B = genesis
@@ -132,7 +134,8 @@ isolate ancestor_transitive_closure_block = {
     invariant [i5] block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
     invariant [i3] block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
     invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
-} with block_t, height_t
+    invariant block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
+} with block_t, height_t, round_t
 
 isolate parent_same_implications = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
@@ -144,7 +147,7 @@ isolate parent_same_implications = {
 
 isolate parent_same_implications_height = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
-    #invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
+    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
 } with block_t, ancestor_transitive_closure_block, height_t
 
 isolate proposal_n_t = {

@@ -50,72 +50,72 @@ object local_view(id:process_index_t) = {
         received_tc_fplusone(TC) := false;
     }
 
-    # implement shim.proposal_n_handler.handle(m:msg) {
-    #     if proposal_n_t.cstd(m.prop_n) {
-    #         received_proposal_n(m.prop_n, m.src) := true;
-    #     }
-    # }
+    implement shim.proposal_n_handler.handle(m:msg) {
+        if proposal_n_t.valid(m.prop_n) {
+            received_proposal_n(m.prop_n, m.src) := true;
+        }
+    }
 
-    # implement shim.proposal_f_handler.handle(m:msg) {
-    #     if global_view.proposal_f_cstd(m.prop_f) {
-    #         received_proposal_f(m.prop_f, m.src) := true;
-    #         received_qc(global_view.proposal_f_get_qc(m.prop_f)) := true;
-    #         received_tc(global_view.proposal_f_get_tc(m.prop_f)) := true;
-    #     }
-    # }
+    implement shim.proposal_f_handler.handle(m:msg) {
+        if global_view.proposal_f_valid(m.prop_f) {
+            received_proposal_f(m.prop_f, m.src) := true;
+            received_qc(global_view.proposal_f_get_qc(m.prop_f)) := true;
+            received_tc(global_view.proposal_f_get_tc(m.prop_f)) := true;
+        }
+    }
 
-    # implement shim.prepare_handler.handle(m:msg) {
-    #     if prepare_t.cstd(m.prep) {
-    #         received_prepare(m.prep, m.src) := true;
-    #     }
-    # }
+    implement shim.prepare_handler.handle(m:msg) {
+        if prepare_t.valid(m.prep) {
+            received_prepare(m.prep, m.src) := true;
+        }
+    }
 
-    # implement shim.qc_handler.handle(m:msg) {
-    #     if global_view.qc_cstd(m.qc) {
-    #         received_qc(m.qc) := true;
-    #     }
-    # }
+    implement shim.qc_handler.handle(m:msg) {
+        if global_view.qc_valid(m.qc) {
+            received_qc(m.qc) := true;
+        }
+    }
 
-    # implement shim.timeout_handler.handle(m:msg) {
-    #     if global_view.timeout_cstd(m.t) {
-    #         received_timeout(m.t, m.src) := true;
-    #         received_qc(global_view.timeout_get_qc(m.t)) := true;
-    #     }
-    # }
+    implement shim.timeout_handler.handle(m:msg) {
+        if global_view.timeout_valid(m.t) {
+            received_timeout(m.t, m.src) := true;
+            received_qc(global_view.timeout_get_qc(m.t)) := true;
+        }
+    }
 
-    # implement shim.tc_handler.handle(m:msg) {
-    #     if global_view.tc_cstd(m.tc) {
-    #         received_tc(m.tc) := true;
-    #     }
-    # }
+    implement shim.tc_handler.handle(m:msg) {
+        if global_view.tc_valid(m.tc) {
+            received_tc(m.tc) := true;
+        }
+    }
 
-    # # the requirement for aggregation is strictly stronger than global_view.qc_cstd, avoid rewriting all that here
-    # export action aggregate_prepares(qc:qc_t) = {
-    #     require ~commit_mode;
+    # the requirement for aggregation is strictly stronger than global_view.qc_valid, avoid rewriting all that here
+    export action aggregate_prepares(qc:qc_t) = {
+        require ~commit_mode;
 
-    #     require global_view.qc_cstd(qc);
-    #     require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
+        require global_view.qc_valid(qc);
+        require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
 
-    #     received_qc(qc) := true;
-    # }
+        received_qc(qc) := true;
+    }
 
-    # export action aggregate_timeouts_fplusone(tc:tc_fplusone_t) = {
-    #     require ~commit_mode;
+    export action aggregate_timeouts_fplusone(tc:tc_fplusone_t) = {
+        require ~commit_mode;
 
-    #     require global_view.tc_fplusone_cstd(tc);
-    #     require tc_fplusone_t.quorum(TC, Q) & tc_fplusone_t.timeout(TC, T) & quorum_fplusone_t.member(Q, N) -> received_timeout(T, N);
+        require global_view.tc_fplusone_valid(tc);
+        require tc_fplusone_t.quorum(TC, Q) & tc_fplusone_t.timeout(TC, T) & quorum_fplusone_t.member(Q, N) -> received_timeout(T, N);
 
-    #     received_tc_fplusone(tc) := true;
-    # }
+        received_tc_fplusone(tc) := true;
+    }
 
-    # export action aggregate_timeouts(tc:tc_t) = {
-    #     require ~commit_mode;
+    export action aggregate_timeouts(tc:tc_t) = {
+        require ~commit_mode;
 
-    #     require global_view.tc_cstd(tc);
-    #     require tc_t.quorum(TC, Q) & tc_t.timeout(TC, T) & quorum_t.member(Q, N) -> received_timeout(T, N);
+        require global_view.tc_valid(tc);
+        require tc_t.quorum(TC, Q) & tc_t.timeout(TC, T) & quorum_t.member(Q, N) -> received_timeout(T, N);
 
-    #     received_tc(tc) := true;
-    # }
+        received_tc(tc) := true;
+    }
 
     action broadcast_proposal_n(p:proposal_n_t) = {
         var m : msg;
@@ -126,14 +126,14 @@ object local_view(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    # action broadcast_proposal_f(p:proposal_f_t) = {
-    #     var m : msg;
-    #     m.kind := msg_kind.proposal_f;
-    #     m.prop_f := p;
-    #     m.src := id;
+    action broadcast_proposal_f(p:proposal_f_t) = {
+        var m : msg;
+        m.kind := msg_kind.proposal_f;
+        m.prop_f := p;
+        m.src := id;
 
-    #     call shim.broadcast(id, m);
-    # }
+        call shim.broadcast(id, m);
+    }
 
     action broadcast_prepare(p:prepare_t) = {
         var m : msg;
@@ -144,54 +144,54 @@ object local_view(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    # action broadcast_qc(q:qc_t) = {
-    #     var m : msg;
-    #     m.kind := msg_kind.qc;
-    #     m.qc := q;
-    #     m.src := id;
+    action broadcast_qc(q:qc_t) = {
+        var m : msg;
+        m.kind := msg_kind.qc;
+        m.qc := q;
+        m.src := id;
 
-    #     call shim.broadcast(id, m);
+        call shim.broadcast(id, m);
 
-    #     if commit_mode & ~commit_mode_broadcasted_qc & ~commit_mode_advancedToRound {
-    #         commit_mode_broadcasted_qc := true;
-    #     }
-    # }
+        if commit_mode & ~commit_mode_broadcasted_qc & ~commit_mode_advancedToRound {
+            commit_mode_broadcasted_qc := true;
+        }
+    }
 
-    # action broadcast_timeout(t:timeout_t) = {
-    #     var m : msg;
-    #     m.kind := msg_kind.timeout;
-    #     m.t := t;
-    #     m.src := id;
+    action broadcast_timeout(t:timeout_t) = {
+        var m : msg;
+        m.kind := msg_kind.timeout;
+        m.t := t;
+        m.src := id;
 
-    #     call shim.broadcast(id, m);
-    # }
+        call shim.broadcast(id, m);
+    }
 
-    # action broadcast_tc(t:tc_t) = {
-    #     var m : msg;
-    #     m.kind := msg_kind.tc;
-    #     m.tc := t;
-    #     m.src := id;
+    action broadcast_tc(t:tc_t) = {
+        var m : msg;
+        m.kind := msg_kind.tc;
+        m.tc := t;
+        m.src := id;
 
-    #     call shim.broadcast(id, m);
-    # }
+        call shim.broadcast(id, m);
+    }
 
-    # export action commit = {
-    #     require commit_mode & commit_mode_broadcasted_qc & commit_mode_advancedToRound;
+    export action commit = {
+        require commit_mode & commit_mode_broadcasted_qc & commit_mode_advancedToRound;
 
-    #     if some b:block_t. (b = commit_mode_block & (commit_mode_block = block_t.genesis | block_t.parent(commit_mode_block, last_committed))) |
-    #             (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed)) {
-    #         last_committed := b;
-    #         uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
+        if some b:block_t. (b = commit_mode_block & (commit_mode_block = block_t.genesis | block_t.parent(commit_mode_block, last_committed))) |
+                (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed)) {
+            last_committed := b;
+            uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
 
-    #         call global_view.commit(id, last_committed);
-    #     }
+            call global_view.commit(id, last_committed);
+        }
 
-    #     if commit_mode_block = last_committed {
-    #         commit_mode := false;
-    #         commit_mode_block := *;
-    #         assume ~block_t.cstd(commit_mode_block);
-    #     }
-    # }
+        if commit_mode_block = last_committed {
+            commit_mode := false;
+            commit_mode_block := *;
+            assume ~block_t.cstd(commit_mode_block);
+        }
+    }
 
     action proposeNormal(pB:block_t) = {
         var ok := true;
@@ -208,16 +208,16 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    # action advanceToRound(r:round_t) = {
-    #     if r > r_c {
-    #         r_c := r;
-    #         timer := false;
-    #     }
+    action advanceToRound(r:round_t) = {
+        if r > r_c {
+            r_c := r;
+            timer := false;
+        }
 
-    #     if commit_mode & commit_mode_broadcasted_qc & ~commit_mode_advancedToRound {
-    #         commit_mode_advancedToRound := true;
-    #     }
-    # }
+        if commit_mode & commit_mode_broadcasted_qc & ~commit_mode_advancedToRound {
+            commit_mode_advancedToRound := true;
+        }
+    }
 
     action vote(b:block_t) = {
         if forall R:round_t. block_t.round(b, R) -> R > r_v {
@@ -229,123 +229,123 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    # action tryLock(qc:qc_t) = {
-    #     if forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & qc_t.block(locked, B2) & block_t.round(B1, R1) & block_t.round(B2, R2) -> R1 > R2 {
-    #         locked := qc;
+    action tryLock(qc:qc_t) = {
+        if forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & qc_t.block(locked, B2) & block_t.round(B1, R1) & block_t.round(B2, R2) -> R1 > R2 {
+            locked := qc;
 
-    #         call global_view.lock(id, global_view.qc_get_block(qc), qc);
-    #     }
-    # }
+            call global_view.lock(id, global_view.qc_get_block(qc), qc);
+        }
+    }
 
-    # action tryCommit(b:block_t) = {
-    #     if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2)) {
-    #         commit_mode_block := bp;
+    action tryCommit(b:block_t) = {
+        if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2)) {
+            commit_mode_block := bp;
 
-    #         if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
-    #                 uncommitted(B)) {
-    #             commit_mode := true;
-    #             commit_mode_broadcasted_qc := false;
-    #             commit_mode_advancedToRound := false;
-    #         }
-    #     }
-    #     else if some bp:block_t. block_t.parent(bp, b) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) ->
-    #             round_t.succ(R2, R1)) {
-    #         commit_mode_block := b;
+            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B)) {
+                commit_mode := true;
+                commit_mode_broadcasted_qc := false;
+                commit_mode_advancedToRound := false;
+            }
+        }
+        else if some bp:block_t. block_t.parent(bp, b) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) ->
+                round_t.succ(R2, R1)) {
+            commit_mode_block := b;
 
-    #         # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
-    #         if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
-    #                 uncommitted(B)) {
-    #             commit_mode := true;
-    #             commit_mode_broadcasted_qc := false;
-    #             commit_mode_advancedToRound := false;
-    #         }
-    #     }
-    # }
+            # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
+            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B)) {
+                commit_mode := true;
+                commit_mode_broadcasted_qc := false;
+                commit_mode_advancedToRound := false;
+            }
+        }
+    }
 
-    # export action qc_processing(qc:qc_t) = {
-    #     require ~commit_mode;
+    export action qc_processing(qc:qc_t) = {
+        require ~commit_mode;
 
-    #     require received_qc(qc);
+        require received_qc(qc);
 
-    #     # this is to prevent a block from being processed if it is already locked or committed. In implementation, this should be checked by checking the blocks that have been locked or committed before
-    #     require forall B:block_t. qc_t.block(qc,B) -> (~global_view.process_locked(id,B) & ~global_view.process_committed(id,B));
+        # this is to prevent a block from being processed if it is already locked or committed. In implementation, this should be checked by checking the blocks that have been locked or committed before
+        require forall B:block_t. qc_t.block(qc,B) -> (~global_view.process_locked(id,B) & ~global_view.process_committed(id,B));
 
-    #     var b_qc := global_view.qc_get_block(qc);
+        var b_qc := global_view.qc_get_block(qc);
 
-    #     uncommitted(b_qc) := true;
-    #     r_v := block_t.get_round(b_qc) if forall R:round_t. block_t.round(b_qc, R) -> R > r_v else r_v;
-    #     call proposeNormal(b_qc);
-    #     call tryLock(qc);
-    #     call tryCommit(b_qc);
-    #     call broadcast_qc(qc);
-    #     call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
-    # }
+        uncommitted(b_qc) := true;
+        r_v := block_t.get_round(b_qc) if forall R:round_t. block_t.round(b_qc, R) -> R > r_v else r_v;
+        call proposeNormal(b_qc);
+        call tryLock(qc);
+        call tryCommit(b_qc);
+        call broadcast_qc(qc);
+        call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
+    }
 
-    # export action proposal_n_processing(p:proposal_n_t) = {
-    #     require ~commit_mode;
+    export action proposal_n_processing(p:proposal_n_t) = {
+        require ~commit_mode;
 
-    #     require received_proposal_n(p, leader(round_t.prev(r_c)));
+        require received_proposal_n(p, leader(round_t.prev(r_c)));
 
-    #     var ok := true;
-    #     ok := ok & ~timer;
-    #     ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
-    #     ok := ok & forall B1,B2:block_t. proposal_n_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(locked, B2);
-    #     if ok {
-    #         call proposeNormal(proposal_n_t.get_block(p));
-    #         call vote(proposal_n_t.get_block(p));
-    #     }
-    # }
+        var ok := true;
+        ok := ok & ~timer;
+        ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
+        ok := ok & forall B1,B2:block_t. proposal_n_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(locked, B2);
+        if ok {
+            call proposeNormal(proposal_n_t.get_block(p));
+            call vote(proposal_n_t.get_block(p));
+        }
+    }
 
-    # action proposeFR(tc:tc_t) = {
-    #     var ok := true;
-    #     ok := ok & forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> round_t.succ(R2, r_c);
-    #     ok := ok & leader(r_c) = id;
-    #     ok := ok & r_p < r_c;
+    action proposeFR(tc:tc_t) = {
+        var ok := true;
+        ok := ok & forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> round_t.succ(R2, r_c);
+        ok := ok & leader(r_c) = id;
+        ok := ok & r_p < r_c;
 
-    #     if ok {
-    #         var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
-    #         var b := block_t.block(r_c, global_view.qc_get_block(qcp));
-    #         var p := proposal_f_t.proposal_f(b, qcp, tc);
-    #         call broadcast_proposal_f(p);
-    #         r_p := r_c;
-    #     }
-    # }
+        if ok {
+            var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
+            var b := block_t.block(r_c, global_view.qc_get_block(qcp));
+            var p := proposal_f_t.proposal_f(b, qcp, tc);
+            call broadcast_proposal_f(p);
+            r_p := r_c;
+        }
+    }
 
-    # export action timeout = {
-    #     require ~commit_mode;
+    export action timeout = {
+        require ~commit_mode;
 
-    #     if ~timer {
-    #         timer := true;
+        if ~timer {
+            timer := true;
 
-    #         var t := timeout_t.timeout(round_t.prev(r_c), locked);
-    #         call broadcast_timeout(t);
+            var t := timeout_t.timeout(round_t.prev(r_c), locked);
+            call broadcast_timeout(t);
 
-    #         call global_view.timeout(id, t);
-    #     }
-    # }
+            call global_view.timeout(id, t);
+        }
+    }
 
-    # export action timeout_sync(tc:tc_fplusone_t) = {
-    #     require ~commit_mode;
+    export action timeout_sync(tc:tc_fplusone_t) = {
+        require ~commit_mode;
 
-    #     require received_tc_fplusone(tc);
-    #     require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & tc_fplusone_t.round(tc, R2) -> R1 < R2;
+        require received_tc_fplusone(tc);
+        require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & tc_fplusone_t.round(tc, R2) -> R1 < R2;
 
-    #     var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
-    #     call broadcast_timeout(t);
+        var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
+        call broadcast_timeout(t);
 
-    #     call global_view.timeout(id, t);
-    # }
+        call global_view.timeout(id, t);
+    }
 
-    # export action tc_processing(tc:tc_t) = {
-    #     require ~commit_mode;
+    export action tc_processing(tc:tc_t) = {
+        require ~commit_mode;
 
-    #     require received_tc(tc);
+        require received_tc(tc);
 
-    #     call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
-    #     if forall P:proposal_f_t. forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> ~received_proposal_f(P, leader(R2)) {
-    #         call proposeFR(tc);
-    #     }
-    # }
+        call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
+        if forall P:proposal_f_t. forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> ~received_proposal_f(P, leader(R2)) {
+            call proposeFR(tc);
+        }
+    }
 
     export action proposal_f_processing(p:proposal_f_t) = {
         require ~commit_mode;
@@ -391,7 +391,8 @@ object local_view(id:process_index_t) = {
     invariant commit_mode -> block_t.cstd(commit_mode_block)
     invariant commit_mode -> uncommitted(commit_mode_block)
     invariant block_t.unused ~= last_committed -> global_view.process_committed(id,last_committed)
-    invariant forall B:block_t. forall R1,R2:round_t. global_view.process_committed(id, B) & block_t.round(B, R1) & block_t.round(last_committed, R2) & block_t.cstd(last_committed) & block_t.cstd(B) -> R1 <= R2
+    invariant commit_mode_block = block_t.genesis -> last_committed = block_t.unused & ~ global_view.process_committed(id,B)
+    invariant forall B:block_t. forall R1,R2:round_t. global_view.process_committed(id, B) & block_t.round(B, R1) & block_t.round(last_committed, R2) & block_t.unused ~= last_committed & block_t.genesis ~= last_committed & block_t.cstd(B) & B ~= block_t.genesis -> R1 <= R2
     invariant forall B:block_t. forall H1,H2:height_t. global_view.process_committed(id, B) & block_t.height(B, H1) & block_t.height(last_committed, H2) & block_t.cstd(last_committed) -> H1 <= H2
     #invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.cstd(last_committed))
     # invariant commit_mode & block_t.cstd(last_committed) & ancestor_transitive_closure_block.inbetween(commit_mode_block, last_committed) ->
