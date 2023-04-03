@@ -31,8 +31,7 @@ object local_view(id:process_index_t) = {
         commit_mode := false;
         commit_mode_block := *;
         assume ~block_t.cstd(commit_mode_block);
-        last_committed := *;
-        assume ~block_t.cstd(last_committed);
+        last_committed := block_t.unused;
 
         locked := qc_t.genesis;
         r_p := 0;
@@ -385,13 +384,13 @@ object local_view(id:process_index_t) = {
 
     invariant ~global_view.process_committed(id,commit_mode_block)
 
-    invariant forall B,P:block_t. forall Hb,Hp:height_t. (block_t.parent(B,P) & block_t.height(B,Hb) & block_t.height(P,Hp) & B ~= block_t.genesis) -> Hb < Hp
+    invariant forall B,P:block_t. forall Hb,Hp:height_t. (block_t.parent(B,P) & block_t.height(B,Hb) & block_t.height(P,Hp) & B ~= block_t.genesis) -> Hp < Hb
 
     invariant uncommitted(B) -> exists QC:qc_t. global_view.qc_valid(QC) & qc_t.block(QC, B)
     invariant global_view.qc_valid(locked)
     invariant commit_mode -> block_t.cstd(commit_mode_block)
     invariant commit_mode -> uncommitted(commit_mode_block)
-    invariant block_t.cstd(last_committed) -> global_view.process_committed(id,last_committed)
+    invariant block_t.unused ~= last_committed -> global_view.process_committed(id,last_committed)
     invariant forall B:block_t. forall R1,R2:round_t. global_view.process_committed(id, B) & block_t.round(B, R1) & block_t.round(last_committed, R2) & block_t.cstd(last_committed) & block_t.cstd(B) -> R1 <= R2
     invariant forall B:block_t. forall H1,H2:height_t. global_view.process_committed(id, B) & block_t.height(B, H1) & block_t.height(last_committed, H2) & block_t.cstd(last_committed) -> H1 <= H2
     #invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.cstd(last_committed))

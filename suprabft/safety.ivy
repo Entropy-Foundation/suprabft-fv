@@ -57,7 +57,7 @@ isolate local_view_used_here = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
 
-    #attribute macro_finder=false
+    attribute macro_finder=false
 } with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_used_here
 
 isolate parent_test = {

@@ -32,8 +32,11 @@ isolate block_t = {
 
     individual genesis : block_t
 
+    individual unused : block_t
+
     after init {
         cstd(B) := B = genesis;
+        cstd(unused) := false;
 
         round(B, R) := B = genesis & R = 0;
         parent(B, P) := B = genesis & P = genesis;
@@ -75,6 +78,7 @@ isolate block_t = {
         require cstd(pB);
         require round(pB,R) -> R < r_c;
         assume ~cstd(b);
+        assume b ~= unused;
 
         #round(B, R) := round(B, R) | (B = b & R = r_c);
         #parent(B, P) := parent(B, P) | (B = b & P = pB);
@@ -91,6 +95,7 @@ isolate block_t = {
     }
 
     invariant cstd(genesis)
+    invariant ~cstd(unused)
     invariant round(B, 0) <-> B = genesis
     invariant parent(genesis, P) <-> P = genesis
     invariant ancestor(genesis, A) <-> A = genesis
