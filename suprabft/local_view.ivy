@@ -22,10 +22,7 @@ object local_view(id:process_index_t) = {
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
     relation received_proposal_f(P:proposal_f_t, Src:process_index_t)
     relation received_prepare(P:prepare_t, Src:process_index_t)
-    relation received_qc(QC:qc_t)
     relation received_timeout(T:timeout_t, Src:process_index_t)
-    relation received_tc(TC:tc_t)
-    relation received_tc_fplusone(TC:tc_fplusone_t)
 
     after init {
         commit_mode := false;
@@ -45,10 +42,7 @@ object local_view(id:process_index_t) = {
         received_proposal_n(P, Src) := P = proposal_n_t.genesis & Src = leader(0);
         received_proposal_f(P, Src) := false;
         received_prepare(P, Src) := P = prepare_t.genesis;
-        received_qc(QC) := QC = qc_t.genesis;
         received_timeout(T, Src) := false;
-        received_tc(TC) := false;
-        received_tc_fplusone(TC) := false;
     }
 
     implement shim.proposal_n_handler.handle(m:msg) {
@@ -71,51 +65,11 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    implement shim.qc_handler.handle(m:msg) {
-        if global_view.qc_valid(m.qc) {
-            received_qc(m.qc) := true;
-        }
-    }
-
     implement shim.timeout_handler.handle(m:msg) {
         if global_view.timeout_valid(m.t) {
             received_timeout(m.t, m.src) := true;
             received_qc(global_view.timeout_get_qc(m.t)) := true;
         }
-    }
-
-    implement shim.tc_handler.handle(m:msg) {
-        if global_view.tc_valid(m.tc) {
-            received_tc(m.tc) := true;
-        }
-    }
-
-    # the requirement for aggregation is strictly stronger than global_view.qc_valid, avoid rewriting all that here
-    export action aggregate_prepares(qc:qc_t) = {
-        require ~commit_mode;
-
-        require global_view.qc_valid(qc);
-        require qc_t.quorum(QC, Q) & qc_t.prepare(QC, P) & quorum_t.member(Q, N) -> received_prepare(P, N);
-
-        received_qc(qc) := true;
-    }
-
-    export action aggregate_timeouts_fplusone(tc:tc_fplusone_t) = {
-        require ~commit_mode;
-
-        require global_view.tc_fplusone_valid(tc);
-        require tc_fplusone_t.quorum(TC, Q) & tc_fplusone_t.timeout(TC, T) & quorum_fplusone_t.member(Q, N) -> received_timeout(T, N);
-
-        received_tc_fplusone(tc) := true;
-    }
-
-    export action aggregate_timeouts(tc:tc_t) = {
-        require ~commit_mode;
-
-        require global_view.tc_valid(tc);
-        require tc_t.quorum(TC, Q) & tc_t.timeout(TC, T) & quorum_t.member(Q, N) -> received_timeout(T, N);
-
-        received_tc(tc) := true;
     }
 
     action broadcast_proposal_n(p:proposal_n_t) = {
@@ -145,32 +99,10 @@ object local_view(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    action broadcast_qc(q:qc_t) = {
-        var m : msg;
-        m.kind := msg_kind.qc;
-        m.qc := q;
-        m.src := id;
-
-        call shim.broadcast(id, m);
-
-        if commit_mode & ~commit_mode_broadcasted_qc & ~commit_mode_advancedToRound {
-            commit_mode_broadcasted_qc := true;
-        }
-    }
-
     action broadcast_timeout(t:timeout_t) = {
         var m : msg;
         m.kind := msg_kind.timeout;
         m.t := t;
-        m.src := id;
-
-        call shim.broadcast(id, m);
-    }
-
-    action broadcast_tc(t:tc_t) = {
-        var m : msg;
-        m.kind := msg_kind.tc;
-        m.tc := t;
         m.src := id;
 
         call shim.broadcast(id, m);
@@ -278,7 +210,9 @@ object local_view(id:process_index_t) = {
         call proposeNormal(b_qc);
         call tryLock(qc);
         call tryCommit(b_qc);
-        call broadcast_qc(qc);
+        # abstract out this call. we never broadcast qcs in IVy since all the information that is needed is
+        # always in the network. To "undrop" a packet simply receive the original packet.
+        # call broadcast_qc(qc);
         call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
     }
 
@@ -325,13 +259,14 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    export action timeout_sync(tc:tc_fplusone_t) = {
+    export action timeout_sync(t:timeout_t) = {
         require ~commit_mode;
 
-        require received_tc_fplusone(tc);
-        require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & tc_fplusone_t.round(tc, R2) -> R1 < R2;
+        # replace f + 1 timeout messages with 1 guaranteed good node timing out
+        require exists N:process_index_t. N ~= id & is_good(N) & received_timeout(t, N);
+        require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & timeout_t.round(t, R2) -> R1 < R2;
 
-        var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
+        var t := timeout_t.timeout(timeout_t.get_round(t), locked);
         call broadcast_timeout(t);
 
         call global_view.timeout(id, t);
@@ -370,11 +305,13 @@ object local_view(id:process_index_t) = {
 
     invariant received_proposal_n(P, N) -> proposal_n_t.valid(P)
     invariant received_proposal_f(P, N) -> global_view.proposal_f_valid(P)
+    invariant received_proposal_f(P, N) & proposal_f_t.qc(P, QC) -> received_qc(QC)
+    invariant received_proposal_f(P, N) & proposal_f_t.tc(P, TC) -> received_tc(TC)
     invariant received_prepare(P, N) -> prepare_t.valid(P)
     invariant received_qc(QC) -> global_view.qc_valid(QC)
     invariant received_timeout(T, N) -> global_view.timeout_valid(T)
+    invariant received_timeout(T, N) & timeout_t.qc(T, QC) -> received_qc(QC)
     invariant received_tc(TC) -> global_view.tc_valid(TC)
-    invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
 
     invariant forall Bl:block_t. forall Bg:block_t. forall Rl,Rg:round_t. (block_t.valid(Bl) & qc_t.block(locked,Bl) & global_view.process_locked(id,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg)) -> Rg <= Rl
 

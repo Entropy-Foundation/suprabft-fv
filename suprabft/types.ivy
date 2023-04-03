@@ -319,14 +319,6 @@ isolate timeout_t = {
     invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
 }
 
-isolate tc_fplusone_t = {
-    type this
-
-    relation round(TC:tc_fplusone_t, R:round_t)
-    relation timeout(TC:tc_fplusone_t, T:timeout_t)
-    relation quorum(TC:tc_fplusone_t, Q:quorum_fplusone_t)
-}
-
 isolate tc_t = {
     type this
 
