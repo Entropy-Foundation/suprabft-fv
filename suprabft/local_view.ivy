@@ -178,7 +178,7 @@ object local_view(id:process_index_t) = {
     export action commit = {
         require commit_mode & commit_mode_broadcasted_qc & commit_mode_advancedToRound;
 
-        if some b:block_t. (b = commit_mode_block & (commit_mode_block = block_t.genesis | block_t.parent(commit_mode_block, last_committed))) |
+        if some b:block_t. (b = commit_mode_block & ((commit_mode_block = block_t.genesis & last_committed = block_t.unused) | block_t.parent(commit_mode_block, last_committed))) |
                 (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed)) {
             last_committed := b;
             uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
@@ -391,8 +391,10 @@ object local_view(id:process_index_t) = {
     invariant commit_mode -> block_t.cstd(commit_mode_block)
     invariant commit_mode -> uncommitted(commit_mode_block)
     invariant block_t.unused ~= last_committed -> global_view.process_committed(id,last_committed)
-    invariant commit_mode_block = block_t.genesis -> last_committed = block_t.unused & ~ global_view.process_committed(id,B)
-    invariant forall B:block_t. forall R1,R2:round_t. global_view.process_committed(id, B) & block_t.round(B, R1) & block_t.round(last_committed, R2) & block_t.unused ~= last_committed & block_t.genesis ~= last_committed & block_t.cstd(B) & B ~= block_t.genesis -> R1 <= R2
+    invariant last_committed = block_t.unused -> ~ global_view.process_committed(id,B)
+    #invariant last_committed = block_t.genesis -> (global_view.process_committed(id,B) -> B = block_t.genesis)
+    invariant forall B:block_t. forall R1,R2:round_t. global_view.process_committed(id, B) & block_t.round(B, R1) & block_t.round(last_committed, R2) -> R1 <= R2
+    #invariant commit_mode_block = block_t.genesis -> ~global_view.process_committed(id,B)
     invariant forall B:block_t. forall H1,H2:height_t. global_view.process_committed(id, B) & block_t.height(B, H1) & block_t.height(last_committed, H2) & block_t.cstd(last_committed) -> H1 <= H2
     #invariant commit_mode -> (commit_mode_block = block_t.genesis <-> ~block_t.cstd(last_committed))
     # invariant commit_mode & block_t.cstd(last_committed) & ancestor_transitive_closure_block.inbetween(commit_mode_block, last_committed) ->
