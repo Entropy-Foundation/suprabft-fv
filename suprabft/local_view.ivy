@@ -27,6 +27,16 @@ object local_view(id:process_index_t) = {
     relation received_tc(TC:tc_t)
     relation received_tc_fplusone(TC:tc_fplusone_t)
 
+    relation processed_qc(B:block_t)
+
+    relation qcs_in_tc_processed(TC:tc_t)
+
+    definition qcs_in_tc_processed(TC) = forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> processed_qc(B)
+
+    relation qc_in_tc(TC:tc_t,QC:qc_t)
+
+    definition qc_in_tc(TC,QC) = exists T:timeout_t. tc_t.timeout(TC,T) & timeout_t.qc(T,QC)
+
     after init {
         commit_mode := false;
         commit_mode_block := *;
@@ -48,6 +58,8 @@ object local_view(id:process_index_t) = {
         received_timeout(T, Src) := false;
         received_tc(TC) := false;
         received_tc_fplusone(TC) := false;
+
+        processed_qc(B) := false;
     }
 
     implement shim.proposal_n_handler.handle(m:msg) {
@@ -60,7 +72,9 @@ object local_view(id:process_index_t) = {
         if global_view.proposal_f_valid(m.prop_f) {
             received_proposal_f(m.prop_f, m.src) := true;
             received_qc(global_view.proposal_f_get_qc(m.prop_f)) := true;
-            received_tc(global_view.proposal_f_get_tc(m.prop_f)) := true;
+            var temp_tc := global_view.proposal_f_get_tc(m.prop_f);
+            received_tc(temp_tc) := true;
+            received_qc(QC) := received_qc(QC) | qc_in_tc(temp_tc,QC);
         }
     }
 
@@ -86,6 +100,7 @@ object local_view(id:process_index_t) = {
     implement shim.tc_handler.handle(m:msg) {
         if global_view.tc_valid(m.tc) {
             received_tc(m.tc) := true;
+            received_qc(QC) := received_qc(QC) | qc_in_tc(m.tc,QC);
         }
     }
 
@@ -267,18 +282,17 @@ object local_view(id:process_index_t) = {
 
         require received_qc(qc);
 
-        # this is to prevent a block from being processed if it is already locked or committed. In implementation, this should be checked by checking the blocks that have been locked or committed before
-        require forall B:block_t. qc_t.block(qc,B) -> (~global_view.process_locked(id,B) & ~global_view.process_committed(id,B));
-
         var b_qc := global_view.qc_get_block(qc);
-
-        uncommitted(b_qc) := true;
-        r_v := block_t.get_round(b_qc) if forall R:round_t. block_t.round(b_qc, R) -> R > r_v else r_v;
-        call proposeNormal(b_qc);
-        call tryLock(qc);
-        call tryCommit(b_qc);
-        call broadcast_qc(qc);
-        call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
+        if ~processed_qc(b_qc) {
+            uncommitted(b_qc) := true;
+            r_v := block_t.get_round(b_qc) if forall R:round_t. block_t.round(b_qc, R) -> R > r_v else r_v;
+            call proposeNormal(b_qc);
+            call tryLock(qc);
+            call tryCommit(b_qc);
+            call broadcast_qc(qc);
+            call advanceToRound(round_t.next(round_t.next(block_t.get_round(global_view.qc_get_block(qc)))));
+            processed_qc(b_qc) := true;
+        }
     }
 
     export action proposal_n_processing(p:proposal_n_t) = {
@@ -296,20 +310,20 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    action proposeFR(tc:tc_t) = {
-        var ok := true;
-        ok := ok & forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> round_t.succ(R2, r_c);
-        ok := ok & leader(r_c) = id;
-        ok := ok & r_p < r_c;
+    # action proposeFR(tc:tc_t) = {
+    #     var ok := true;
+    #     ok := ok & forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> round_t.succ(R2, r_c);
+    #     ok := ok & leader(r_c) = id;
+    #     ok := ok & r_p < r_c;
 
-        if ok {
-            var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
-            var b := block_t.block(r_c, global_view.qc_get_block(qcp));
-            var p := proposal_f_t.proposal_f(b, qcp, tc);
-            call broadcast_proposal_f(p);
-            r_p := r_c;
-        }
-    }
+    #     if ok {
+    #         var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
+    #         var b := block_t.block(r_c, global_view.qc_get_block(qcp));
+    #         var p := proposal_f_t.proposal_f(b, qcp, tc);
+    #         call broadcast_proposal_f(p);
+    #         r_p := r_c;
+    #     }
+    # }
 
     export action timeout = {
         require ~commit_mode;
@@ -328,6 +342,7 @@ object local_view(id:process_index_t) = {
         require ~commit_mode;
 
         require received_tc_fplusone(tc);
+        require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> processed_qc(B);
         require forall T:timeout_t. forall R1,R2:round_t. global_view.process_sent_timeout(id, T) & timeout_t.round(T, R1) & tc_fplusone_t.round(tc, R2) -> R1 < R2;
 
         var t := timeout_t.timeout(global_view.tc_fplusone_get_round(tc), locked);
@@ -336,21 +351,25 @@ object local_view(id:process_index_t) = {
         call global_view.timeout(id, t);
     }
 
-    export action tc_processing(tc:tc_t) = {
-        require ~commit_mode;
+    # export action tc_processing(tc:tc_t) = {
+    #     require ~commit_mode;
 
-        require received_tc(tc);
+    #     require qcs_in_tc_processed(tc);
+    #     require received_tc(tc);
 
-        call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
-        if forall P:proposal_f_t. forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> ~received_proposal_f(P, leader(R2)) {
-            call proposeFR(tc);
-        }
-    }
+    #     call advanceToRound(round_t.next(round_t.next(global_view.tc_get_round(tc))));
+    #     if forall P:proposal_f_t. forall R1,R2:round_t. tc_t.round(tc, R1) & round_t.succ(R1, R2) -> ~received_proposal_f(P, leader(R2)) {
+    #         call proposeFR(tc);
+    #     }
+    # }
 
     export action proposal_f_processing(p:proposal_f_t) = {
         require ~commit_mode;
 
         require received_proposal_f(p, leader(round_t.prev(r_c)));
+
+        require proposal_f_t.tc(p,TC) -> qcs_in_tc_processed(TC);
+        require proposal_f_t.qc(p,QC) & qc_t.block(QC,B) -> processed_qc(B);
 
         var qcp := global_view.qc_maxQC(global_view.proposal_f_get_qc(p), global_view.tc_getMaxQC(global_view.proposal_f_get_tc(p)));
         var ok := true;
@@ -361,8 +380,7 @@ object local_view(id:process_index_t) = {
         ok := ok & forall B1,B2:block_t. proposal_f_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(qcp, B2);
         if ok {
             call proposeNormal(proposal_f_t.get_block(p));
-            var b:block_t;
-            call vote(b);
+            call vote(proposal_f_t.get_block(p));
         }
     }
 
@@ -379,6 +397,10 @@ object local_view(id:process_index_t) = {
     invariant forall Bl:block_t. forall Bg:block_t. forall Rl,Rg:round_t. (block_t.cstd(Bl) & qc_t.block(locked,Bl) & global_view.process_locked(id,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg)) -> Rg <= Rl
 
     invariant forall B,P:block_t. forall Rb,Rp:round_t. (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rp < Rb
+
+    invariant uncommitted(B) -> processed_qc(B)
+
+    invariant global_view.process_committed(id,B) -> processed_qc(B)
 
     invariant forall B:block_t. uncommitted(B) -> ~global_view.process_committed(id,B)
 

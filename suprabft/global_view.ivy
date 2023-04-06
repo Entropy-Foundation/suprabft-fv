@@ -89,7 +89,7 @@ module global_view = {
 
     action vote(n:process_index_t, b:block_t) = {
         require block_t.cstd(b);
-        require forall P:block_t. block_t.parent(b, P) -> process_locked(n, P);
+        require forall P:block_t. block_t.parent(b, P) & ~ process_locked(n, P) & block_t.round(P,Rp) & block_t.round(b,Rb) -> ~round_t.succ(Rp,Rb);
         require forall PB,LB:block_t. forall PR,LR:round_t. block_t.parent(b, PB) & block_t.round(PB, PR) & process_locked(n, LB) & block_t.round(LB, LR) -> LR <= PR;
         require forall B:block_t. forall R1,R2:round_t. process_voted(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
 
