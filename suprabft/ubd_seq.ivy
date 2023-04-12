@@ -17,6 +17,10 @@ module ubd_seq = {
 
     definition [successor_definition] succ(X,Z) = X < Z & forall Y:t. (X < Y -> (Z < Y | Z = Y))
 
+    relation maximum(X:t)
+
+    definition [maximum_definition] maximum(X) = forall Y:t. Y <= X
+
     function max2(X:t,Y:t) = Y if X <= Y else X
     function mod(X:this,Y:this) = X - X / Y * Y
 
@@ -58,6 +62,8 @@ module ubd_seq = {
     # When testing, use the integer implementation.
 
     attribute test = impl
+
+    attribute test = spec
 
 }
 

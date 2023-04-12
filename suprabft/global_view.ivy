@@ -100,7 +100,6 @@ module global_view = {
         require block_t.cstd(b);
         require qc_valid(qc);
         require qc_t.block(qc, b);
-        #require forall B:block_t. block_t.parent(b, PB) -> process_committed(n, PB);
         require forall B:block_t. forall R1,R2:round_t. process_locked(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
 
         process_locked(n, b) := true;

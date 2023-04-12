@@ -319,7 +319,7 @@ object local_view(id:process_index_t) = {
         if ok {
             var qcp := global_view.qc_maxQC(locked, global_view.tc_getMaxQC(tc));
             require qc_t.block(qcp,B) & qcp ~= qc_t.genesis -> processed_qc(B);
-            require forall R,Rs:round_t. forall B:block_t. qc_t.block(qcp,B) & block_t.round(B,R) & qcp ~= qc_t.genesis & round_t.succ(R,Rs) -> Rs < r_c;
+            require forall R:round_t. forall B:block_t. qc_t.block(qcp,B) & block_t.round(B,R) & qcp ~= qc_t.genesis -> R < r_c;
             var b := block_t.block(r_c, global_view.qc_get_block(qcp));
             var p := proposal_f_t.proposal_f(b, qcp, tc);
             call broadcast_proposal_f(p);
@@ -396,6 +396,8 @@ object local_view(id:process_index_t) = {
     invariant received_tc(TC) -> global_view.tc_valid(TC)
     invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
 
+    invariant global_view.process_voted(id,B) & block_t.round(B,R) -> R <= r_v
+
     invariant forall Bl:block_t. forall Bg:block_t. forall Rl,Rg:round_t. (block_t.cstd(Bl) & qc_t.block(locked,Bl) & global_view.process_locked(id,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg)) -> Rg <= Rl
 
     invariant qc_t.block(locked,B) & block_t.round(B,R) -> R < r_c
@@ -408,7 +410,7 @@ object local_view(id:process_index_t) = {
 
     invariant processed_qc(B) -> block_t.cstd(B)
 
-    invariant forall B:block_t. forall R:round_t. forall Rs:round_t. (processed_qc(B) & block_t.round(B,R) & round_t.succ(R,Rs)) -> Rs < r_c
+    invariant forall B:block_t. forall R:round_t. (processed_qc(B) & block_t.round(B,R)) -> R < r_c
 
     invariant global_view.process_committed(id,B) -> processed_qc(B)
 

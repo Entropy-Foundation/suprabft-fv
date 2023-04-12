@@ -10,6 +10,11 @@ relation is_good(N:process_index_t)
 
 function leader(R:round_t) : process_index_t
 
+# isolate round_properties = {
+
+#     property (~round_t.maximum(R1) & (round_t.succ(R1,R2) -> R2 <= R3)) -> R1 < R3
+# } with round_t
+
 # There are two ways to access a type's member. Example
 # [block_t.parent(b, p)] is a relation that is set to true when [p] is the parent of [b].
 # [block_t.get_parent(b)] is an action that gives us the parent of a valid block [b]. It
@@ -76,6 +81,7 @@ isolate block_t = {
     }
 
     export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
+        require r_c > 0;
         require cstd(pB);
         require round(pB,R) -> R < r_c;
         assume ~cstd(b);
