@@ -39,8 +39,7 @@ object local_view(id:process_index_t) = {
 
     after init {
         commit_mode := false;
-        commit_mode_block := *;
-        assume ~block_t.cstd(commit_mode_block);
+        commit_mode_block := block_t.unused;
         last_committed := block_t.unused;
 
         locked := qc_t.genesis;
@@ -203,8 +202,7 @@ object local_view(id:process_index_t) = {
 
         if commit_mode_block = last_committed {
             commit_mode := false;
-            commit_mode_block := *;
-            assume ~block_t.cstd(commit_mode_block);
+            commit_mode_block := block_t.unused;
         }
     }
 
@@ -417,6 +415,8 @@ object local_view(id:process_index_t) = {
     invariant forall B:block_t. uncommitted(B) -> ~global_view.process_committed(id,B)
 
     invariant ~global_view.process_committed(id,commit_mode_block)
+
+    invariant ~block_t.cstd(commit_mode_block) -> commit_mode_block = block_t.unused
 
     invariant forall B,P:block_t. forall Hb,Hp:height_t. (block_t.parent(B,P) & block_t.height(B,Hb) & block_t.height(P,Hp) & B ~= block_t.genesis) -> Hp < Hb
 
