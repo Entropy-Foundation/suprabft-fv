@@ -64,7 +64,7 @@ isolate quorum_votes_def = {
     relation quorum_of_votes(B:block_t)
 
     definition quorum_of_votes(B:block_t) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> global_view_used_here.process_voted(N,B)
-} with global_view_used_here,quorum_t
+} with global_view_used_here,quorum_t,block_t,prepare_t,timeout_t,proposal_f_t
 
 isolate last_committed_quorum_m1 = {
     invariant ancestor_transitive_closure_block.inbetween(D,A) | ~ancestor_transitive_closure_block.inbetween(D,A)
