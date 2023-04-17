@@ -114,12 +114,14 @@ isolate quorum_after_commit_is_descendant_m1 = {
 
     invariant is_good(N) & highest_locked(N,BL) & block_t.round(BL,RL) & local_view_used_here.local_view(N).processed_qc(BQ) & block_t.round(BQ,RQ) -> RQ <= RL
 
+    invariant is_good(N) & highest_locked(N,BH) & qc_t.block(local_view_used_here.local_view(N).locked,BL) -> BL = BH
+
     invariant is_good(N) & highest_locked(N,BH) & qc_t.block(local_view_used_here.local_view(N).locked,BL) & block_t.round(BH,RH) & block_t.round(BL,RL) -> RL <= RH 
 
     invariant is_good(N) & global_view_used_here.process_voted(N, B) & block_t.parent(B, BP) & block_t.round(BP, RP) & highest_locked(N, BL) & block_t.round(BL, RL) -> RL >= RP
 
     attribute macro_finder=false
-} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t,successor_of_last_committed_block_is_child
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t,successor_of_last_committed_block_is_child,qc_t
 
 isolate quorum_after_commit_is_descendant = {
 
