@@ -114,7 +114,11 @@ isolate quorum_after_commit_is_descendant_m1 = {
 
     invariant is_good(N) & highest_locked(N,BL) & block_t.round(BL,RL) & local_view_used_here.local_view(N).processed_qc(BQ) & block_t.round(BQ,RQ) -> RQ <= RL
 
+    invariant is_good(N) & highest_locked(N,BH) & qc_t.block(local_view_used_here.local_view(N).locked,BL) & block_t.round(BH,RH) & block_t.round(BL,RL) -> RL <= RH 
+
     invariant is_good(N) & global_view_used_here.process_voted(N, B) & block_t.parent(B, BP) & block_t.round(BP, RP) & highest_locked(N, BL) & block_t.round(BL, RL) -> RL >= RP
+
+    attribute macro_finder=false
 } with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t,successor_of_last_committed_block_is_child
 
 isolate quorum_after_commit_is_descendant = {
@@ -122,5 +126,5 @@ isolate quorum_after_commit_is_descendant = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
 
-    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) -> (exists Q:quorum_t. quorum_t.member(Q, N1) & is_good(N1) & quorum_after_commit_is_descendant_m1.highest_locked(N1, BL) & block_t.round(local_view_used_here.local_view(N).last_committed, R) & block_t.round(BL, RL) -> RL >= R)
-} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t,successor_of_last_committed_block_is_child,quorum_after_commit_is_descendant_m1
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~ local_view_used_here.local_view(N).commit_mode -> (exists Q:quorum_t. quorum_t.member(Q, N1) & is_good(N1) & quorum_after_commit_is_descendant_m1.highest_locked(N1, BL) & block_t.round(local_view_used_here.local_view(N).last_committed, R) & block_t.round(BL, RL) -> RL >= R)
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,quorum_after_commit_is_descendant_m1
