@@ -86,6 +86,7 @@ isolate block_t = {
         require round(pB,R) -> R < r_c;
         assume ~cstd(b);
         assume b ~= unused;
+        assume round(b,r_c);
 
         #round(B, R) := round(B, R) | (B = b & R = r_c);
         #parent(B, P) := parent(B, P) | (B = b & P = pB);
@@ -94,7 +95,7 @@ isolate block_t = {
 
         cstd(b) := true;
         
-        round(b,r_c) := true;
+        #round(b,r_c) := true;
         parent(b,pB) := true;
         ancestor(b,pB) := true;
         ancestor(b,B) := ancestor(pB,B) | B = pB;
@@ -288,19 +289,16 @@ isolate qc_t = {
     type this
 
     relation block(QC:qc_t, B:block_t)
-    relation prepare(QC:qc_t, P:prepare_t)
     relation quorum(QC:qc_t, Q:quorum_t)
 
     individual genesis : qc_t
 
     after init {
         block(genesis, B) := B = block_t.genesis;
-        prepare(genesis, P) := P = prepare_t.genesis;
         quorum(genesis, Q) := Q = quorum_t.genesis;
     }
 
     invariant block(genesis, B) <-> B = block_t.genesis
-    invariant prepare(genesis, P) <-> P = prepare_t.genesis
     invariant quorum(genesis, Q) <-> Q = quorum_t.genesis
 }
 
@@ -374,14 +372,12 @@ isolate proposal_f_t = {
     relation was_constructed(P:proposal_f_t)
 
     relation block(P:proposal_f_t, B:block_t)
-    relation qc(P:proposal_f_t, QC:qc_t)
     relation tc(P:proposal_f_t, TC:tc_t)
 
     after init {
         was_constructed(P) := false;
 
         block(P, B) := false;
-        qc(P, QC) := false;
         tc(P, TC) := false;
     }
 
@@ -395,15 +391,14 @@ isolate proposal_f_t = {
         ensure block(p, b);
     }
 
-    export action proposal_f(b:block_t, q:qc_t, t:tc_t) returns (p:proposal_f_t) = {
+    export action proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) = {
         require block_t.cstd(b);
         assume ~was_constructed(p);
 
-        if some p_old:proposal_f_t. block(p_old, b) & qc(p_old, q) & tc(p_old, t) {
+        if some p_old:proposal_f_t. block(p_old, b) & tc(p_old, t) {
             p := p_old;
         } else {
             block(P, B) := block(P, B) | (P = p & B = b);
-            qc(P, QC) := qc(P, QC) | (P = p & QC = q);
             tc(P, TC) := tc(P, TC) | (P = p & TC = t);
         }
 
@@ -411,14 +406,11 @@ isolate proposal_f_t = {
     }
 
     invariant block(P, B) -> was_constructed(P) & block_t.cstd(B)
-    invariant qc(P, QC) -> was_constructed(P)
     invariant tc(P, TC) -> was_constructed(P)
 
     invariant was_constructed(P) -> exists B:block_t. block(P, B)
-    invariant was_constructed(P) -> exists QC:qc_t. qc(P, QC)
     invariant was_constructed(P) -> exists TC:tc_t. tc(P, TC)
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
-    invariant qc(P, QC1) & qc(P, QC2) -> QC1 = QC2
     invariant tc(P, TC1) & tc(P, TC2) -> TC1 = TC2
 } with block_t

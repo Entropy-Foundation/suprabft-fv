@@ -4,27 +4,37 @@ include types
 include network
 
 module global_view = {
-    relation process_proposed(N:process_index_t, B:block_t)
+    #process N is currently in round R
+    relation process_in_round(N:process_index_t, R:round_t)
+
+    #process N has sent a prepare message for block B received via a normal proposal
+    relation process_voted_normal(N:process_index_t, B:block_t)
+
+    #process N has sent a prepare message for block B received via a fallback proposal
+    relation process_voted_fallback(N:process_index_t, B:block_t)
+
+    #process N has sent a prepare message for block B either via normal or fallback voting
     relation process_voted(N:process_index_t, B:block_t)
+
+    #process N has locked QC for block B
     relation process_locked(N:process_index_t, B:block_t)
+
+    #process N has locked QC for B when it is in B.r+1 and before sending Tr, so this is a candidate for GC
+    relation process_locked_gc_candidate(N:process_index_t, B:block_t)
+
+    #process N has processed a QC for block B
+    relation process_processed_qc(N:process_index_t, B:block_t)
+
+    #process N has committed block B to its blockchain
     relation process_committed(N:process_index_t, B:block_t)
-    relation process_sent_timeout(N:process_index_t, T:timeout_t)
 
-    # export action byzantine_propose(n:process_index_t, r_c:round_t, pB:block_t) = {
-        # require ~is_good(n);
-        # require block_t.cstd(pB);
-        # require n = leader(r_c);
+    #process N has sent a timetout message for round R with QC qc
+    relation process_sent_timeout(N:process_index_t, R:round_t, QC:qc_t)
 
-        # var b := block_t.block(r_c, pB)
-        # process_proposed(n, b) := true;
-    # }
+    #process N has processed TC
+    relation process_processed_tc(N:process_index_t, TC:tc_t)
 
-    # export action byzantine_vote(n:process_index_t, b:block_t) = {
-        # require ~is_good(n);
-        # require block_t.cstd(b);
-
-        # process_voted(n, b) := true;
-    # }
+    definition process_voted(N,B) = process_voted_normal(N,B) | process_voted_fallback(N,B)
 
     # In the real world, we would assess the validity of certificates using signatures. For the IVy model,
     # we use the fact that the global view has access to this information and can tell us whether the QC is
@@ -32,18 +42,18 @@ module global_view = {
     relation qc_valid(QC:qc_t)
     definition qc_valid(QC) =
                 (exists B:block_t. qc_t.block(QC, B)) &
-                (exists P:prepare_t. qc_t.prepare(QC, P)) &
                 (exists Q:quorum_t. qc_t.quorum(QC, Q)) &
                 (forall B1,B2:block_t. qc_t.block(QC, B1) & qc_t.block(QC, B2) -> B1 = B2) &
-                (forall P1,P2:prepare_t. qc_t.prepare(QC, P1) & qc_t.prepare(QC, P2) -> P1 = P2) &
                 (forall Q1,Q2:quorum_t. qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2) -> Q1 = Q2) &
-                (forall P:prepare_t. qc_t.prepare(QC, P) -> prepare_t.valid(P)) &
-                (forall P:prepare_t,B:block_t. qc_t.prepare(QC, P) & prepare_t.block(P, B) -> qc_t.block(QC, B)) &
                 (forall Q:quorum_t,N:process_index_t,B:block_t. qc_t.quorum(QC, Q) & quorum_t.member(Q, N) & qc_t.block(QC, B) -> process_voted(N, B))
 
     relation timeout_valid(T:timeout_t)
     definition timeout_valid(T) = timeout_t.was_constructed(T) &
                 (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
+                & (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
+
+    relation qc_round_in_tc_fplusone(QC:qc_t, R:round_t, TC:tc_fplusone_t)
+    definition qc_round_in_tc_fplusone(QC,R,TC) = exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC)
 
     relation tc_fplusone_valid(TC:tc_fplusone_t)
     definition tc_fplusone_valid(TC) =
@@ -53,8 +63,11 @@ module global_view = {
                 (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q1) & tc_fplusone_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_fplusone_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_fplusone_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_fplusone_t.round(TC, R)) &
-                (forall Q:quorum_fplusone_t,N:process_index_t. tc_fplusone_t.quorum(TC, Q) -> (quorum_fplusone_t.member(Q, N) ->
-                        exists T:timeout_t. tc_fplusone_t.timeout(TC, T) & process_sent_timeout(N, T)))
+                (forall Q:quorum_fplusone_t,N:process_index_t,R:round_t. tc_fplusone_t.quorum(TC, Q) & tc_fplusone_t.round(TC,R) -> (quorum_fplusone_t.member(Q, N) ->
+                        exists QC:qc_t. qc_round_in_tc_fplusone(QC,R,TC) & process_sent_timeout(N, R, QC)))
+
+    relation qc_round_in_tc(QC:qc_t, R:round_t, TC:tc_t)
+    definition qc_round_in_tc(QC,R,TC) = exists T:timeout_t. tc_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC)
 
     relation tc_valid(TC:tc_t)
     definition tc_valid(TC) =
@@ -64,45 +77,78 @@ module global_view = {
                 (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                (forall Q:quorum_t,N:process_index_t. tc_t.quorum(TC, Q) -> (quorum_t.member(Q, N) ->
-                        exists T:timeout_t. tc_t.timeout(TC,T) & process_sent_timeout(N, T)))
+                (forall Q:quorum_t,N:process_index_t,R:round_t. tc_t.quorum(TC, Q) & tc_t.round(TC,R) -> (quorum_t.member(Q, N) ->
+                        exists QC:qc_t. qc_round_in_tc(QC,R,TC) & process_sent_timeout(N, R, QC)))
 
     relation proposal_f_valid(P:proposal_f_t)
     definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) &
-                (forall QC:qc_t. proposal_f_t.qc(P, QC) -> qc_valid(QC)) &
                 (forall TC:tc_t. proposal_f_t.tc(P, TC) -> tc_valid(TC))
 
+    relation quorum_of_votes(B:block_t)
+    definition quorum_of_votes(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> process_voted(N,B)
+
     after init {
-        process_proposed(N, B) := N = leader(0) & B = block_t.genesis;
-        process_voted(N, B) := B = block_t.genesis;
+        process_in_round(N,R) := round_t.succ(0,R);
+        process_voted_normal(N, B) := B = block_t.genesis;
+        process_voted_fallback(N, B) := false;
+        process_processed_qc(N,B) := B = block_t.genesis;
         process_locked(N, B) := B = block_t.genesis;
+        process_locked_gc_candidate(N,B) := B = block_t.genesis;
         process_committed(N, B) := false;
-        process_sent_timeout(N, B) := false;
+        process_sent_timeout(N, R, QC) := false;
+        process_processed_tc(N,TC) := false;
     }
 
-    action propose(n:process_index_t, b:block_t) = {
-        require block_t.cstd(b);
-        require forall R:round_t. block_t.round(b, R) -> n = leader(R);
+    action enter_round(n:process_index_t,r:round_t) = {
+        require process_in_round(n,R) -> R < r;
 
-        process_proposed(n, b) := true;
+        require (exists B:block_t. exists Rb,Rs:round_t. process_processed_qc(n,B) & block_t.round(B,Rb) & round_t.succ(Rb,Rs) & round_t.succ(Rs,r)) | (exists TC:tc_t. exists Rt,Rs:round_t. process_processed_tc(n,TC) & tc_t.round(TC,Rt) & round_t.succ(Rt,Rs) & round_t.succ(Rs,r));
+
+        process_in_round(n,R) := R = r;
     }
 
-    action vote(n:process_index_t, b:block_t) = {
+    action vote_normal(n:process_index_t, b:block_t) = {
         require block_t.cstd(b);
-        # require forall P:block_t. block_t.parent(b, P) & ~ process_locked(n, P) & block_t.round(P,Rp) & block_t.round(b,Rb) -> ~round_t.succ(Rp,Rb);
-        # require forall PB,LB:block_t. forall PR,LR:round_t. block_t.parent(b, PB) & block_t.round(PB, PR) & process_locked(n, LB) & block_t.round(LB, LR) -> LR <= PR;
-        require forall B:block_t. forall R1,R2:round_t. process_voted(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
+        require ~is_good(n) | forall Rb,Rc:round_t. block_t.round(b, Rb) & process_in_round(n,Rc) -> round_t.succ(Rb,Rc);
+        require forall Bp:block_t. block_t.parent(b,Bp) & block_t.round(Bp,Rp) & block_t.round(b,Rb)-> process_locked(n,Bp) & round_t.succ(Rp,Rb);
+        require forall Rt,Rb:round_t. forall QC:qc_t. process_sent_timeout(n,Rt,QC) & block_t.round(b,Rb) -> Rt < Rb;
+        require forall Bvn:block_t. forall Rvn:round_t. process_voted_normal(n,Bvn) & block_t.round(Bvn,Rvn) & block_t.round(b,Rb)-> Rvn < Rb;
+        require block_t.parent(b,Bp) -> process_locked_gc_candidate(n,Bp);
 
-        process_voted(n, b) := true;
+        process_voted_normal(n, b) := true;
+    }
+
+    action vote_fallback(n:process_index_t, b:block_t, t:timeout_t) = {
+        require block_t.cstd(b);
+        require timeout_valid(t);
+        require block_t.round(b,Rb) & timeout_t.round(t,Rt)-> round_t.succ(Rt,Rb);
+        require timeout_t.qc(t,QC) & qc_t.block(QC,Bq) -> block_t.parent(b,Bq);
+        require timeout_t.qc(t,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & timeout_t.round(t,Rt) -> Rq < Rt;
+
+        process_voted_fallback(n, b) := true;
+    }
+
+    action process_qc(n:process_index_t, b:block_t, qc:qc_t) = {
+        require qc_valid(qc);
+        require qc_t.block(qc,b);
+        require block_t.round(b,R) & round_t.succ(R,Rs) & process_in_round(n,Rc) -> Rs < Rc;
+
+        process_processed_qc(n,b) := true;
     }
 
     action lock(n:process_index_t, b:block_t, qc:qc_t) = {
         require block_t.cstd(b);
         require qc_valid(qc);
         require qc_t.block(qc, b);
+        require process_processed_qc(n,b);
         require forall B:block_t. forall R1,R2:round_t. process_locked(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
+        require forall Rc,Rq,Rs:round_t. process_in_round(n,Rc) & block_t.round(b,Rq) & round_t.succ(Rq,Rs)-> Rc <= Rs;
+        require forall Rq:round_t. forall QC:qc_t. block_t.round(b,Rq) -> ~ process_sent_timeout(N,Rq,QC);
 
-        process_locked(n, b) := true;
+        process_locked(n, B) := B=b;
+        if forall R,Rs:round_t. forall QC:qc_t. block_t.round(b,R) & round_t.succ(R,Rs) -> process_in_round(n,Rs) & ~ process_sent_timeout(n, R, QC) {
+            process_locked_gc_candidate(n,b) := true;
+        }
     }
 
     action commit(n:process_index_t, b:block_t) = {
@@ -115,105 +161,56 @@ module global_view = {
         process_committed(n, b) := true;
     }
 
-    action timeout(n:process_index_t, t:timeout_t) = {
-        require timeout_valid(t);
-
-        process_sent_timeout(n, t) := true;
+    action timeout(n:process_index_t, r:round_t, locked:qc_t) = {
+        require qc_valid(locked);
+        require qc_t.block(locked,B) & block_t.round(B,R) -> process_locked(n,B) & R < r;
+        require round_t.succ(r,Rs) & process_in_round(n,Rc) -> Rc <= Rs;
+        
+        process_sent_timeout(n, r, locked) := true;
     }
 
-    export action qc_get_block(qc:qc_t) returns (b:block_t) = {
-        require qc_valid(qc);
-
-        if some qc_b:block_t. qc_t.block(qc, qc_b) {
-            b := qc_b;
-        }
-
-        ensure qc_t.block(qc, b);
-    }
-
-    export action qc_maxQC(qc1:qc_t, qc2:qc_t) returns (qc:qc_t) = {
-        require qc_valid(qc1);
-        require qc_valid(qc2);
-
-        if forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc1, B1) & block_t.round(B1, R1) & qc_t.block(qc2, B2) & block_t.round(B2, R2) -> R1 > R2 {
-            qc := qc1;
-        } else {
-            qc := qc2;
-        }
-
-        ensure qc = qc1 | qc = qc2;
-        ensure forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & block_t.round(B1, R1) & qc_t.block(qc1, B2) & block_t.round(B2, R2) -> R1 >= R2;
-        ensure forall B1,B2:block_t. forall R1,R2:round_t. qc_t.block(qc, B1) & block_t.round(B1, R1) & qc_t.block(qc2, B2) & block_t.round(B2, R2) -> R1 >= R2;
-    }
-
-    export action timeout_get_qc(t:timeout_t) returns (qc:qc_t) = {
-        require timeout_valid(t);
-
-        if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
-            qc := t_qc;
-        }
-
-        ensure timeout_t.qc(t, qc);
-    }
-
-    export action tc_fplusone_get_round(tc:tc_fplusone_t) returns (r:round_t) = {
-        require tc_fplusone_valid(tc);
-
-        if some tc_r:round_t. tc_fplusone_t.round(tc, tc_r) {
-            r := tc_r;
-        }
-
-        ensure tc_fplusone_t.round(tc, r);
-    }
-
-    export action tc_get_round(tc:tc_t) returns (r:round_t) = {
+    action processed_tc(n:process_index_t, tc:tc_t) = {
         require tc_valid(tc);
 
-        if some tc_r:round_t. tc_t.round(tc, tc_r) {
-            r := tc_r;
-        }
-
-        ensure tc_t.round(tc, r);
-    }
-
-    export action tc_getMaxQC(tc:tc_t) returns (qc:qc_t) = {
-        require tc_valid(tc);
-        assume exists T:timeout_t. timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, qc);
-        assume forall T:timeout_t. forall QC:qc_t. forall B1,B2:block_t. forall R1,R2:round_t. timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, QC) &
-                qc_t.block(QC, B1) & block_t.round(B1, R1) & qc_t.block(qc, B2) & block_t.round(B2, R2) -> R2 >= R1;
-
-        ensure qc_valid(qc);
-    }
-
-    export action proposal_f_get_qc(p:proposal_f_t) returns (qc:qc_t) = {
-        require proposal_f_valid(p);
-
-        if some p_qc:qc_t. proposal_f_t.qc(p, p_qc) {
-            qc := p_qc;
-        }
-
-        ensure proposal_f_t.qc(p, qc);
-    }
-
-    export action proposal_f_get_tc(p:proposal_f_t) returns (tc:tc_t) = {
-        require proposal_f_valid(p);
-
-        if some p_tc:tc_t. proposal_f_t.tc(p, p_tc) {
-            tc := p_tc;
-        }
-
-        ensure proposal_f_t.tc(p, tc);
+        process_processed_tc(n,tc) := true;
     }
 
     invariant qc_valid(qc_t.genesis)
 
-    invariant process_proposed(N, block_t.genesis) <-> N = leader(0)
     invariant process_voted(N, block_t.genesis)
-    invariant process_locked(N, block_t.genesis)
-
-    invariant process_proposed(N, B) -> block_t.cstd(B)
+    invariant process_locked_gc_candidate(N, block_t.genesis)
     invariant process_voted(N, B) -> block_t.cstd(B)
+    invariant process_processed_qc(N,B) -> block_t.cstd(B)
     invariant process_locked(N, B) -> block_t.cstd(B)
     invariant process_committed(N, B) -> block_t.cstd(B)
-    invariant process_sent_timeout(N, T) -> timeout_valid(T)
+    invariant process_sent_timeout(N, R, QC) -> qc_valid(QC)
+    invariant process_processed_tc(N,TC) -> tc_valid(TC)
+
+    invariant process_locked(N,QC1) & process_locked(N,QC2) -> QC1 = QC2
+    invariant process_in_round(N,R1) & process_in_round(N,R2) -> R1 = R2
+
+    relation floating_node(N:process_index_t)
+    definition floating_node(N) = forall R:round_t. ~process_in_round(N,R)
+
+    invariant ~floating_node(N)
+
+    invariant process_in_round(N,R) & round_t.succ(0,Rs)-> Rs <= R
+
+    invariant process_voted(N,B) & block_t.round(B,R) & process_in_round(N,Rc) -> R < Rc
+
+    invariant process_locked(N,B) -> exists N1:process_index_t. process_voted(N1,B)
+
+    invariant process_voted(N,B) -> (forall B:block_t. forall R,Rc:round_t. block_t.round(B,R) & process_in_round(N,Rc) -> R < Rc)
+
+    invariant process_locked(N,B) & block_t.round(B,R) & process_in_round(N,Rc) & round_t.succ(R,Rs) & B ~= block_t.genesis-> Rs < Rc
+
+    invariant process_sent_timeout(N,Rt,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) -> Rq < Rt
+
+    invariant process_voted_fallback(N,Bv) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
+
+    invariant process_locked(N,B) & block_t.round(B,R) & process_in_round(N,Rc) & (forall QC:qc_t. ~ process_sent_timeout(N,R,QC)) & round_t.succ(R,Rs) & Rs <= Rc -> process_locked_gc_candidate(N,B)
+
+    invariant process_processed_qc(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(R,Rs) & process_in_round(N,Rc) -> Rs < Rc
+
+    invariant process_sent_timeout(N,R,QC) & block_t.round(B,R) -> ~process_locked(N,B)
 }
