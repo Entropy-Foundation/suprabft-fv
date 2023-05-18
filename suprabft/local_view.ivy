@@ -60,7 +60,7 @@ object local_view(id:process_index_t) = {
         received_tc(TC) := false;
         received_tc_fplusone(TC) := false;
 
-        processed_qc(B) := false;
+        processed_qc(B) := B = block_t.genesis;
 
         expired_rounds(R) := false;
     }
@@ -334,6 +334,7 @@ object local_view(id:process_index_t) = {
 
     export action timer_expire = {
         require ~timer;
+        require round_t.succ(0,R1) -> R1 < r_c;
         
         timer := true;
         call timeout(round_t.prev(r_c));
@@ -491,15 +492,15 @@ object local_view(id:process_index_t) = {
     invariant received_tc(TC) -> global_view.tc_valid(TC)
     invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
 
-    invariant global_view.process_voted_normal(id,B) & block_t.round(B,R) -> R <= r_vn
-    invariant global_view.process_voted_fallback(id,B) & block_t.round(B,R) -> R <= r_vf
+    invariant is_good(id) & global_view.process_voted_normal(id,B) & block_t.round(B,R) -> R <= r_vn
+    invariant is_good(id) & global_view.process_voted_fallback(id,B) & block_t.round(B,R) -> R <= r_vf
     invariant global_view.process_in_round(id,r_c)
 
     invariant forall R:round_t. expired_rounds(R) -> exists QC:qc_t. global_view.process_sent_timeout(id,R,QC)
 
-    invariant forall R,Rs1,Rs2:round_t. forall QC:qc_t. global_view.process_sent_timeout(id,R,QC) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) & Rs2 > r_c -> expired_rounds(R)
+    invariant forall R,Rs1,Rs2:round_t. forall QC:qc_t. is_good(id) & global_view.process_sent_timeout(id,R,QC) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) & Rs2 > r_c -> expired_rounds(R)
 
-    invariant timer -> global_view.process_sent_timeout(id,r_c,locked)
+    invariant timer & round_t.succ(Rp,r_c) -> exists QC:qc_t. global_view.process_sent_timeout(id,Rp,QC)
 
     invariant processed_qc(QC) <-> global_view.process_processed_qc(id,QC)
 
@@ -507,6 +508,14 @@ object local_view(id:process_index_t) = {
 
     invariant qc_t.block(locked,B) -> global_view.process_locked(id,B)
     
-    invariant qc_t.block(locked,B) & block_t.round(B,R) & round_t.succ(R,Rs) -> Rs < r_c
+    invariant qc_t.block(locked,B) & block_t.round(B,R) & round_t.succ(R,Rs) & B ~= block_t.genesis -> Rs < r_c
+
+    invariant processed_qc(B) -> exists QC:qc_t. global_view.qc_valid(QC) & qc_t.block(QC,B)
+
+    invariant commit_mode -> uncommitted(commit_mode_block)
+
+    invariant uncommitted(B) -> processed_qc(B)
+
+    invariant last_committed ~= block_t.unused -> global_view.process_committed(id,last_committed)
 } # object local_view
 } # module supraBFT
