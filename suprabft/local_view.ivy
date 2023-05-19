@@ -517,5 +517,11 @@ object local_view(id:process_index_t) = {
     invariant uncommitted(B) -> processed_qc(B)
 
     invariant last_committed ~= block_t.unused -> global_view.process_committed(id,last_committed)
+
+    invariant last_committed = block_t.unused -> ~ global_view.process_committed(id,B)
+
+    invariant global_view.process_committed(id,B) & block_t.round(B,Rb) & block_t.round(last_committed,Rl) -> Rb <= Rl
+
+    invariant global_view.process_committed(id,B) & block_t.height(B,Hb) & block_t.height(last_committed,Hl) -> Hb <= Hl
 } # object local_view
 } # module supraBFT
