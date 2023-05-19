@@ -27,6 +27,7 @@ object local_view(id:process_index_t) = {
     relation received_tc_fplusone(TC:tc_fplusone_t)
 
     relation processed_qc(B:block_t)
+    function qc_for_block(B:block_t) : qc_t
 
     relation expired_rounds(R:round_t)
 
@@ -61,6 +62,7 @@ object local_view(id:process_index_t) = {
         received_tc_fplusone(TC) := false;
 
         processed_qc(B) := B = block_t.genesis;
+        qc_for_block(block_t.genesis) := qc_t.genesis;
 
         expired_rounds(R) := false;
     }
@@ -193,8 +195,8 @@ object local_view(id:process_index_t) = {
     export action commit = {
         require commit_mode;
 
-        if some b:block_t. (b = commit_mode_block & ((commit_mode_block = block_t.genesis & last_committed = block_t.unused) | block_t.parent(commit_mode_block, last_committed))) |
-                (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed)) {
+        if some b:block_t. commit_mode_block ~= last_committed & ((b = commit_mode_block & ((commit_mode_block = block_t.genesis & last_committed = block_t.unused) | block_t.parent(commit_mode_block, last_committed))) |
+                (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed))) {
             last_committed := b;
             uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
 
@@ -244,9 +246,9 @@ object local_view(id:process_index_t) = {
         if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2)) {
             commit_mode_block := bp;
 
-            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
-                    uncommitted(B)) {
-                commit_mode := true;
+            if (commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B))) {
+                        commit_mode := true;
             }
         }
         else if some bc:block_t. block_t.parent(bc, b) & uncommitted(bc) & (forall R1,R2:round_t. block_t.round(bc, R1) & block_t.round(b, R2) ->
@@ -254,9 +256,9 @@ object local_view(id:process_index_t) = {
             commit_mode_block := b;
 
             # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
-            if commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
-                    uncommitted(B)) {
-                commit_mode := true;
+            if commit_mode_block ~= last_committed & (commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
+                    uncommitted(B))) {
+                        commit_mode := true;
             }
         }
     }
@@ -277,6 +279,7 @@ object local_view(id:process_index_t) = {
             call advanceToRound(round_t.next(round_t.next(block_t.get_round(b_qc))));
             global_view.process_qc(id,qc_get_block(qc),qc);
             processed_qc(b_qc) := true;
+            qc_for_block(b_qc) := qc;
         }
     }
 
@@ -376,7 +379,7 @@ object local_view(id:process_index_t) = {
 
         require received_proposal_f(p, leader(round_t.prev(r_c)));
 
-        require proposal_f_t.tc(p,TC) -> qcs_in_tc_processed(TC);
+        require proposal_f_t.tc(p,TC) -> received_tc(TC) & qcs_in_tc_processed(TC);
 
         var tcp := tc_getMaxTC(proposal_f_get_tc(p));
         var qcp := timeout_get_qc(tcp);
@@ -484,6 +487,8 @@ object local_view(id:process_index_t) = {
 
     invariant r_c > 0
 
+    invariant global_view.qc_valid(locked)
+
     invariant received_proposal_n(P, N) -> proposal_n_t.valid(P)
     invariant received_proposal_f(P, N) -> global_view.proposal_f_valid(P)
     invariant received_prepare(P, N) -> prepare_t.valid(P)
@@ -510,9 +515,11 @@ object local_view(id:process_index_t) = {
     
     invariant qc_t.block(locked,B) & block_t.round(B,R) & round_t.succ(R,Rs) & B ~= block_t.genesis -> Rs < r_c
 
-    invariant processed_qc(B) -> exists QC:qc_t. global_view.qc_valid(QC) & qc_t.block(QC,B)
+    invariant processed_qc(B) -> global_view.qc_valid(qc_for_block(B)) & qc_t.block(qc_for_block(B),B)
 
     invariant commit_mode -> uncommitted(commit_mode_block)
+
+    invariant global_view.process_committed(id,B) -> processed_qc(B) & ~ uncommitted(B)
 
     invariant uncommitted(B) -> processed_qc(B)
 

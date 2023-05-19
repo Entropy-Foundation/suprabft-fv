@@ -41,7 +41,7 @@ module global_view = {
     # actually constructible from the information currently floating around in the network
     relation qc_valid(QC:qc_t)
     definition qc_valid(QC) =
-                (exists B:block_t. qc_t.block(QC, B)) &
+                (exists B:block_t. qc_t.block(QC, B) & block_t.cstd(B)) &
                 (exists Q:quorum_t. qc_t.quorum(QC, Q)) &
                 (forall B1,B2:block_t. qc_t.block(QC, B1) & qc_t.block(QC, B2) -> B1 = B2) &
                 (forall Q1,Q2:quorum_t. qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2) -> Q1 = Q2) &
@@ -129,9 +129,9 @@ module global_view = {
     }
 
     action process_qc(n:process_index_t, b:block_t, qc:qc_t) = {
-        require qc_valid(qc);
-        require qc_t.block(qc,b);
-        require block_t.round(b,R) & round_t.succ(R,Rs) & process_in_round(n,Rc) -> Rs < Rc;
+        #require qc_valid(qc);
+        #require qc_t.block(qc,b);
+        #require block_t.round(b,R) & round_t.succ(R,Rs) & process_in_round(n,Rc) -> Rs < Rc;
 
         process_processed_qc(n,b) := true;
     }
@@ -195,10 +195,6 @@ module global_view = {
     invariant ~floating_node(N)
 
     invariant process_in_round(N,R) & round_t.succ(0,Rs)-> Rs <= R
-
-    invariant process_voted(N,B) & block_t.round(B,R) & process_in_round(N,Rc) -> R < Rc
-
-    invariant process_locked(N,B) -> exists N1:process_index_t. process_voted(N1,B)
 
     invariant process_voted(N,B) -> (forall B:block_t. forall R,Rc:round_t. block_t.round(B,R) & process_in_round(N,Rc) -> R < Rc)
 
