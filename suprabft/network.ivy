@@ -5,7 +5,7 @@ include udp
 include types
 
 object msg_kind = {
-    type this = {proposal_n, proposal_f, prepare, qc, timeout, tc}
+    type this = {proposal_n, proposal_f, prepare, qc, timeout, tc, tcfpo}
 }
 
 object msg = {
@@ -17,6 +17,7 @@ object msg = {
         qc : qc_t,
         t : timeout_t,
         tc : tc_t,
+        tc_po: tc_fplusone_t,
         src : process_index_t
     }
 }
@@ -42,6 +43,7 @@ isolate shim = {
     instance qc_handler : handler(msg_kind.qc)
     instance timeout_handler : handler(msg_kind.timeout)
     instance tc_handler : handler(msg_kind.tc)
+    instance tc_fplusone_handler: handler(msg_kind.tcfpo)
 
     relation sent(M:msg, N:process_index_t)
 

@@ -7,9 +7,48 @@ include local_view
 
 isolate gv_properties_base = {
     axiom exists R:round_t. round_t.succ(0,R)
+
+    property block_t.round_exists(B) | ~ block_t.round_exists(B)
     
     instantiate global_view
-} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, every_quorum_good
+
+    property process_voted(N,B) | ~ process_voted(N,B)
+    property proposal_f_valid(P) | ~ proposal_f_valid(P)
+    property tc_valid(TC) | ~ tc_valid(TC)
+} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t
+
+isolate gv_basic_consequences = {
+
+    property block_t.parent_exists(B) | ~ block_t.parent_exists(B)
+
+    # same block cannot be received as a normal proposal by one process and as fallback proposal by another/same process
+    invariant gv_properties_base.process_received_normal_proposal(Nn,Pn) & gv_properties_base.process_received_fallback_proposal(Nf,Pf) & proposal_n_t.block(Pn,Bn) & proposal_f_t.block(Pf,Bf) -> Bn ~= Bf
+
+    ### invariants related to process_voted_normal
+    invariant gv_properties_base.process_voted_normal(N,B) & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> (B = block_t.genesis | round_t.succ(Rp,R)) & gv_properties_base.process_locked_marker(N,Rp)
+
+    invariant gv_properties_base.process_locked_marker(N,R) & gv_properties_base.process_voted_normal(N,Br) & block_t.round(Br,Rr) & R < Rr & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) -> R <= Rp
+
+    ### invariants related to process_voted_fallback
+    invariant gv_properties_base.process_voted_fallback(N,Bv,Q) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
+    
+    ### invariants related to process_voted
+    ### invariants related to process_locked
+
+    invariant gv_properties_base.process_locked(N,QC1) & gv_properties_base.process_locked(N,QC2) -> QC1 = QC2
+
+    ### invriants related to process_processed_qc
+
+
+    ### invariants related to process_sent_timeout
+    invariant gv_properties_base.process_sent_timeout(N,Rt,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & is_good(N) -> Rq < Rt
+
+    invariant gv_properties_base.process_sent_timeout(N,R,QC1) & gv_properties_base.process_sent_timeout(N,R,QC2) -> QC1 = QC2
+
+    invariant gv_properties_base.process_sent_timeout(N,R,QC) & is_good(N) -> (forall B:block_t. block_t.round(B,R) -> ~ gv_properties_base.process_locked(N,B))
+
+    attribute macro_finder=false
+} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, gv_properties_base
 
 isolate genesis_starts_the_chain = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
@@ -22,4 +61,5 @@ isolate lv_properties_base = {
 
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
-} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, gv_properties_base
+    invariant round_t.succ(R1,R2) | ~ round_t.succ(R1,R2)
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, shim, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, gv_properties_base

@@ -118,7 +118,9 @@ isolate block_t = {
     invariant ancestor(B, A) -> cstd(B) & cstd(A)
     invariant height(B, H) -> cstd(B)
 
-    invariant cstd(B) -> exists R:round_t. round(B, R)
+    relation round_exists(B:block_t)
+    definition round_exists(B) = exists R:round_t. round(B, R)
+    invariant cstd(B) -> round_exists(B)
     relation parent_exists(B:block_t)
     definition parent_exists(B) = exists P:block_t. parent(B, P)
     invariant cstd(B) -> parent_exists(B)
@@ -160,20 +162,20 @@ isolate parent_same_implications_height = {
 isolate proposal_n_t = {
     type this
 
-    relation valid(P:proposal_n_t)
+    relation cstd(P:proposal_n_t)
 
     relation block(P:proposal_n_t, B:block_t)
 
     individual genesis : proposal_n_t
 
     after init {
-        valid(P) := P = genesis;
+        cstd(P) := P = genesis;
 
         block(P, B) := P = genesis & B = block_t.genesis;
     }
 
     export action get_block(p:proposal_n_t) returns (b:block_t) = {
-        require valid(p);
+        require cstd(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
@@ -184,7 +186,7 @@ isolate proposal_n_t = {
 
     export action proposal_n(b:block_t) returns (p:proposal_n_t) = {
         require block_t.cstd(b);
-        assume ~valid(p);
+        assume ~cstd(p);
 
         if some p_old:proposal_n_t. block(p_old, b) {
             p := p_old;
@@ -192,15 +194,15 @@ isolate proposal_n_t = {
             block(P, B) := block(P, B) | (P = p & B = b);
         }
 
-        valid(P) := valid(P) | P = p;
+        cstd(P) := cstd(P) | P = p;
     }
 
-    invariant valid(genesis)
+    invariant cstd(genesis)
     invariant block(genesis, B) <-> B = block_t.genesis
 
-    invariant block(P, B) -> valid(P) & block_t.cstd(B)
+    invariant block(P, B) -> cstd(P) & block_t.cstd(B)
 
-    invariant valid(P) -> exists B:block_t. block(P, B)
+    invariant cstd(P) -> exists B:block_t. block(P, B)
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
@@ -209,20 +211,20 @@ isolate proposal_n_t = {
 isolate prepare_t = {
     type this
 
-    relation valid(P:prepare_t)
+    relation cstd(P:prepare_t)
 
     relation block(P:prepare_t, B:block_t)
 
     individual genesis : prepare_t
 
     after init {
-        valid(P) := P = genesis;
+        cstd(P) := P = genesis;
 
         block(P, B) := P = genesis & B = block_t.genesis;
     }
 
     export action get_block(p:prepare_t) returns (b:block_t) = {
-        require valid(p);
+        require cstd(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
@@ -233,7 +235,7 @@ isolate prepare_t = {
 
     export action prepare(b:block_t) returns (p:prepare_t) = {
         require block_t.cstd(b);
-        assume ~valid(p);
+        assume ~cstd(p);
 
         if some p_old:prepare_t. block(p_old, b) {
             p := p_old;
@@ -241,15 +243,15 @@ isolate prepare_t = {
             block(P, B) := block(P, B) | (P = p & B = b);
         }
 
-        valid(P) := valid(P) | P = p;
+        cstd(P) := cstd(P) | P = p;
     }
 
-    invariant valid(genesis)
+    invariant cstd(genesis)
     invariant block(genesis, B) <-> B = block_t.genesis
 
-    invariant block(P, B) -> valid(P) & block_t.cstd(B)
+    invariant block(P, B) -> cstd(P) & block_t.cstd(B)
 
-    invariant valid(P) -> exists B:block_t. block(P, B)
+    invariant cstd(P) -> exists B:block_t. block(P, B)
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2

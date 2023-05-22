@@ -7,11 +7,17 @@ module global_view = {
     #process N is currently in round R
     relation process_in_round(N:process_index_t, R:round_t)
 
+    #process N received the normal proposal P
+    relation process_received_normal_proposal(N:process_index_t, P:proposal_n_t)
+
+    #process N received the fallback proposal P
+    relation process_received_fallback_proposal(N:process_index_t, P:proposal_f_t)
+
     #process N has sent a prepare message for block B received via a normal proposal
     relation process_voted_normal(N:process_index_t, B:block_t)
 
-    #process N has sent a prepare message for block B received via a fallback proposal
-    relation process_voted_fallback(N:process_index_t, B:block_t)
+    #process N has sent a prepare message for block B received via a fallback proposal with a TC based on the quorum Q of timeout messages
+    relation process_voted_fallback(N:process_index_t, B:block_t, Q:quorum_t)
 
     #process N has sent a prepare message for block B either via normal or fallback voting
     relation process_voted(N:process_index_t, B:block_t)
@@ -19,8 +25,8 @@ module global_view = {
     #process N has locked QC for block B
     relation process_locked(N:process_index_t, B:block_t)
 
-    #process N has locked QC for B when it is in B.r+1 and before sending Tr, so this is a candidate for GC
-    relation process_locked_gc_candidate(N:process_index_t, B:block_t)
+    #process N has locked QC for round R, so any subsequent locks will be for higher rounds
+    relation process_locked_marker(N:process_index_t, R:round_t)
 
     #process N has processed a QC for block B
     relation process_processed_qc(N:process_index_t, B:block_t)
@@ -34,7 +40,7 @@ module global_view = {
     #process N has processed TC
     relation process_processed_tc(N:process_index_t, TC:tc_t)
 
-    definition process_voted(N,B) = process_voted_normal(N,B) | process_voted_fallback(N,B)
+    definition process_voted(N,B) = process_voted_normal(N,B) | exists Q:quorum_t. process_voted_fallback(N,B,Q)
 
     # In the real world, we would assess the validity of certificates using signatures. For the IVy model,
     # we use the fact that the global view has access to this information and can tell us whether the QC is
@@ -47,8 +53,12 @@ module global_view = {
                 (forall Q1,Q2:quorum_t. qc_t.quorum(QC, Q1) & qc_t.quorum(QC, Q2) -> Q1 = Q2) &
                 (forall Q:quorum_t,N:process_index_t,B:block_t. qc_t.quorum(QC, Q) & quorum_t.member(Q, N) & qc_t.block(QC, B) -> process_voted(N, B))
 
+    relation timeout_round_exists(T:timeout_t)
+    definition timeout_round_exists(T) = exists R:round_t. timeout_t.round(T,R)
+    relation timeout_qc_exists(T:timeout_t)
+    definition timeout_qc_exists(T) = exists QC:qc_t. timeout_t.qc(T,QC) & qc_valid(QC)
     relation timeout_valid(T:timeout_t)
-    definition timeout_valid(T) = timeout_t.was_constructed(T) &
+    definition timeout_valid(T) = timeout_t.was_constructed(T) & timeout_round_exists(T) & timeout_qc_exists(T) &
                 (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
                 & (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
 
@@ -59,6 +69,7 @@ module global_view = {
     definition tc_fplusone_valid(TC) =
                 (exists R:round_t. tc_fplusone_t.round(TC, R)) &
                 (exists Q:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q)) &
+                (exists T:timeout_t. tc_fplusone_t.timeout(TC,T)) &
                 (forall R1,R2:round_t. tc_fplusone_t.round(TC, R1) & tc_fplusone_t.round(TC, R2) -> R1 = R2) &
                 (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC, Q1) & tc_fplusone_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_fplusone_t.timeout(TC, T) -> timeout_valid(T)) &
@@ -73,6 +84,7 @@ module global_view = {
     definition tc_valid(TC) =
                 (exists R:round_t. tc_t.round(TC, R)) &
                 (exists Q:quorum_t. tc_t.quorum(TC, Q)) &
+                (exists T:timeout_t. tc_t.timeout(TC,T)) &
                 (forall R1,R2:round_t. tc_t.round(TC, R1) & tc_t.round(TC, R2) -> R1 = R2) &
                 (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
@@ -81,57 +93,80 @@ module global_view = {
                         exists QC:qc_t. qc_round_in_tc(QC,R,TC) & process_sent_timeout(N, R, QC)))
 
     relation proposal_f_valid(P:proposal_f_t)
-    definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) &
-                (forall TC:tc_t. proposal_f_t.tc(P, TC) -> tc_valid(TC))
+    definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) & (forall TC:tc_t. proposal_f_t.tc(P, TC) -> tc_valid(TC)) &
+                (forall TC:tc_t. forall Rt,R:round_t. forall B:block_t. proposal_f_t.tc(P, TC) & proposal_f_t.block(P,B) & block_t.round(B,R) & tc_t.round(TC,Rt) -> round_t.succ(Rt,R)) &
+                (forall Br,Bp:block_t, Rr,Rp,Rs:round_t. proposal_f_t.block(P,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rs) -> Rs < Rr)
+
+    relation proposal_n_valid(P:proposal_n_t)
+    definition proposal_n_valid(P) = proposal_n_t.cstd(P) &
+                            (forall Br,Bp:block_t. forall Rr,Rp:round_t. proposal_n_t.block(P,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) -> round_t.succ(Rp,Rr))
 
     relation quorum_of_votes(B:block_t)
     definition quorum_of_votes(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> process_voted(N,B)
 
+    relation no_timeout_for_block_round(N:process_index_t, B:block_t)
+    definition no_timeout_for_block_round(N,B) = forall R:round_t. block_t.round(B,R) -> forall QC:qc_t. ~process_sent_timeout(N,R,QC)
+
     after init {
         process_in_round(N,R) := round_t.succ(0,R);
+        process_received_normal_proposal(N,P) := false;
+        process_received_fallback_proposal(N,P) := false;
         process_voted_normal(N, B) := B = block_t.genesis;
-        process_voted_fallback(N, B) := false;
+        process_voted_fallback(N, B, Q) := false;
         process_processed_qc(N,B) := B = block_t.genesis;
         process_locked(N, B) := B = block_t.genesis;
-        process_locked_gc_candidate(N,B) := B = block_t.genesis;
+        process_locked_marker(N,R) := R = 0;
         process_committed(N, B) := false;
         process_sent_timeout(N, R, QC) := false;
         process_processed_tc(N,TC) := false;
     }
 
-    action enter_round(n:process_index_t,r:round_t) = {
-        require process_in_round(n,R) -> R < r;
+    action enter_round(n:process_index_t,r:round_t,b:block_t,tc:tc_t) = {
+        require process_in_round(n,Rc) -> Rc < r;
 
-        require (exists B:block_t. exists Rb,Rs:round_t. process_processed_qc(n,B) & block_t.round(B,Rb) & round_t.succ(Rb,Rs) & round_t.succ(Rs,r)) | (exists TC:tc_t. exists Rt,Rs:round_t. process_processed_tc(n,TC) & tc_t.round(TC,Rt) & round_t.succ(Rt,Rs) & round_t.succ(Rs,r));
+        require (process_processed_qc(n,b) & (forall Rb,Rs:round_t. block_t.round(b,Rb) & round_t.succ(Rb,Rs) -> round_t.succ(Rs,r))) | (process_processed_tc(n,tc) & (forall Rt,Rs:round_t. tc_t.round(tc,Rt) & round_t.succ(Rt,Rs) -> round_t.succ(Rs,r)));
 
-        process_in_round(n,R) := R = r;
+        process_in_round(n,R) := false;
+        process_in_round(n,r) := true;
     }
 
-    action vote_normal(n:process_index_t, b:block_t) = {
-        require block_t.cstd(b);
-        require ~is_good(n) | forall Rb,Rc:round_t. block_t.round(b, Rb) & process_in_round(n,Rc) -> round_t.succ(Rb,Rc);
-        require forall Bp:block_t. block_t.parent(b,Bp) & block_t.round(Bp,Rp) & block_t.round(b,Rb)-> process_locked(n,Bp) & round_t.succ(Rp,Rb);
-        require forall Rt,Rb:round_t. forall QC:qc_t. process_sent_timeout(n,Rt,QC) & block_t.round(b,Rb) -> Rt < Rb;
-        require forall Bvn:block_t. forall Rvn:round_t. process_voted_normal(n,Bvn) & block_t.round(Bvn,Rvn) & block_t.round(b,Rb)-> Rvn < Rb;
-        require block_t.parent(b,Bp) -> process_locked_gc_candidate(n,Bp);
+    action receive_normal_proposal(n:process_index_t, p:proposal_n_t) = {
+        require proposal_n_valid(p);
 
-        process_voted_normal(n, b) := true;
+        process_received_normal_proposal(n,p) := true;
     }
 
-    action vote_fallback(n:process_index_t, b:block_t, t:timeout_t) = {
-        require block_t.cstd(b);
-        require timeout_valid(t);
-        require block_t.round(b,Rb) & timeout_t.round(t,Rt)-> round_t.succ(Rt,Rb);
-        require timeout_t.qc(t,QC) & qc_t.block(QC,Bq) -> block_t.parent(b,Bq);
-        require timeout_t.qc(t,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & timeout_t.round(t,Rt) -> Rq < Rt;
+    action receive_fallback_proposal(n:process_index_t, p:proposal_f_t) = {
+        require proposal_f_valid(p);
 
-        process_voted_fallback(n, b) := true;
+        process_received_fallback_proposal(n,p) := true;
+    }
+
+    action vote_normal(n:process_index_t, p:proposal_n_t) = {
+        require process_received_normal_proposal(n,p);
+        require ~is_good(n) | (forall B:block_t. forall Rb,Rc:round_t. proposal_n_t.block(p,B) & block_t.round(B,Rb) & process_in_round(n,Rc) -> round_t.succ(Rb,Rc));
+        require ~is_good(n) | forall B,Bp:block_t. proposal_n_t.block(p,B) & block_t.parent(B,Bp) -> process_locked(n,Bp) & no_timeout_for_block_round(n,Bb);
+        require ~is_good(n) | forall B,Bvn:block_t. forall Rvn:round_t. process_voted_normal(n,Bvn) & block_t.round(Bvn,Rvn) & proposal_n_t.block(p,B) & block_t.round(B,Rb)-> Rvn < Rb;
+
+        process_voted_normal(n, B) := process_voted_normal(n, B) | proposal_n_t.block(p,B);
+
+        process_locked_marker(n,R) := process_locked_marker(n,R) | (forall B,Bp:block_t. proposal_n_t.block(p,B) & block_t.parent(B,Bp) -> block_t.round(Bp,R));
+    }
+
+    action vote_fallback(n:process_index_t, p:proposal_f_t, q:quorum_t) = {
+        require proposal_f_valid(p);
+        require proposal_f_t.block(p,B) & block_t.round(B,Rb) & process_in_round(n,Rc) -> round_t.succ(Rb,Rc);
+        require proposal_f_t.tc(p,TC) -> tc_t.quorum(TC,q);
+        require proposal_f_t.block(p,B) & proposal_f_t.tc(p,TC) & block_t.round(B,Rb) & tc_t.round(TC,Rt) -> round_t.succ(Rt,Rb);
+        require proposal_f_t.block(p,Br) & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) & proposal_f_t.tc(p,TC) & tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rq <= Rp;
+
+        process_voted_fallback(n, B, q) := process_voted_fallback(n,B,q) | proposal_f_t.block(p,B);
     }
 
     action process_qc(n:process_index_t, b:block_t, qc:qc_t) = {
-        #require qc_valid(qc);
-        #require qc_t.block(qc,b);
-        #require block_t.round(b,R) & round_t.succ(R,Rs) & process_in_round(n,Rc) -> Rs < Rc;
+        require qc_valid(qc);
+        require qc_t.block(qc,b);
+        require block_t.round(b,R) & round_t.succ(R,Rs) & process_in_round(n,Rc) -> Rs < Rc;
 
         process_processed_qc(n,b) := true;
     }
@@ -143,12 +178,10 @@ module global_view = {
         require process_processed_qc(n,b);
         require forall B:block_t. forall R1,R2:round_t. process_locked(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
         require forall Rc,Rq,Rs:round_t. process_in_round(n,Rc) & block_t.round(b,Rq) & round_t.succ(Rq,Rs)-> Rc <= Rs;
-        require forall Rq:round_t. forall QC:qc_t. block_t.round(b,Rq) -> ~ process_sent_timeout(N,Rq,QC);
+        require forall Rq:round_t. block_t.round(b,Rq) -> (forall QC:qc_t. ~ process_sent_timeout(N,Rq,QC));
 
-        process_locked(n, B) := B=b;
-        if forall R,Rs:round_t. forall QC:qc_t. block_t.round(b,R) & round_t.succ(R,Rs) -> process_in_round(n,Rs) & ~ process_sent_timeout(n, R, QC) {
-            process_locked_gc_candidate(n,b) := true;
-        }
+        process_locked(n, B) := false;
+        process_locked(n,b) := true;
     }
 
     action commit(n:process_index_t, b:block_t) = {
@@ -163,8 +196,9 @@ module global_view = {
 
     action timeout(n:process_index_t, r:round_t, locked:qc_t) = {
         require qc_valid(locked);
-        require qc_t.block(locked,B) & block_t.round(B,R) -> process_locked(n,B) & R < r;
-        require round_t.succ(r,Rs) & process_in_round(n,Rc) -> Rc <= Rs;
+        require qc_t.block(locked,B) & block_t.round(B,R) & is_good(n) -> process_locked(n,B) & R < r;
+        require round_t.succ(r,Rs) & process_in_round(n,Rc) & is_good(n) -> Rc <= Rs;
+        require ~process_sent_timeout(n,r,QC);
         
         process_sent_timeout(n, r, locked) := true;
     }
@@ -175,38 +209,57 @@ module global_view = {
         process_processed_tc(n,tc) := true;
     }
 
+    invariant process_in_round(N,R) -> 0 < R
+
+    invariant tc_valid(TC) & tc_t.round(TC,R) -> 0 < R
+
+    invariant tc_fplusone_valid(TC) & tc_fplusone_t.round(TC,R) -> 0 < R
+
+    invariant process_sent_timeout(N,R,QC) & is_good(N) -> 0 < R
+
+    invariant gv_properties_base.process_in_round(N,R1) & gv_properties_base.process_in_round(N,R2) -> R1 = R2
+
+    relation floating_node(N:process_index_t)
+    definition floating_node(N) = forall R:round_t. ~ process_in_round(N,R)
+
+    invariant ~ floating_node(N)
+
     invariant qc_valid(qc_t.genesis)
 
     invariant process_voted(N, block_t.genesis)
-    invariant process_locked_gc_candidate(N, block_t.genesis)
     invariant process_voted(N, B) -> block_t.cstd(B)
     invariant process_processed_qc(N,B) -> block_t.cstd(B)
     invariant process_locked(N, B) -> block_t.cstd(B)
     invariant process_committed(N, B) -> block_t.cstd(B)
     invariant process_sent_timeout(N, R, QC) -> qc_valid(QC)
-    invariant process_processed_tc(N,TC) -> tc_valid(TC)
+    #invariant process_processed_tc(N,TC) -> tc_valid(TC)
 
-    invariant process_locked(N,QC1) & process_locked(N,QC2) -> QC1 = QC2
-    invariant process_in_round(N,R1) & process_in_round(N,R2) -> R1 = R2
+    invariant (process_voted_normal(N,B) | process_voted_fallback(N,B,Q)) & block_t.round(B,R) & gv_properties_base.process_in_round(N,Rc) -> R < Rc
 
-    relation floating_node(N:process_index_t)
-    definition floating_node(N) = forall R:round_t. ~process_in_round(N,R)
-
-    invariant ~floating_node(N)
-
-    invariant process_in_round(N,R) & round_t.succ(0,Rs)-> Rs <= R
-
-    invariant process_voted(N,B) -> (forall B:block_t. forall R,Rc:round_t. block_t.round(B,R) & process_in_round(N,Rc) -> R < Rc)
+    
+    invariant process_processed_qc(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(R,Rs) & process_in_round(N,Rc) -> Rs < Rc
 
     invariant process_locked(N,B) & block_t.round(B,R) & process_in_round(N,Rc) & round_t.succ(R,Rs) & B ~= block_t.genesis-> Rs < Rc
 
-    invariant process_sent_timeout(N,Rt,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) -> Rq < Rt
+    isolate always_locked = {
+        invariant exists B:block_t. process_locked(N,B)
+    } with gv_properties_base, block_t, proposal_n_t, timeout_t, proposal_f_t
+    
+    invariant process_locked_marker(N,R) & process_locked(N,B) & block_t.round(B,Rb) -> R <= Rb
 
-    invariant process_voted_fallback(N,Bv) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
+    invariant process_voted_fallback(N,B,Q) & block_t.round(B,Rv) & round_t.succ(Rm,Rv) & quorum_t.member(Q,N1) -> exists QC:qc_t. process_sent_timeout(N1,Rm,QC)
 
-    invariant process_locked(N,B) & block_t.round(B,R) & process_in_round(N,Rc) & (forall QC:qc_t. ~ process_sent_timeout(N,R,QC)) & round_t.succ(R,Rs) & Rs <= Rc -> process_locked_gc_candidate(N,B)
+    invariant process_voted_fallback(N,B,Q) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & block_t.round(B,Rv) & round_t.succ(Rm,Rv) & quorum_t.member(Q,N1) & process_sent_timeout(N1,Rm,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rq <= Rp
 
-    invariant process_processed_qc(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(R,Rs) & process_in_round(N,Rc) -> Rs < Rc
+    invariant is_good(N) & process_locked_marker(N,R) & process_sent_timeout(N,Rt,QC) & R < Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> R <= Rq
 
-    invariant process_sent_timeout(N,R,QC) & block_t.round(B,R) -> ~process_locked(N,B)
+    ###### invariants related to process_received_normal_proposal
+    invariant process_received_normal_proposal(N,P) -> proposal_n_valid(P)
+
+    ###### invariants related to process_received_fallback_proposal
+
+    isolate proposal_f_validity = {
+        invariant process_received_fallback_proposal(N,P) -> proposal_f_valid(P)
+    } with gv_properties_base, block_t, proposal_n_t, timeout_t, proposal_f_t
+    
 }
