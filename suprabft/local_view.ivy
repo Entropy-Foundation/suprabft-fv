@@ -234,7 +234,7 @@ object local_view(id:process_index_t) = {
     }
 
     action tryCommit(b:block_t) = {
-        if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & (forall R1,R2:round_t. block_t.round(bp, R1) & block_t.round(b, R2) -> round_t.succ(R1, R2)) {
+        if some bp:block_t. block_t.parent(b, bp) & uncommitted(bp) & global_view.successive_blocks(bp,b) {
             commit_mode_block := bp;
 
             if (commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(commit_mode_block, B) & block_t.ancestor(B, last_committed) ->
@@ -242,8 +242,7 @@ object local_view(id:process_index_t) = {
                         commit_mode := true;
             }
         }
-        else if some bc:block_t. block_t.parent(bc, b) & uncommitted(bc) & (forall R1,R2:round_t. block_t.round(bc, R1) & block_t.round(b, R2) ->
-                round_t.succ(R2, R1)) {
+        else if some bc:block_t. block_t.parent(bc, b) & uncommitted(bc) & global_view.successive_blocks(b,bc) {
             commit_mode_block := b;
 
             # the code is duplicated here rather than outside these blocks to avoid using an uninitialised commit_mode_block
@@ -493,7 +492,7 @@ object local_view(id:process_index_t) = {
             if m.kind = msg_kind.qc & global_view.qc_valid(m.qc) {
                 call shim.send(id, dst, m);
             }
-            if m.kind = msg_kind.timeout & global_view.qc_valid(timeout_get_qc(m.t)) {
+            if m.kind = msg_kind.timeout & global_view.timeout_valid(m.t) {
                 call shim.send(id, dst, m);
                 call global_view.timeout(m.src,timeout_t.get_round(m.t),timeout_get_qc(m.t));
             }
