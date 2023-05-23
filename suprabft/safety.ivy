@@ -5,7 +5,7 @@ include network
 include global_view
 include local_view
 
-isolate gv_properties_base = {
+isolate global_view_instance = {
     axiom exists R:round_t. round_t.succ(0,R)
 
     property block_t.round_exists(B) | ~ block_t.round_exists(B)
@@ -18,20 +18,229 @@ isolate gv_properties_base = {
     property block_t.parent_exists(B) | ~ block_t.parent_exists(B)
 } with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t
 
+isolate gv_action_requires = {
+    before global_view_instance.enter_round(n:process_index_t,r:round_t,b:block_t,tc:tc_t) {
+        require global_view_instance.process_in_round(n,Rc) -> Rc < r;
+
+        require (global_view_instance.process_processed_qc(n,b) & (forall Rb,Rs:round_t. block_t.round(b,Rb) & round_t.succ(Rb,Rs) -> round_t.succ(Rs,r))) | (global_view_instance.process_processed_tc(n,tc) & (forall Rt,Rs:round_t. tc_t.round(tc,Rt) & round_t.succ(Rt,Rs) -> round_t.succ(Rs,r)));
+
+    }
+
+    before global_view_instance.receive_normal_proposal(n:process_index_t, p:proposal_n_t) {
+        require global_view_instance.proposal_n_valid(p);
+
+    }
+
+    before global_view_instance.receive_fallback_proposal(n:process_index_t, p:proposal_f_t) {
+
+        require global_view_instance.proposal_f_valid(p);
+    }
+
+    before global_view_instance.vote_normal(n:process_index_t, p:proposal_n_t) {
+        require global_view_instance.process_received_normal_proposal(n,p);
+        require ~is_good(n) | (forall B:block_t. forall Rb,Rc:round_t. proposal_n_t.block(p,B) & block_t.round(B,Rb) & global_view_instance.process_in_round(n,Rc) -> round_t.succ(Rb,Rc));
+        require ~is_good(n) | forall B,Bp:block_t. proposal_n_t.block(p,B) & block_t.parent(B,Bp) -> global_view_instance.process_locked(n,Bp) & global_view_instance.no_timeout_for_block_round(n,Bp);
+        require ~is_good(n) | forall B,Bvn:block_t. forall Rvn:round_t. global_view_instance.process_voted_normal(n,Bvn) & block_t.round(Bvn,Rvn) & proposal_n_t.block(p,B) & block_t.round(B,Rb)-> Rvn < Rb;
+
+    }
+
+    before global_view_instance.vote_fallback(n:process_index_t, p:proposal_f_t, q:quorum_t) {
+        require global_view_instance.proposal_f_valid(p);
+        require proposal_f_t.block(p,B) & block_t.round(B,Rb) & global_view_instance.process_in_round(n,Rc) -> round_t.succ(Rb,Rc);
+        require proposal_f_t.tc(p,TC) -> tc_t.quorum(TC,q);
+        require proposal_f_t.block(p,B) & proposal_f_t.tc(p,TC) & block_t.round(B,Rb) & tc_t.round(TC,Rt) -> round_t.succ(Rt,Rb);
+        require proposal_f_t.block(p,Br) & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) & proposal_f_t.tc(p,TC) & tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rq <= Rp;
+
+    }
+
+    before global_view_instance.process_qc(n:process_index_t, b:block_t, qc:qc_t) {
+        require global_view_instance.qc_valid(qc);
+        require qc_t.block(qc,b);
+        require block_t.round(b,R) & round_t.succ(R,Rs) & global_view_instance.process_in_round(n,Rc) -> Rs < Rc;
+
+    }
+
+    before global_view_instance.lock(n:process_index_t, b:block_t, qc:qc_t) {
+        require block_t.cstd(b);
+        require global_view_instance.qc_valid(qc);
+        require qc_t.block(qc, b);
+        require global_view_instance.process_processed_qc(n,b);
+        require forall B:block_t. forall R1,R2:round_t. global_view_instance.process_locked(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
+        require forall Rc,Rq,Rs:round_t. global_view_instance.process_in_round(n,Rc) & block_t.round(b,Rq) & round_t.succ(Rq,Rs)-> Rc <= Rs;
+        require forall Rq:round_t. block_t.round(b,Rq) -> (forall QC:qc_t. ~ global_view_instance.process_sent_timeout(N,Rq,QC));
+
+    }
+
+    before global_view_instance.commit(n:process_index_t, b:block_t) {
+        require block_t.cstd(b);
+        require exists QC:qc_t. global_view_instance.qc_valid(QC) & qc_t.block(QC, b);
+        require b ~= block_t.genesis -> forall PB:block_t. block_t.parent(b, PB) -> global_view_instance.process_committed(n, PB);
+        require forall B:block_t. forall R1,R2:round_t. global_view_instance.process_committed(n, B) & block_t.round(B, R1) & block_t.round(b, R2) -> R1 < R2;
+        require forall B:block_t. forall H1,H2:height_t. global_view_instance.process_committed(n, B) & block_t.height(B, H1) & block_t.height(b, H2) -> H1 < H2;
+
+    }
+
+    before global_view_instance.timeout(n:process_index_t, r:round_t, locked:qc_t) {
+        require global_view_instance.qc_valid(locked);
+        require qc_t.block(locked,B) & block_t.round(B,R) -> global_view_instance.process_locked(n,B) & R < r;
+        require round_t.succ(r,Rs) & global_view_instance.process_in_round(n,Rc) & is_good(n) -> Rc <= Rs;
+        require ~global_view_instance.process_sent_timeout(n,r,QC);
+
+    }
+
+    before global_view_instance.processed_tc(n:process_index_t, tc:tc_t) {
+        require global_view_instance.tc_valid(tc);
+
+    }
+} with global_view_instance, block_t, proposal_n_t, timeout_t, proposal_f_t
+
+isolate gv_action_ensures = {
+    after global_view_instance.enter_round(n:process_index_t,r:round_t,b:block_t,tc:tc_t) {
+
+        global_view_instance.process_in_round(n,R) := false;
+        global_view_instance.process_in_round(n,r) := true;
+
+    }
+
+    after global_view_instance.receive_normal_proposal(n:process_index_t, p:proposal_n_t) {
+
+        global_view_instance.process_received_normal_proposal(n,p) := true;
+
+    }
+
+    after global_view_instance.receive_fallback_proposal(n:process_index_t, p:proposal_f_t) {
+
+        global_view_instance.process_received_fallback_proposal(n,p) := true;
+
+    }
+
+    after global_view_instance.vote_normal(n:process_index_t, p:proposal_n_t) {
+
+        global_view_instance.process_voted_normal(n, B) := global_view_instance.process_voted_normal(n, B) | proposal_n_t.block(p,B);
+
+        global_view_instance.process_locked_marker(n,R) := global_view_instance.process_locked_marker(n,R) | (forall B,Bp:block_t. proposal_n_t.block(p,B) & block_t.parent(B,Bp) -> block_t.round(Bp,R));
+
+    }
+
+    after global_view_instance.vote_fallback(n:process_index_t, p:proposal_f_t, q:quorum_t) {
+
+        global_view_instance.process_voted_fallback(n, B, q) := global_view_instance.process_voted_fallback(n,B,q) | proposal_f_t.block(p,B);
+
+    }
+
+    after global_view_instance.process_qc(n:process_index_t, b:block_t, qc:qc_t) {
+
+        global_view_instance.process_processed_qc(n,b) := true;
+
+    }
+
+    after global_view_instance.lock(n:process_index_t, b:block_t, qc:qc_t) {
+
+        global_view_instance.process_locked(n, B) := false;
+        global_view_instance.process_locked(n,b) := true;
+
+    }
+
+    after global_view_instance.commit(n:process_index_t, b:block_t) {
+
+        global_view_instance.process_committed(n, b) := true;
+
+    }
+
+    after global_view_instance.timeout(n:process_index_t, r:round_t, locked:qc_t) {
+        
+        global_view_instance.process_sent_timeout(n, r, locked) := true;
+        
+    }
+
+    after global_view_instance.processed_tc(n:process_index_t, tc:tc_t) {
+
+        global_view_instance.process_processed_tc(n,tc) := true;
+
+    }
+} with global_view_instance, block_t, proposal_n_t, timeout_t, proposal_f_t
+
 isolate gv_basic_consequences = {
 
     property block_t.parent_exists(B) | ~ block_t.parent_exists(B)
 
+    invariant global_view_instance.process_in_round(N,R) -> 0 < R
+
+    invariant global_view_instance.tc_valid(TC) & tc_t.round(TC,R) -> 0 < R
+
+    invariant global_view_instance.tc_fplusone_valid(TC) & tc_fplusone_t.round(TC,R) -> 0 < R
+
+    invariant global_view_instance.process_sent_timeout(N,R,QC) & is_good(N) -> 0 < R
+
+    invariant global_view_instance.process_in_round(N,R1) & global_view_instance.process_in_round(N,R2) -> R1 = R2
+
+    relation floating_node(N:process_index_t)
+    definition floating_node(N) = forall R:round_t. ~ global_view_instance.process_in_round(N,R)
+
+    invariant ~ floating_node(N)
+
+    invariant global_view_instance.qc_valid(qc_t.genesis)
+
+    invariant global_view_instance.process_voted(N, block_t.genesis)
+    invariant global_view_instance.process_voted(N, B) -> block_t.cstd(B)
+    invariant global_view_instance.process_processed_qc(N,B) -> block_t.cstd(B)
+    invariant global_view_instance.process_locked(N, B) -> block_t.cstd(B)
+    invariant global_view_instance.process_committed(N, B) -> block_t.cstd(B)
+    invariant global_view_instance.process_sent_timeout(N, R, QC) -> global_view_instance.qc_valid(QC)
+    
+    isolate processed_tc_valid = {
+        invariant global_view_instance.process_processed_tc(N,TC) -> global_view_instance.tc_valid(TC)
+    } with global_view_instance, block_t, proposal_n_t, timeout_t, proposal_f_t
+    
+    relation round_max_for_tc(TC:tc_t, R:round_t)
+
+    definition round_max_for_tc(TC, R) = forall T:timeout_t. forall QC:qc_t. forall B:block_t. forall Rq:round_t. tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) -> Rq <= R
+
+    relation round_max_for_timeout_quorum(Q:quorum_t, Rt:round_t, R:round_t)
+    
+    definition round_max_for_timeout_quorum(Q,Rt,R) = forall N:process_index_t. forall QC:qc_t. forall Bq:block_t. forall Rq:round_t. quorum_t.member(Q,N) & global_view_instance.process_sent_timeout(N,Rt,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rq <= R
+    
+    invariant forall TC:tc_t. forall Rt,Rp:round_t. global_view_instance.quorum_is_subset(TC) & tc_t.round(TC,Rt) & round_max_for_tc(TC,Rp) -> (forall Q:quorum_t. tc_t.quorum(TC,Q) -> round_max_for_timeout_quorum(Q,Rt,Rp))
+
+    invariant is_good(N) & (global_view_instance.process_voted_normal(N,B) | global_view_instance.process_voted_fallback(N,B,Q)) & block_t.round(B,R) & global_view_instance.process_in_round(N,Rc)-> R < Rc
+
+    invariant global_view_instance.process_processed_qc(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(R,Rs) & global_view_instance.process_in_round(N,Rc) -> Rs < Rc
+
+    invariant global_view_instance.process_locked(N,B) & block_t.round(B,R) & global_view_instance.process_in_round(N,Rc) & round_t.succ(R,Rs) & B ~= block_t.genesis-> Rs < Rc
+
+    invariant global_view_instance.process_locked(N,QC1) & global_view_instance.process_locked(N,QC2) -> QC1 = QC2
+
+    isolate always_locked = {
+        invariant exists B:block_t. global_view_instance.process_locked(N,B)
+    } with global_view_instance, block_t, proposal_n_t, timeout_t, proposal_f_t
+    
+    invariant is_good(N) & global_view_instance.process_locked_marker(N,R) & global_view_instance.process_locked(N,B) & block_t.round(B,Rb) -> R <= Rb
+
+    invariant global_view_instance.process_voted_fallback(N,B,Q) & block_t.round(B,Rv) & round_t.succ(Rm,Rv) & quorum_t.member(Q,N1) -> exists QC:qc_t. global_view_instance.process_sent_timeout(N1,Rm,QC)
+
+    invariant global_view_instance.process_voted_fallback(N,B,Q) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & block_t.round(B,Rv) & round_t.succ(Rm,Rv) & quorum_t.member(Q,N1) & global_view_instance.process_sent_timeout(N1,Rm,QC) & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rq <= Rp
+
+    ###### invariants related to process_received_normal_proposal
+    invariant global_view_instance.process_received_normal_proposal(N,P) -> global_view_instance.proposal_n_valid(P)
+
+    ###### invariants related to process_received_fallback_proposal
+
+    isolate proposal_f_validity = {
+        invariant global_view_instance.process_received_fallback_proposal(N,P) -> global_view_instance.proposal_f_valid(P)
+    } with global_view_instance, block_t, proposal_n_t, timeout_t, proposal_f_t
+    
+    invariant global_view_instance.process_sent_timeout(N,Rt,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) -> Rq < Rt
+
     # same block cannot be received as a normal proposal by one process and as fallback proposal by another/same process
-    invariant gv_properties_base.process_received_normal_proposal(Nn,Pn) & gv_properties_base.process_received_fallback_proposal(Nf,Pf) & proposal_n_t.block(Pn,Bn) & proposal_f_t.block(Pf,Bf) -> Bn ~= Bf
+    invariant global_view_instance.process_received_normal_proposal(Nn,Pn) & global_view_instance.process_received_fallback_proposal(Nf,Pf) & proposal_n_t.block(Pn,Bn) & proposal_f_t.block(Pf,Bf) -> Bn ~= Bf
 
     ### invariants related to process_voted_normal
-    invariant gv_properties_base.process_voted_normal(N,B) & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> (B = block_t.genesis | round_t.succ(Rp,R)) & gv_properties_base.process_locked_marker(N,Rp)
+    invariant global_view_instance.process_voted_normal(N,B) & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> (B = block_t.genesis | round_t.succ(Rp,R)) & global_view_instance.process_locked_marker(N,Rp)
 
-    invariant gv_properties_base.process_locked_marker(N,R) & gv_properties_base.process_voted_normal(N,Br) & block_t.round(Br,Rr) & R < Rr & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) -> R <= Rp
+    invariant global_view_instance.process_locked_marker(N,R) & global_view_instance.process_voted_normal(N,Br) & block_t.round(Br,Rr) & R < Rr & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) -> R <= Rp
 
     ### invariants related to process_voted_fallback
-    invariant gv_properties_base.process_voted_fallback(N,Bv,Q) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
+    invariant global_view_instance.process_voted_fallback(N,Bv,Q) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
     
     ### invariants related to process_voted
     ### invariants related to process_locked
@@ -41,23 +250,227 @@ isolate gv_basic_consequences = {
 
     ### invariants related to process_sent_timeout
 
-    invariant gv_properties_base.process_sent_timeout(N,R,QC1) & gv_properties_base.process_sent_timeout(N,R,QC2) -> QC1 = QC2
+    invariant global_view_instance.process_sent_timeout(N,R,QC1) & global_view_instance.process_sent_timeout(N,R,QC2) -> QC1 = QC2
 
-    invariant gv_properties_base.process_sent_timeout(N,R,QC) & is_good(N) -> (forall B:block_t. block_t.round(B,R) -> ~ gv_properties_base.process_locked(N,B))
+    invariant global_view_instance.process_sent_timeout(N,R,QC) & is_good(N) -> (forall B:block_t. block_t.round(B,R) -> ~ global_view_instance.process_locked(N,B))
 
     attribute macro_finder=false
-} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, gv_properties_base
+} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_requires, gv_action_ensures
 
 isolate genesis_starts_the_chain = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
 
-    invariant is_good(N) & gv_properties_base.process_committed(N, B) & block_t.height(B, 0) -> B = block_t.genesis
-} with block_t, prepare_t, timeout_t, proposal_f_t, gv_properties_base
+    invariant is_good(N) & global_view_instance.process_committed(N, B) & block_t.height(B, 0) -> B = block_t.genesis
+} with block_t, prepare_t, timeout_t, proposal_f_t, global_view_instance
 
-isolate lv_properties_base = {
-    instantiate supraBFT(gv_properties_base)
+isolate local_view_instance = {
+    instantiate supraBFT(global_view_instance)
+
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, shim, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_instance, types_ensures, lv_preserves_validities, lv_validity_invariants#, lv_basic_invariants, types_requires, lv_action_requires, lv_action_ensures, gv_action_requires
+
+isolate lv_action_requires = {
+    before local_view_instance.local_view.proposal_f_get_tc(id:process_index_t, p:proposal_f_t) returns (tc:tc_t) {
+        require global_view_instance.proposal_f_valid(p);
+    }
+
+    before local_view_instance.local_view.timeout_get_qc(id:process_index_t, t:timeout_t) returns (qc:qc_t) {
+        require global_view_instance.timeout_valid(t);
+    }
+
+    before local_view_instance.local_view.qc_get_block(id:process_index_t, qc:qc_t) returns (b:block_t) {
+        require global_view_instance.qc_valid(qc);
+    }
+
+    before local_view_instance.local_view.commit(id:process_index_t) {
+        require local_view_instance.local_view(id).commit_mode;
+    }
+
+    before local_view_instance.local_view.proposeNormal(id:process_index_t, pB:block_t) {
+        require block_t.round(pB,Rp) -> round_t.succ(Rp,local_view_instance.local_view(id).r_c);
+    }
+
+    before local_view_instance.local_view.proposal_n_processing(id:process_index_t, p:proposal_n_t) {
+        require ~local_view_instance.local_view(id).timer;
+
+        require local_view_instance.local_view(id).received_proposal_n(p, leader(round_t.prev(local_view_instance.local_view(id).r_c)));
+    }
+
+    before local_view_instance.local_view.timeout(id:process_index_t, r:round_t) {
+        require round_t.succ(r,Rs) & global_view_instance.process_in_round(id,Rc) -> Rc <= Rs;
+        require r ~= 0;
+    }
+
+    before local_view_instance.local_view.timer_expire(id:process_index_t) {
+        require ~local_view_instance.local_view(id).timer;
+        require round_t.succ(0,R1) -> R1 < local_view_instance.local_view(id).r_c;
+    }
+
+    before local_view_instance.local_view.timeout_sync(id:process_index_t, tc:tc_fplusone_t) {
+        require local_view_instance.local_view(id).received_tc_fplusone(tc);
+
+        #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we contrain the environment to call qc_processing on the qcs before calling timeout_sync
+        require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> local_view_instance.local_view(id).processed_qc(B);
+    }
+
+    before local_view_instance.local_view.proposal_f_processing(id:process_index_t, p:proposal_f_t) {
+        require ~local_view_instance.local_view(id).timer;
+
+        require local_view_instance.local_view(id).received_proposal_f(p, leader(round_t.prev(local_view_instance.local_view(id).r_c)));
+
+        require proposal_f_t.tc(p,TC) -> local_view_instance.local_view(id).received_tc(TC) & local_view_instance.local_view(id).qcs_in_tc_processed(TC);
+    }
+
+    before local_view_instance.local_view.tc_getMaxQC(id:process_index_t, tc:tc_t) returns (qc:qc_t) {
+        require global_view_instance.tc_valid(tc);
+    }
+
+    before local_view_instance.local_view.tc_getMaxTC(id:process_index_t, tc:tc_t) returns (t:timeout_t) {
+        require global_view_instance.tc_valid(tc);
+    }
+
+    before local_view_instance.local_view.tc_get_round(id:process_index_t, tc:tc_t) returns (r:round_t) {
+        require global_view_instance.tc_valid(tc);
+    }
+
+    before local_view_instance.local_view.tc_get_quorum(id:process_index_t, tc:tc_t) returns (q:quorum_t) {
+        require global_view_instance.tc_valid(tc);
+    }
+
+    before local_view_instance.local_view.qc_get_round(id:process_index_t, qc:qc_t) returns (r:round_t) {
+        require global_view_instance.qc_valid(qc);
+    }
+
+    before local_view_instance.local_view.tc_fplusone_get_round(id:process_index_t, tc:tc_fplusone_t) returns (r:round_t) {
+        require global_view_instance.tc_fplusone_valid(tc);
+    }
+
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance
+
+isolate lv_action_ensures = {
+
+    after local_view_instance.local_view.proposal_f_get_tc(id:process_index_t, p:proposal_f_t) returns (tc:tc_t) {
+        ensure proposal_f_t.tc(p, tc);
+    }
+
+    after local_view_instance.local_view.timeout_get_qc(id:process_index_t, t:timeout_t) returns (qc:qc_t) {
+
+        ensure timeout_t.qc(t, qc);
+    }
+
+    after local_view_instance.local_view.qc_get_block(id:process_index_t, qc:qc_t) returns (b:block_t) {
+        ensure qc_t.block(qc, b);
+    }
+
+    after local_view_instance.local_view.tc_getMaxQC(id:process_index_t, tc:tc_t) returns (qc:qc_t) {
+        ensure global_view_instance.qc_valid(qc);
+    }
+
+    after local_view_instance.local_view.tc_get_round(id:process_index_t, tc:tc_t) returns (r:round_t) {
+        ensure tc_t.round(tc, r);
+    }
+
+    after local_view_instance.local_view.tc_get_quorum(id:process_index_t, tc:tc_t) returns (q:quorum_t) {
+        ensure tc_t.quorum(tc,q);
+    }
+
+    after local_view_instance.local_view.qc_get_round(id:process_index_t, qc:qc_t) returns (r:round_t) {
+        ensure forall B:block_t. qc_t.block(qc,B) -> block_t.round(B, r);
+    }
+
+    after local_view_instance.local_view.tc_fplusone_get_round(id:process_index_t, tc:tc_fplusone_t) returns (r:round_t) {
+        ensure tc_fplusone_t.round(tc, r);
+    }
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance
+
+isolate lv_preserves_validities = {
+        # after local_view_instance.local_view.proposal_f_processing(id:process_index_t, p:proposal_f_t) {
+        #     ensure local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
+        # }
+
+        # after local_view_instance.local_view.proposal_n_processing(id:process_index_t, p:proposal_n_t) {
+        #     ensure local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
+        # }
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance
+
+isolate lv_validity_invariants = {
+
+    relation local_timeout_valid(T:timeout_t)
+    definition local_timeout_valid(T) =  timeout_t.was_constructed(T) & global_view_instance.timeout_round_exists(T)
+
+    invariant local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
+
+    invariant local_view_instance.local_view.received_proposal_n(Id, P, N) -> global_view_instance.proposal_n_valid(P)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_n -> global_view_instance.proposal_n_valid(M.prop_n)
+
+    invariant local_view_instance.local_view.received_timeout(Id, T, N) -> global_view_instance.timeout_valid(T)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> local_timeout_valid(M.t)#global_view_instance.timeout_valid(M.t)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> global_view_instance.timeout_valid(M.t)
+
+    invariant local_view_instance.local_view.received_tc(Id, TC) -> global_view_instance.tc_valid(TC)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tc -> global_view_instance.tc_valid(M.tc)
+
+    invariant local_view_instance.local_view.received_tc_fplusone(Id, TC) -> global_view_instance.tc_fplusone_valid(TC)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tcfpo -> global_view_instance.tc_fplusone_valid(M.tc_po)
+
+    invariant local_view_instance.local_view.received_prepare(Id, P, N) -> prepare_t.cstd(P)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.prepare -> prepare_t.cstd(M.prep)
+
+    invariant local_view_instance.local_view.received_qc(Id, QC) -> global_view_instance.qc_valid(QC)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.qc -> global_view_instance.qc_valid(M.qc)
+
+    invariant global_view_instance.qc_valid(local_view_instance.local_view(Id).locked)
+
+    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> local_view_instance.local_view(Id).processed_qc(B)
+
+    invariant local_view_instance.local_view(Id).processed_qc(B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(R,Rs) -> Rs < local_view_instance.local_view(Id).r_c
+
+    #attribute macro_finder=false
+
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, global_view_instance, gv_action_ensures, local_view_instance, lv_action_ensures, types_ensures, lv_preserves_validities
+
+isolate lv_basic_invariants = {
 
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
     invariant round_t.succ(R1,R2) | ~ round_t.succ(R1,R2)
-} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, shim, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, gv_properties_base
+
+    invariant local_view_instance.local_view(Id).r_c > 0
+
+    invariant is_good(Id) & global_view_instance.process_voted_normal(Id,B) & block_t.round(B,R) -> R <= local_view_instance.local_view(Id).r_vn
+    invariant is_good(Id) & global_view_instance.process_voted_fallback(Id,B,Q) & block_t.round(B,R) -> R <= local_view_instance.local_view(Id).r_vf
+    invariant global_view_instance.process_in_round(Id,local_view_instance.local_view(Id).r_c)
+
+    invariant forall R:round_t. local_view_instance.local_view(Id).expired_rounds(R) -> exists QC:qc_t. global_view_instance.process_sent_timeout(Id,R,QC)
+
+    invariant forall R,Rs1,Rs2:round_t. forall QC:qc_t. is_good(Id) & global_view_instance.process_sent_timeout(Id,R,QC) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) & Rs2 > local_view_instance.local_view(Id).r_c -> local_view_instance.local_view(Id).expired_rounds(R)
+
+    invariant local_view_instance.local_view(Id).timer & round_t.succ(Rp,local_view_instance.local_view(Id).r_c) -> exists QC:qc_t. global_view_instance.process_sent_timeout(Id,Rp,QC)
+
+    invariant local_view_instance.local_view(Id).processed_qc(QC) <-> global_view_instance.process_processed_qc(Id,QC)
+
+    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> local_view_instance.local_view(Id).processed_qc(B)
+
+    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> global_view_instance.process_locked(Id,B)
+    
+    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) & block_t.round(B,R) & round_t.succ(R,Rs) & B ~= block_t.genesis -> Rs < local_view_instance.local_view(Id).r_c
+
+    invariant local_view_instance.local_view(Id).processed_qc(B) -> global_view_instance.qc_valid(local_view_instance.local_view(Id).qc_for_block(B)) & qc_t.block(local_view_instance.local_view(Id).qc_for_block(B),B)
+
+    invariant local_view_instance.local_view(Id).commit_mode -> local_view_instance.local_view(Id).uncommitted(local_view_instance.local_view(Id).commit_mode_block)
+
+    invariant global_view_instance.process_committed(Id,B) -> local_view_instance.local_view(Id).processed_qc(B) & ~ local_view_instance.local_view(Id).uncommitted(B)
+
+    invariant local_view_instance.local_view(Id).uncommitted(B) -> local_view_instance.local_view(Id).processed_qc(B)
+
+    invariant local_view_instance.local_view(Id).last_committed ~= block_t.unused -> global_view_instance.process_committed(Id,local_view_instance.local_view(Id).last_committed)
+
+    invariant local_view_instance.local_view(Id).last_committed = block_t.unused -> ~ global_view_instance.process_committed(Id,B)
+
+    invariant global_view_instance.process_committed(Id,B) & block_t.round(B,Rb) & block_t.round(local_view_instance.local_view(Id).last_committed,Rl) -> Rb <= Rl
+
+    invariant global_view_instance.process_committed(Id,B) & block_t.height(B,Hb) & block_t.height(local_view_instance.local_view(Id).last_committed,Hl) -> Hb <= Hl
+
+    attribute macro_finder=false
+
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance,lv_preserves_validities

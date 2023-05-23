@@ -51,39 +51,26 @@ isolate block_t = {
     }
 
     export action get_round(b:block_t) returns (r:round_t) = {
-        require cstd(b);
-
         if some b_r:round_t. round(b, b_r) {
             r := b_r;
         }
-
-        ensure round(b, r);
     }
 
     export action get_parent(b:block_t) returns (pB:block_t) = {
-        require cstd(b);
 
         if some b_pB:block_t. parent(b, b_pB) {
             pB := b_pB;
         }
-
-        ensure parent(b, pB);
     }
 
     export action get_height(b:block_t) returns (h:height_t) = {
-        require cstd(b);
 
         if some b_h:height_t. height(b, b_h) {
             h := b_h;
         }
-
-        ensure height(b, h);
     }
 
     export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
-        require r_c > 0;
-        require cstd(pB);
-        require round(pB,R) -> R < r_c;
         assume ~cstd(b);
         assume b ~= unused;
         assume round(b,r_c);
@@ -132,7 +119,7 @@ isolate block_t = {
 
     invariant (parent(B,P) & round(B,Rb) & round(P,Rp) & B ~= genesis) -> Rp < Rb
     invariant (parent(B,P) & height(B,Hb) & height(P,Hp) & B ~= genesis) -> height_t.succ(Hp,Hb)
-} with height_t, round_t
+} with height_t, round_t, types_requires, types_ensures
 
 isolate ancestor_transitive_closure_block = {
     invariant [i1] block_t.parent(B, P) -> block_t.ancestor(B, P)
@@ -175,17 +162,13 @@ isolate proposal_n_t = {
     }
 
     export action get_block(p:proposal_n_t) returns (b:block_t) = {
-        require cstd(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
         }
-
-        ensure block(p, b);
     }
 
     export action proposal_n(b:block_t) returns (p:proposal_n_t) = {
-        require block_t.cstd(b);
         assume ~cstd(p);
 
         if some p_old:proposal_n_t. block(p_old, b) {
@@ -206,7 +189,7 @@ isolate proposal_n_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
-} with block_t
+} with block_t, types_ensures, types_requires
 
 isolate prepare_t = {
     type this
@@ -224,17 +207,13 @@ isolate prepare_t = {
     }
 
     export action get_block(p:prepare_t) returns (b:block_t) = {
-        require cstd(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
         }
-
-        ensure block(p, b);
     }
 
     export action prepare(b:block_t) returns (p:prepare_t) = {
-        require block_t.cstd(b);
         assume ~cstd(p);
 
         if some p_old:prepare_t. block(p_old, b) {
@@ -255,7 +234,7 @@ isolate prepare_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
-} with block_t
+} with block_t, types_ensures, types_requires
 
 isolate quorum_fplusone_t = {
     type this
@@ -320,13 +299,10 @@ isolate timeout_t = {
     }
 
     export action get_round(t:timeout_t) returns (r:round_t) = {
-        require was_constructed(t);
 
         if some t_r:round_t. round(t, t_r) {
             r := t_r;
         }
-
-        ensure round(t, r);
     }
 
     export action timeout(r:round_t, q:qc_t) returns (t:timeout_t) = {
@@ -350,7 +326,7 @@ isolate timeout_t = {
 
     invariant round(T, R1) & round(T, R2) -> R1 = R2
     invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
-}
+} with types_ensures, types_requires, block_t
 
 isolate tc_fplusone_t = {
     type this
@@ -384,17 +360,13 @@ isolate proposal_f_t = {
     }
 
     export action get_block(p:proposal_f_t) returns (b:block_t) = {
-        require was_constructed(p);
 
         if some p_b:block_t. block(p, p_b) {
             b := p_b;
         }
-
-        ensure block(p, b);
     }
 
     export action proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) = {
-        require block_t.cstd(b);
         assume ~was_constructed(p);
 
         if some p_old:proposal_f_t. block(p_old, b) & tc(p_old, t) {
@@ -415,4 +387,96 @@ isolate proposal_f_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant tc(P, TC1) & tc(P, TC2) -> TC1 = TC2
-} with block_t
+} with block_t, types_ensures, types_requires
+
+isolate types_requires = {
+    before block_t.get_round(b:block_t) returns (r:round_t) {
+        require block_t.cstd(b);
+    }
+
+    before block_t.get_parent(b:block_t) returns (pB:block_t) {
+        require block_t.cstd(b);
+    }
+
+    before block_t.get_height(b:block_t) returns (h:height_t) {
+        require block_t.cstd(b);
+    }
+
+    before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
+        require r_c > 0;
+        require block_t.cstd(pB);
+        require block_t.round(pB,R) -> R < r_c;
+    }
+
+    before proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
+        require proposal_n_t.cstd(p);
+    }
+
+    before proposal_n_t.proposal_n(b:block_t) returns (p:proposal_n_t) {
+        require block_t.cstd(b);
+    }
+
+    before prepare_t.get_block(p:prepare_t) returns (b:block_t) {
+        require prepare_t.cstd(p);        
+    }
+
+    before prepare_t.prepare(b:block_t) returns (p:prepare_t) {
+        require block_t.cstd(b);       
+    }
+
+    before timeout_t.get_round(t:timeout_t) returns (r:round_t) {
+        require timeout_t.was_constructed(t);
+    }
+
+    before proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
+        require proposal_f_t.was_constructed(p);
+    }
+
+    before proposal_f_t.proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) {
+        require block_t.cstd(b);
+    }
+} with block_t, proposal_n_t, prepare_t, timeout_t, proposal_f_t
+
+isolate types_ensures = {
+    after block_t.get_round(b:block_t) returns (r:round_t) {
+
+        ensure block_t.round(b, r);
+
+    }
+
+    after block_t.get_parent(b:block_t) returns (pB:block_t) {
+
+        ensure block_t.parent(b, pB);
+
+    }
+
+    after block_t.get_height(b:block_t) returns (h:height_t) {
+
+        ensure block_t.height(b, h);
+
+    }
+
+    after proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
+
+        ensure proposal_n_t.block(p, b);
+
+    }
+
+    after prepare_t.get_block(p:prepare_t) returns (b:block_t) {
+
+        ensure prepare_t.block(p, b);
+
+    }
+
+    after timeout_t.get_round(t:timeout_t) returns (r:round_t) {
+
+        ensure timeout_t.round(t, r);
+
+    }
+
+    after proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
+
+        ensure proposal_f_t.block(p, b);
+
+    }
+} with block_t, proposal_n_t, prepare_t, timeout_t, proposal_f_t
