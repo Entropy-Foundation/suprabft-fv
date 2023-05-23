@@ -72,6 +72,7 @@ object local_view(id:process_index_t) = {
     }
 
     implement shim.proposal_f_handler.handle(m:msg) {
+            require global_view.proposal_f_valid(m.prop_f);
             received_proposal_f(m.prop_f, m.src) := true;
             var temp_tc := proposal_f_get_tc(m.prop_f);
             received_tc(temp_tc) := true;
@@ -378,7 +379,7 @@ object local_view(id:process_index_t) = {
 
         require proposal_f_t.tc(p,TC) -> received_tc(TC) & qcs_in_tc_processed(TC);
 
-        call global_view.receive_fallback_proposal(id,p);
+        #call global_view.receive_fallback_proposal(id,p);
 
         var tcp := proposal_f_get_tc(p);
         var tp := tc_getMaxTC(proposal_f_get_tc(p));
@@ -458,13 +459,14 @@ object local_view(id:process_index_t) = {
         ensure tc_fplusone_t.round(tc, r);
     }
 
-    export action byzantine_send = {
+    action byzantine_send = {
+    #_#export action byzantine_send = {
         require ~is_good(id);
 
         var m : msg;
         var dst : process_index_t;
         if ~is_good(m.src) {
-            if m.kind = msg_kind.proposal_n & proposal_n_t.cstd(m.prop_n) {
+            if m.kind = msg_kind.proposal_n & global_view.proposal_n_valid(m.prop_n) {
                 call shim.send(id, dst, m);
             }
             if m.kind = msg_kind.proposal_f & global_view.proposal_f_valid(m.prop_f) {
@@ -506,20 +508,27 @@ object local_view(id:process_index_t) = {
 
     invariant global_view.qc_valid(locked)
 
-    invariant received_proposal_n(P, N) -> global_view.proposal_n_valid(P)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_n -> global_view.proposal_n_valid(M.prop_n)
-    invariant received_proposal_f(P, N) -> global_view.proposal_f_valid(P)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view.proposal_f_valid(M.prop_f)
-    invariant received_prepare(P, N) -> prepare_t.cstd(P)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.prepare -> prepare_t.cstd(M.prep)
-    invariant received_qc(QC) -> global_view.qc_valid(QC)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.qc -> global_view.qc_valid(M.qc)
-    invariant received_timeout(T, N) -> global_view.timeout_valid(T)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> global_view.timeout_valid(M.t)
-    invariant received_tc(TC) -> global_view.tc_valid(TC)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tc -> global_view.tc_valid(M.tc)
-    invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tcfpo -> global_view.tc_fplusone_valid(M.tc_po)
+        invariant received_proposal_n(P, N) -> global_view.proposal_n_valid(P)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_n -> global_view.proposal_n_valid(M.prop_n)
+
+    isolate basic_validities = {
+        invariant received_proposal_f(P, N) -> global_view.proposal_f_valid(P)
+        invariant received_timeout(T, N) -> global_view.timeout_valid(T)
+
+        invariant received_tc(TC) -> global_view.tc_valid(TC)
+        invariant received_tc_fplusone(TC) -> global_view.tc_fplusone_valid(TC)
+
+    } with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, lv_properties_base, gv_properties_base, quorum_t, qc_t
+
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view.proposal_f_valid(M.prop_f)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> global_view.timeout_valid(M.t)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tc -> global_view.tc_valid(M.tc)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.tcfpo -> global_view.tc_fplusone_valid(M.tc_po)
+
+        invariant received_prepare(P, N) -> prepare_t.cstd(P)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.prepare -> prepare_t.cstd(M.prep)
+        invariant received_qc(QC) -> global_view.qc_valid(QC)
+        invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.qc -> global_view.qc_valid(M.qc)
 
     invariant is_good(id) & global_view.process_voted_normal(id,B) & block_t.round(B,R) -> R <= r_vn
     invariant is_good(id) & global_view.process_voted_fallback(id,B,Q) & block_t.round(B,R) -> R <= r_vf

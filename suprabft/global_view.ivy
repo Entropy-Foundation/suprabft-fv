@@ -102,7 +102,7 @@ module global_view = {
 
     relation proposal_n_valid(P:proposal_n_t)
     definition proposal_n_valid(P) = proposal_n_t.cstd(P) &
-                            (forall Br,Bp:block_t. forall Rr,Rp:round_t. proposal_n_t.block(P,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) -> round_t.succ(Rp,Rr))
+                            (forall Br,Bp:block_t. forall Rr,Rp:round_t. proposal_n_t.block(P,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) -> (Br ~= block_t.genesis & round_t.succ(Rp,Rr) | Br = block_t.genesis & Rp = 0 & Rr = 0))
 
     relation quorum_of_votes(B:block_t)
     definition quorum_of_votes(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> process_voted(N,B)
