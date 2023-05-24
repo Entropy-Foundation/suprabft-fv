@@ -11,8 +11,9 @@ relation is_good(N:process_index_t)
 function leader(R:round_t) : process_index_t
 
 # isolate round_properties = {
+#     property round_t.succ(R1,R2) & round_t.succ(R3,R2) -> R1 = R3
 
-#     property (~round_t.maximum(R1) & (round_t.succ(R1,R2) -> R2 <= R3)) -> R1 < R3
+#     property forall Rc,Rq,Rt:round_t. Rc > 0 & (forall Rs1:round_t. round_t.succ(Rs1,Rc) -> Rq < Rs1) & (forall Rs2:round_t. round_t.succ(Rs2,Rc) -> Rs2 <= Rt) -> Rq < Rt
 # } with round_t
 
 # There are two ways to access a type's member. Example

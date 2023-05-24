@@ -395,9 +395,7 @@ isolate lv_preserves_validities = {
 isolate lv_validity_invariants = {
 
     invariant local_view_instance.local_view(Id).r_c > 0
-
-    relation local_timeout_valid(T:timeout_t)
-    definition local_timeout_valid(T) =  timeout_t.was_constructed(T) & global_view_instance.timeout_round_exists(T)& (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
+    invariant round_t.succ(local_view_instance.local_view(Id).r_c_m1, local_view_instance.local_view(Id).r_c)
 
     invariant local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
     invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
@@ -406,7 +404,6 @@ isolate lv_validity_invariants = {
     invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_n -> global_view_instance.proposal_n_valid(M.prop_n)
 
     invariant local_view_instance.local_view.received_timeout(Id, T, N) -> global_view_instance.timeout_valid(T)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> local_timeout_valid(M.t)#global_view_instance.timeout_valid(M.t)
     invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.timeout -> global_view_instance.timeout_valid(M.t)
 
     invariant local_view_instance.local_view.received_tc(Id, TC) -> global_view_instance.tc_valid(TC)
@@ -425,7 +422,7 @@ isolate lv_validity_invariants = {
 
     invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> local_view_instance.local_view(Id).processed_qc(B)
 
-    invariant local_view_instance.local_view(Id).processed_qc(B) & B ~= block_t.genesis & block_t.round(B,R) -> R < local_view_instance.local_view(Id).r_c & (forall Rs:round_t. round_t.succ(Rs,local_view_instance.local_view(Id).r_c) -> R < Rs)
+    invariant local_view_instance.local_view(Id).processed_qc(B) & B ~= block_t.genesis & block_t.round(B,R) -> R < local_view_instance.local_view(Id).r_c_m1
 
     #attribute macro_finder=false
 
