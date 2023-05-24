@@ -326,7 +326,7 @@ object local_view(id:process_index_t) = {
         require qcs_in_tc_processed(tc);
         require received_tc(tc);
 
-        if(round_t.next(round_t.next(tc_get_round(tc))) > r_c) {
+        if((forall Rs:round_t. round_t.succ(Rs,r_c) -> Rs <= tc_get_round(tc)) & tc_get_round(tc) > 0) {
             call timeout(tc_get_round(tc));
         }
         call advanceToRound(round_t.next(round_t.next(tc_get_round(tc))));
