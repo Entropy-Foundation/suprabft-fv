@@ -266,7 +266,7 @@ isolate genesis_starts_the_chain = {
 isolate local_view_instance = {
     instantiate supraBFT(global_view_instance)
 
-} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, shim, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_instance, types_ensures, lv_preserves_validities, lv_validity_invariants#, lv_basic_invariants, types_requires, lv_action_requires, lv_action_ensures, gv_action_requires
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, shim, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_instance, types_ensures, lv_validity_invariants#, lv_basic_invariants, types_requires, lv_action_requires, lv_action_ensures, gv_action_requires
 
 isolate lv_action_requires = {
     before local_view_instance.local_view.proposal_f_get_tc(id:process_index_t, p:proposal_f_t) returns (tc:tc_t) {
@@ -382,16 +382,6 @@ isolate lv_action_ensures = {
     }
 } with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance
 
-isolate lv_preserves_validities = {
-        # after local_view_instance.local_view.proposal_f_processing(id:process_index_t, p:proposal_f_t) {
-        #     ensure local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
-        # }
-
-        # after local_view_instance.local_view.proposal_n_processing(id:process_index_t, p:proposal_n_t) {
-        #     ensure local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P)
-        # }
-} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance
-
 isolate lv_validity_invariants = {
 
     invariant local_view_instance.local_view(Id).r_c > 0
@@ -426,15 +416,13 @@ isolate lv_validity_invariants = {
 
     #attribute macro_finder=false
 
-} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, global_view_instance, gv_action_ensures, local_view_instance, lv_action_requires, lv_action_ensures, types_ensures, lv_preserves_validities
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, global_view_instance, gv_action_ensures, local_view_instance, lv_action_requires, lv_action_ensures, types_ensures
 
 isolate lv_basic_invariants = {
 
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
     invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
     invariant round_t.succ(R1,R2) | ~ round_t.succ(R1,R2)
-
-
 
     invariant is_good(Id) & global_view_instance.process_voted_normal(Id,B) & block_t.round(B,R) -> R <= local_view_instance.local_view(Id).r_vn
     invariant is_good(Id) & global_view_instance.process_voted_fallback(Id,B,Q) & block_t.round(B,R) -> R <= local_view_instance.local_view(Id).r_vf
@@ -448,11 +436,7 @@ isolate lv_basic_invariants = {
 
     invariant local_view_instance.local_view(Id).processed_qc(QC) <-> global_view_instance.process_processed_qc(Id,QC)
 
-    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> local_view_instance.local_view(Id).processed_qc(B)
-
     invariant qc_t.block(local_view_instance.local_view(Id).locked,B) -> global_view_instance.process_locked(Id,B)
-    
-    invariant qc_t.block(local_view_instance.local_view(Id).locked,B) & block_t.round(B,R) & round_t.succ(R,Rs) & B ~= block_t.genesis -> Rs < local_view_instance.local_view(Id).r_c
 
     invariant local_view_instance.local_view(Id).processed_qc(B) -> global_view_instance.qc_valid(local_view_instance.local_view(Id).qc_for_block(B)) & qc_t.block(local_view_instance.local_view(Id).qc_for_block(B),B)
 
@@ -472,4 +456,4 @@ isolate lv_basic_invariants = {
 
     attribute macro_finder=false
 
-} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance,lv_preserves_validities
+} with shim, block_t, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, quorum_t, qc_t, local_view_instance, global_view_instance, gv_action_ensures, lv_action_ensures, lv_action_requires, lv_validity_invariants
