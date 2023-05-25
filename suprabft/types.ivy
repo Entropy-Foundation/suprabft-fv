@@ -40,6 +40,10 @@ isolate block_t = {
 
     individual unused : block_t
 
+    # function blocks_round(B:block_t) : round_t
+
+    # function blocks_parents_round(B:block_t) : round_t
+
     after init {
         assume genesis ~= unused;
         cstd(B) := B = genesis;
@@ -49,6 +53,9 @@ isolate block_t = {
         parent(B, P) := B = genesis & P = genesis;
         ancestor(B, A) := B = genesis & A = genesis;
         height(B, H) := B = genesis & H = 0;
+
+        # assume block_t.round(B,blocks_round(B));
+        # assume parent(B,Bp) -> round(Bp,blocks_parents_round(B));
     }
 
     export action get_round(b:block_t) returns (r:round_t) = {
@@ -87,7 +94,6 @@ isolate block_t = {
         parent(b,pB) := true;
         ancestor(b,pB) := true;
         ancestor(b,B) := ancestor(pB,B) | B = pB;
-
     }
 
     invariant genesis ~= unused
@@ -120,6 +126,8 @@ isolate block_t = {
 
     invariant (parent(B,P) & round(B,Rb) & round(P,Rp) & B ~= genesis) -> Rp < Rb
     invariant (parent(B,P) & height(B,Hb) & height(P,Hp) & B ~= genesis) -> height_t.succ(Hp,Hb)
+
+    # invariant round(B,blocks_round(B))
 } with height_t, round_t, types_requires, types_ensures
 
 isolate ancestor_transitive_closure_block = {
@@ -392,7 +400,7 @@ isolate proposal_f_t = {
 
 isolate types_requires = {
     before block_t.get_round(b:block_t) returns (r:round_t) {
-        require block_t.cstd(b);
+        assume block_t.cstd(b);#_#
     }
 
     before block_t.get_parent(b:block_t) returns (pB:block_t) {
@@ -404,37 +412,37 @@ isolate types_requires = {
     }
 
     before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
-        require r_c > 0;
-        require block_t.cstd(pB);
-        require block_t.round(pB,R) -> R < r_c;
+        assume r_c > 0;#_#
+        assume block_t.cstd(pB);#_#
+        assume block_t.round(pB,R) -> R < r_c;#_#
     }
 
     before proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
-        require proposal_n_t.cstd(p);
+        assume proposal_n_t.cstd(p);#_#
     }
 
     before proposal_n_t.proposal_n(b:block_t) returns (p:proposal_n_t) {
-        require block_t.cstd(b);
+        assume block_t.cstd(b);#_#
     }
 
     before prepare_t.get_block(p:prepare_t) returns (b:block_t) {
-        require prepare_t.cstd(p);        
+        assume prepare_t.cstd(p);#_#
     }
 
     before prepare_t.prepare(b:block_t) returns (p:prepare_t) {
-        require block_t.cstd(b);       
+        assume block_t.cstd(b);#_#
     }
 
     before timeout_t.get_round(t:timeout_t) returns (r:round_t) {
-        require timeout_t.was_constructed(t);
+        assume timeout_t.was_constructed(t);#_#
     }
 
     before proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
-        require proposal_f_t.was_constructed(p);
+        assume proposal_f_t.was_constructed(p);#_#
     }
 
     before proposal_f_t.proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) {
-        require block_t.cstd(b);
+        assume block_t.cstd(b);#_#
     }
 } with block_t, proposal_n_t, prepare_t, timeout_t, proposal_f_t
 

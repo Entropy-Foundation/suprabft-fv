@@ -110,6 +110,9 @@ module global_view = {
     relation no_timeout_for_block_round(N:process_index_t, B:block_t)
     definition no_timeout_for_block_round(N,B) = forall R:round_t. block_t.round(B,R) -> forall QC:qc_t. ~process_sent_timeout(N,R,QC)
 
+    relation no_timeout_for_block_prev_round(N:process_index_t, B:block_t)
+    definition no_timeout_for_block_prev_round(N,B) = forall R,Rp:round_t. block_t.round(B,R) & round_t.succ(Rp,R) -> (forall QC:qc_t. ~process_sent_timeout(N,R,QC))
+
     relation successive_blocks(Bp:block_t, Bc:block_t)
     definition successive_blocks(Bp,Bc) = forall Rp,Rc:round_t. block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
 

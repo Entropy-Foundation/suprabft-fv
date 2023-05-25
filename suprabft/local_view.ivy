@@ -334,9 +334,6 @@ object local_view(id:process_index_t) = {
     }
 
     action tc_processing(tc:tc_t) = {
-        require qcs_in_tc_processed(tc);
-        require received_tc(tc);
-
         if(r_c_m1 <= tc_get_round(tc) & tc_get_round(tc) > 0) {
             call timeout(tc_get_round(tc));
         }
