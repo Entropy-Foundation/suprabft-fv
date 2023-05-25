@@ -5,7 +5,7 @@ include network
 
 module global_view = {
     #process N is currently in round R
-    relation process_in_round(N:process_index_t, R:round_t)
+    function process_in_round(N:process_index_t) : round_t
 
     #process N received the normal proposal P
     relation process_received_normal_proposal(N:process_index_t, P:proposal_n_t)
@@ -23,7 +23,7 @@ module global_view = {
     relation process_voted(N:process_index_t, B:block_t)
 
     #process N has locked QC for block B
-    relation process_locked(N:process_index_t, B:block_t)
+    function process_locked(N:process_index_t) : block_t
 
     #process N has locked QC for round R, so any subsequent locks will be for higher rounds
     relation process_locked_marker(N:process_index_t, R:round_t)
@@ -114,13 +114,13 @@ module global_view = {
     definition successive_blocks(Bp,Bc) = forall Rp,Rc:round_t. block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
 
     after init {
-        process_in_round(N,R) := round_t.succ(0,R);
+        process_in_round(N) := round_t.next(0);
         process_received_normal_proposal(N,P) := false;
         process_received_fallback_proposal(N,P) := false;
         process_voted_normal(N, B) := B = block_t.genesis;
         process_voted_fallback(N, B, Q) := false;
         process_processed_qc(N,B) := B = block_t.genesis;
-        process_locked(N, B) := B = block_t.genesis;
+        process_locked(N) :=  block_t.genesis;
         process_locked_marker(N,R) := R = 0;
         process_committed(N, B) := false;
         process_sent_timeout(N, R, QC) := false;
