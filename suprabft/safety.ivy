@@ -172,6 +172,8 @@ isolate gv_basic_validities = {
 
     invariant global_view_instance.qc_valid(qc_t.genesis)
 
+    invariant global_view_instance.process_received_normal_proposal(N,P) -> global_view_instance.proposal_n_valid(P)
+    invariant global_view_instance.process_received_fallback_proposal(N,P) -> global_view_instance.proposal_f_valid(P)
     invariant global_view_instance.process_voted(N, block_t.genesis)
     invariant global_view_instance.process_voted(N, B) -> block_t.cstd(B)
     invariant global_view_instance.process_processed_qc(N,B) -> block_t.cstd(B)
@@ -216,7 +218,7 @@ isolate gv_basic_consequences = {
     invariant global_view_instance.process_received_normal_proposal(Nn,Pn) & global_view_instance.process_received_fallback_proposal(Nf,Pf) & proposal_n_t.block(Pn,Bn) & proposal_f_t.block(Pf,Bf) -> Bn ~= Bf
 
     ### invariants related to process_voted_normal
-    invariant [normal_vote_marks_parent] global_view_instance.process_voted_normal(N,B) & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> (B = block_t.genesis | round_t.succ(Rp,R)) & global_view_instance.process_locked_marker(N,Rp)
+    invariant global_view_instance.process_voted_normal(N,B) & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> (B = block_t.genesis | round_t.succ(Rp,R)) & global_view_instance.process_locked_marker(N,Rp)
 
     ### invariants related to process_voted_fallback
     invariant global_view_instance.process_voted_fallback(N,Bv,Q) & block_t.parent(Bv,Bp) & block_t.round(Bv,Rv) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rt) -> Rt < Rv
@@ -240,8 +242,8 @@ isolate gv_process_locked_marker_properties = {
 
     invariant is_good(N) & global_view_instance.process_locked_marker(N,R) & block_t.round(global_view_instance.process_locked(N),Rb) -> R <= Rb
 
-    invariant global_view_instance.process_locked_marker(N,R) & global_view_instance.process_voted_normal(N,Br) & block_t.round(Br,Rr) & R < Rr & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) -> R <= Rp
-} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_requires, gv_action_ensures, gv_basic_validities#, gv_basic_consequences.normal_vote_marks_parent
+    invariant is_good(N) & global_view_instance.process_locked_marker(N,R) & global_view_instance.process_voted_normal(N,Br) & block_t.round(Br,Rr) & R < Rr & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) -> R <= Rp
+} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_requires, gv_action_ensures, gv_basic_validities
 
 isolate genesis_starts_the_chain = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
