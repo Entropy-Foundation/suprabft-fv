@@ -247,24 +247,44 @@ isolate gv_process_locked_marker_properties = {
 
 isolate no_normal_vote_after_timeout = {
 
-    # if N sends a timeout for R, it will never send a normal vote any block proposed in R+1
+    # if N sends a timeout for R, it will never send a normal vote for any block proposed in R+1
     invariant is_good(N) & global_view_instance.process_sent_timeout(N,R,QC) -> (forall B:block_t. forall Rs:round_t. round_t.succ(R,Rs) & block_t.round(B,Rs) -> ~ global_view_instance.process_voted_normal(N,B))
 
 } with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_requires, gv_action_ensures, gv_basic_validities,gv_basic_consequences
 
-isolate gv_quorum_of_votes = {
+isolate gv_quorum_of_normal_votes = {
     # quorum of normal votes
     relation qonv(B:block_t)
     definition qonv(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> global_view_instance.process_voted_normal(N,B)
+ 
+    # quorum of time out messages for round r
+    relation qoto(R:round_t)
+    definition qoto(R) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> exists QC:qc_t. global_view_instance.process_sent_timeout(N,R,QC)
 
-    # a quorum of no normal votes: nodes who will never send a normal vote for any block proposed in R
-    relation qonnv(R:round_t)
-    definition qonnv(R) = exists Q:quorum_t. forall N:process_index_t. forall B:block_t. quorum_t.member(Q,N) & is_good(N) & block_t.round(B,R) -> ~ global_view_instance.process_voted_normal(N,B)
+    invariant qoto(R) & round_t.succ(R,Rs) & block_t.round(B,Rs) -> ~ qonv(B)
+    attribute macro_finder=false
+} with quorum_intersection_axiom, round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, no_normal_vote_after_timeout, gv_action_ensures
 
-    invariant qonnv(R) & round_t.succ(R,Rs) & block_t.round(B,Rs) -> ~ qonv(B)  
+isolate gv_quorum_of_fallback_votes_m1 = {
+    relation process_voted_fallback_projection(N:process_index_t, B:block_t)
+    definition process_voted_fallback_projection(N,B) = exists QN:quorum_t. global_view_instance.process_voted_fallback(N,B,QN)
+
+    invariant global_view_instance.process_voted_fallback(N,B,Q) & block_t.round(B,Rb) & round_t.succ(Rp,Rb) -> (forall N:process_index_t. quorum_t.member(Q,N) -> exists QC:qc_t. global_view_instance.process_sent_timeout(N,Rp,QC))
+
+    invariant global_view_instance.process_voted_fallback(N,B,Q) & block_t.round(B,Rb) & round_t.succ(Rp,Rb) -> gv_quorum_of_normal_votes.qoto(Rp)
 
     attribute macro_finder=false
-} with quorum_intersection_axiom, round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, no_normal_vote_after_timeout#, gv_action_requires, gv_action_ensures, gv_basic_validities, gv_basic_consequences
+
+} with round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_ensures, gv_action_requires
+
+isolate gv_quorum_of_fallback_votes = {
+
+    # quorum of fallback votes
+    relation qofv(B:block_t)
+    definition qofv(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) -> gv_quorum_of_fallback_votes_m1.process_voted_fallback_projection(N,B)
+
+    invariant qofv(B) & block_t.round(B,R) & round_t.succ(Rp,R) -> gv_quorum_of_normal_votes.qoto(Rp)
+} with every_quorum_good, round_t, height_t, block_t, prepare_t, qc_t, tc_t, timeout_t, proposal_f_t, proposal_n_t, global_view_instance, gv_action_ensures, gv_action_requires, gv_quorum_of_normal_votes,gv_quorum_of_fallback_votes_m1
 
 isolate genesis_starts_the_chain = {
     invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
@@ -285,8 +305,6 @@ isolate lv_action_requires = {
 
     before local_view_instance.local_view.timeout_get_qc(id:process_index_t, t:timeout_t) returns (qc:qc_t) {
         assume global_view_instance.timeout_valid(t);#_#
-        assume round_t.succ(r,Rs) -> global_view_instance.process_in_round(id) <= Rs;#_#
-        assume r ~= 0;#_#
     }
 
     before local_view_instance.local_view.qc_get_block(id:process_index_t, qc:qc_t) returns (b:block_t) {
@@ -308,8 +326,8 @@ isolate lv_action_requires = {
     }
 
     before local_view_instance.local_view.timeout(id:process_index_t, r:round_t) {
-        require round_t.succ(r,Rs) -> global_view_instance.process_in_round(id) <= Rs;
-        require r ~= 0;
+        assume round_t.succ(r,Rs) -> global_view_instance.process_in_round(id) <= Rs;#_#
+        assume r ~= 0;#_#
     }
 
     before local_view_instance.local_view.timer_expire(id:process_index_t) {
