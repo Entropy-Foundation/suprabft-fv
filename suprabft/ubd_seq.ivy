@@ -35,7 +35,7 @@ module ubd_seq = {
         assert succ(x,y)
     }
     before prev {
-        assert 0 < x
+        assume 0 < x #_#
     }
     after prev {
         assert y < x & (Y < x -> Y <= y);

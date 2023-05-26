@@ -25,8 +25,8 @@ module global_view = {
     #process N has locked QC for block B
     function process_locked(N:process_index_t) : block_t
 
-    #process N has locked QC for round R, so any subsequent locks will be for higher rounds
-    relation process_locked_marker(N:process_index_t, R:round_t)
+    #process N has locked a QC but not advanced the round yet
+    function process_locked_but_round_not_advanced_yet(N:process_index_t) : bool
 
     #process N has processed a QC for block B
     relation process_processed_qc(N:process_index_t, B:block_t)
@@ -124,7 +124,7 @@ module global_view = {
         process_voted_fallback(N, B, Q) := false;
         process_processed_qc(N,B) := B = block_t.genesis;
         process_locked(N) :=  block_t.genesis;
-        process_locked_marker(N,R) := R = 0;
+        process_locked_but_round_not_advanced_yet(N) := false;
         process_committed(N, B) := false;
         process_sent_timeout(N, R, QC) := false;
         process_processed_tc(N,TC) := false;

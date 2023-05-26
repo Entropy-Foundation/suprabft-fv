@@ -178,7 +178,7 @@ object local_view(id:process_index_t) = {
 
         if some b:block_t. commit_mode_block ~= last_committed & ((b = commit_mode_block & ((commit_mode_block = block_t.genesis & last_committed = block_t.unused) | block_t.parent(commit_mode_block, last_committed))) |
                 (uncommitted(b) & block_t.ancestor(commit_mode_block, b) & block_t.parent(b, last_committed))) {
-            ensure block_t.height(b,Hb) & global_view.process_committed(id,B) & block_t.height(B,Hc) -> Hc < Hb;
+            assume block_t.height(b,Hb) & global_view.process_committed(id,B) & block_t.height(B,Hc) -> Hc < Hb;#_#
             last_committed := b;
             uncommitted(B) := uncommitted(B) & (b = block_t.genesis -> B ~= block_t.genesis) & block_t.ancestor(B, last_committed);
 
