@@ -466,7 +466,9 @@ isolate types_ensures = {
     }
 
     after block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
-        ensure block_t.height(pB,Hp) & block_t.height(b,Hb) -> height_t.succ(Hp,Hb)
+        ensure block_t.height(pB,Hp) & block_t.height(b,Hb) -> height_t.succ(Hp,Hb);
+
+        ensure block_t.cstd(b);
     }
 
     after proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {

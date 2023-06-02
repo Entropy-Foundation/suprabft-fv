@@ -81,7 +81,7 @@ module global_view = {
     definition qc_round_in_tc(QC,R,TC) = exists T:timeout_t. tc_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC)
 
     relation quorum_is_subset(TC:tc_t)
-    definition quorum_is_subset(TC) = forall Q:quorum_t. forall N:process_index_t. forall Rt:round_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & tc_t.round(TC,Rt) -> exists QC:qc_t. process_sent_timeout(N,Rt,QC) & qc_round_in_tc(QC,Rt,TC)
+    definition quorum_is_subset(TC) = forall Q:quorum_t. forall N:process_index_t. forall Rt:round_t. forall QC:qc_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) & tc_t.round(TC,Rt) & process_sent_timeout(N,Rt,QC) -> qc_round_in_tc(QC,Rt,TC)
 
     relation tc_valid(TC:tc_t)
     definition tc_valid(TC) =
@@ -92,7 +92,7 @@ module global_view = {
                 (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                # quorum_is_subset(TC) &
+                quorum_is_subset(TC) &
                 forall Q:quorum_t. forall N:process_index_t. forall Rt:round_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & tc_t.round(TC,Rt) -> exists QC:qc_t. process_sent_timeout(N,Rt,QC) & qc_round_in_tc(QC,Rt,TC)
 
     relation proposal_f_valid(P:proposal_f_t)

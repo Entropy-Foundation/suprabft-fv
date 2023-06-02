@@ -8,9 +8,9 @@ object local_view(id:process_index_t) = {
     individual commit_mode : bool
     individual commit_mode_block : block_t
     individual last_committed : block_t
+    individual last_prop_n : block_t
 
     individual locked : qc_t
-    individual r_p : round_t
     individual r_c : round_t
     individual r_c_m1 : round_t
     individual timer : bool
@@ -18,6 +18,7 @@ object local_view(id:process_index_t) = {
     relation uncommitted(B:block_t)
     individual r_vf : round_t
     individual r_vn : round_t
+    individual r_pf : round_t
 
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
     relation received_proposal_f(P:proposal_f_t, Src:process_index_t)
@@ -44,9 +45,9 @@ object local_view(id:process_index_t) = {
         commit_mode := false;
         commit_mode_block := block_t.unused;
         last_committed := block_t.unused;
+        last_prop_n := block_t.genesis;
 
         locked := qc_t.genesis;
-        r_p := 0;
         r_c := *;
         assume round_t.succ(0, r_c);
         r_c_m1 := 0;
@@ -54,6 +55,7 @@ object local_view(id:process_index_t) = {
         uncommitted(B) := false;
         r_vf := 0;
         r_vn := 0;
+        r_pf := 0;
 
         received_proposal_n(P, Src) := P = proposal_n_t.genesis & Src = leader(0);
         received_proposal_f(P, Src) := false;
@@ -196,11 +198,10 @@ object local_view(id:process_index_t) = {
     }
 
     action proposeNormal(pB:block_t) = {
-        if leader(r_c) = id {
+        if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
             var b := block_t.block(r_c, pB);
             var p := proposal_n_t.proposal_n(b);
             call broadcast_proposal_n(p);
-            r_p := r_c;
         }
     }
 
@@ -251,7 +252,8 @@ object local_view(id:process_index_t) = {
         
         var b_qc := qc_get_block(qc);
         if ~processed_qc(b_qc) {
-            if (r_p < r_c & (forall R:round_t. block_t.round(b_qc,R) -> round_t.succ(R,r_c))) {
+            if (forall R:round_t. block_t.round(b_qc,R) -> round_t.succ(R,r_c))
+            {
                 call proposeNormal(b_qc);
             }
             uncommitted(b_qc) := true;
@@ -276,6 +278,7 @@ object local_view(id:process_index_t) = {
         ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
         ok := ok & forall B,Bp:block_t. proposal_n_t.block(p, B) & block_t.parent(B,Bp) -> uncommitted(Bp);
         ok := ok & ~timer;
+        ok := ok & forall R:round_t. block_t.round(last_prop_n,R) -> R < r_c;
         if ok {
             call proposeNormal(proposal_n_t.get_block(p));
         }
@@ -289,10 +292,9 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    action proposeFR(tc:tc_t) = {
+    action proposeFR(tc:tc_t, r:round_t) = {
 
         var ok := true;
-        var r := round_t.next(tc_get_round(tc));
         ok := ok & round_t.succ(r, r_c);
         ok := ok & leader(r) = id;
 
@@ -305,13 +307,14 @@ object local_view(id:process_index_t) = {
             var b := block_t.block(r, qc_get_block(qcp));
             var p := proposal_f_t.proposal_f(b,tc);
             call broadcast_proposal_f(p);
-            r_p := r;
+            r_pf := r;
         }
     }
 
     action timeout(r:round_t) = {
         if( ~expired_rounds(r)) {
-            var t := timeout_t.timeout(r, locked);
+
+            var t := timeout_t.timeout(r, getMaxUncommitted);
             call broadcast_timeout(t);
             expired_rounds(r) := true;
             call global_view.timeout(id, r,locked);
@@ -334,12 +337,15 @@ object local_view(id:process_index_t) = {
     }
 
     action tc_processing(tc:tc_t) = {
-        if(r_c_m1 <= tc_get_round(tc) & tc_get_round(tc) > 0) {
-            call timeout(tc_get_round(tc));
+
+        var tc_round := tc_get_round(tc);
+
+        if(r_c_m1 <= tc_round & tc_round > 0) {
+            call timeout(tc_round);
         }
-        var r_c_updated := advanceToRound(round_t.next(round_t.next(tc_get_round(tc))));
-        call proposeFR(tc);
-        if round_t.succ(round_t.next(tc_get_round(tc)),r_c)
+        var r_c_updated := advanceToRound(round_t.next(round_t.next(tc_round)));
+        call proposeFR(tc,tc_round);
+        if round_t.succ(round_t.next(tc_round),r_c)
         {
             #in real implementation, the timer has to be extended by \Delta. Here in IVy, timer is not maintained explicitly, but only maintained implecitly through a Boolean variable, so there is nothing to do
             #timer := false;
@@ -347,7 +353,7 @@ object local_view(id:process_index_t) = {
         global_view.processed_tc(id,tc);
         var b_temp:block_t;
         if r_c_updated {
-            global_view.enter_round(id,round_t.next(round_t.next(tc_get_round(tc))),b_temp,tc);
+            global_view.enter_round(id,round_t.next(round_t.next(tc_round)),b_temp,tc);
         }
     }
 
@@ -356,8 +362,7 @@ object local_view(id:process_index_t) = {
         call global_view.receive_fallback_proposal(id,p);
 
         var tcp := proposal_f_get_tc(p);
-        var tp := tc_getMaxTC(proposal_f_get_tc(p));
-        var qcp := timeout_get_qc(tp);
+        var qcp := prop_f_getMaxQC(p);
         var ok := true;
         ok := ok & ~timer;
         ok := ok & forall B:block_t. forall R:round_t. proposal_f_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
@@ -377,16 +382,29 @@ object local_view(id:process_index_t) = {
         
     }
 
+    action getMaxUncommitted returns (qc:qc_t) = {
+        var b : block_t;
+        assume uncommitted(b);
+        assume forall Rb,Ru:round_t. forall Bu:block_t. uncommitted(Bu) & block_t.round(Bu,Ru) & block_t.round(b,Rb) -> Ru <= Rb;
+
+        assume qc = qc_for_block(b);
+    }
+
     action tc_getMaxQC(tc:tc_t) returns (qc:qc_t) = {
         assume exists T:timeout_t. global_view.timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, qc);
         assume forall T:timeout_t. forall QC:qc_t. forall B1,B2:block_t. forall R1,R2:round_t. global_view.timeout_valid(T) & tc_t.timeout(tc, T) & timeout_t.qc(T, QC) &
                 qc_t.block(QC, B1) & block_t.round(B1, R1) & qc_t.block(qc, B2) & block_t.round(B2, R2) -> R2 >= R1;
     }
 
-    action tc_getMaxTC(tc:tc_t) returns (t:timeout_t) = {
-        assume tc_t.timeout(tc, t);
-        assume forall T:timeout_t. forall QCc,QCt:qc_t. forall Bc,Bt:block_t. forall Rc,Rt:round_t. tc_t.timeout(tc, T) & timeout_t.qc(T, QCc) &
-                qc_t.block(QCc, Bc) & block_t.round(Bc, Rc) & timeout_t.qc(t,QCt) & qc_t.block(QCt, Bt) & block_t.round(Bt, Rt) -> Rc <= Rt;
+    action prop_f_getMaxQC(p:proposal_f_t) returns (qc:qc_t) = {
+        var tcp : tc_t;
+        var to : timeout_t;
+
+        assume proposal_f_t.tc(p,tcp);
+        assume tc_t.timeout(tcp, to);
+        assume timeout_t.qc(to,qc);
+        assume forall T:timeout_t. forall QCt:qc_t. forall Br,Bt:block_t. forall Rr,Rt:round_t. tc_t.timeout(tcp, T) & timeout_t.qc(T, QCt) &
+                qc_t.block(QCt, Bt) & block_t.round(Bt, Rt) & qc_t.block(qc, Br) & block_t.round(Br, Rr) -> Rt <= Rr;
     }
 
     action tc_get_round(tc:tc_t) returns (r:round_t) = {
@@ -439,8 +457,9 @@ object local_view(id:process_index_t) = {
         var m : msg;
         var dst : process_index_t;
         assume prepare_t.cstd(m.prep);
+        assume proposal_n_t.cstd(m.prop_n);
 
-        if ~is_good(m.src) & m.kind = msg_kind.prepare & prepare_t.get_block(m.prep) = proposal_n_t.get_block(m.prop_n)
+        if ~is_good(m.src) & m.kind = msg_kind.prepare & prepare_t.get_block(m.prep) = proposal_n_t.get_block(m.prop_n) & global_view.process_received_normal_proposal(m.src,m.prop_n)
         {
             call shim.send(id, dst, m);
             call global_view.vote_normal(m.src,m.prop_n);
@@ -452,10 +471,12 @@ object local_view(id:process_index_t) = {
         var m : msg;
         var dst : process_index_t;
         assume prepare_t.cstd(m.prep);
+        assume proposal_f_t.was_constructed(m.prop_f);
 
-        if ~is_good(m.src) & m.kind = msg_kind.prepare & prepare_t.get_block(m.prep) = proposal_f_t.get_block(m.prop_f)
+        if ~is_good(m.src) & m.kind = msg_kind.prepare & prepare_t.get_block(m.prep) = proposal_f_t.get_block(m.prop_f) & global_view_instance.proposal_f_valid(m.prop_f)
         {
             var q:quorum_t;
+            assume proposal_f_t.tc(m.prop_f,TC) -> tc_t.quorum(TC,q);
             call shim.send(id, dst, m);
             call global_view.vote_fallback(m.src,m.prop_f,q);
         }
