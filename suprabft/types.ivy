@@ -53,9 +53,6 @@ isolate block_t = {
         parent(B, P) := B = genesis & P = genesis;
         ancestor(B, A) := B = genesis & A = genesis;
         height(B, H) := B = genesis & H = 0;
-
-        # assume block_t.round(B,blocks_round(B));
-        # assume parent(B,Bp) -> round(Bp,blocks_parents_round(B));
     }
 
     export action get_round(b:block_t) returns (r:round_t) = {
@@ -81,9 +78,8 @@ isolate block_t = {
     export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
         assume ~cstd(b);
         assume b ~= unused;
-        assume round(b,r_c);
 
-        #round(B, R) := round(B, R) | (B = b & R = r_c);
+        round(b, R) := R = r_c;
         #parent(B, P) := parent(B, P) | (B = b & P = pB);
         #ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
         height(B, H) := height(B, H) | B = b & H = height_t.next(get_height(pB));
@@ -91,7 +87,7 @@ isolate block_t = {
         cstd(b) := true;
         
         #round(b,r_c) := true;
-        parent(b,pB) := true;
+        parent(b,B) := B = pB;
         ancestor(b,pB) := true;
         ancestor(b,B) := ancestor(pB,B) | B = pB;
     }
@@ -126,9 +122,7 @@ isolate block_t = {
 
     invariant (parent(B,P) & round(B,Rb) & round(P,Rp) & B ~= genesis) -> Rp < Rb
     invariant (parent(B,P) & height(B,Hb) & height(P,Hp) & B ~= genesis) -> height_t.succ(Hp,Hb)
-
-    # invariant round(B,blocks_round(B))
-} with height_t, round_t, types_requires, types_ensures
+} with height_t, round_t, types_block_t_requires, types_block_t_ensures
 
 isolate ancestor_transitive_closure_block = {
     invariant [i1] block_t.parent(B, P) -> block_t.ancestor(B, P)
@@ -140,7 +134,7 @@ isolate ancestor_transitive_closure_block = {
     invariant [i3] block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
     invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
     invariant block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
-} with block_t, height_t, round_t
+} with block_t, height_t, round_t, types_block_t_requires, types_block_t_ensures
 
 isolate parent_same_implications = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
@@ -148,12 +142,12 @@ isolate parent_same_implications = {
     invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.ancestor(B1, A) -> block_t.ancestor(B2, A)
 
     attribute macro_finder=false
-} with block_t, ancestor_transitive_closure_block.i1, ancestor_transitive_closure_block.i2, ancestor_transitive_closure_block.i3, ancestor_transitive_closure_block.i4, ancestor_transitive_closure_block.inbetween, height_t
+} with block_t, ancestor_transitive_closure_block.i1, ancestor_transitive_closure_block.i2, ancestor_transitive_closure_block.i3, ancestor_transitive_closure_block.i4, ancestor_transitive_closure_block.inbetween, height_t, types_block_t_requires, types_block_t_ensures
 
 isolate parent_same_implications_height = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
     invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
-} with block_t, ancestor_transitive_closure_block, height_t
+} with block_t, ancestor_transitive_closure_block, height_t, types_block_t_requires, types_block_t_ensures
 
 isolate proposal_n_t = {
     type this
@@ -198,7 +192,7 @@ isolate proposal_n_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
-} with block_t, types_ensures, types_requires
+} with block_t, types_proposal_n_t_ensures, types_proposal_n_t_requires
 
 isolate prepare_t = {
     type this
@@ -243,7 +237,7 @@ isolate prepare_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant block(P1, B) & block(P2, B) -> P1 = P2
-} with block_t, types_ensures, types_requires
+} with block_t, types_prepare_t_ensures, types_prepare_t_requires
 
 isolate quorum_fplusone_t = {
     type this
@@ -335,7 +329,7 @@ isolate timeout_t = {
 
     invariant round(T, R1) & round(T, R2) -> R1 = R2
     invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
-} with types_ensures, types_requires, block_t
+} with types_timeout_t_ensures, types_timeout_t_requires, block_t
 
 isolate tc_fplusone_t = {
     type this
@@ -396,11 +390,11 @@ isolate proposal_f_t = {
 
     invariant block(P, B1) & block(P, B2) -> B1 = B2
     invariant tc(P, TC1) & tc(P, TC2) -> TC1 = TC2
-} with block_t, types_ensures, types_requires
+} with block_t, types_proposal_f_t_ensures, types_proposal_f_t_requires
 
-isolate types_requires = {
+isolate types_block_t_requires = {
     before block_t.get_round(b:block_t) returns (r:round_t) {
-        assume block_t.cstd(b);#_#
+        require block_t.cstd(b);#_#
     }
 
     before block_t.get_parent(b:block_t) returns (pB:block_t) {
@@ -412,41 +406,52 @@ isolate types_requires = {
     }
 
     before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
-        assume r_c > 0;#_#
-        assume block_t.cstd(pB);#_#
-        assume block_t.round(pB,R) -> R < r_c;#_#
+        require r_c > 0;#_#
+        require block_t.cstd(pB);#_#
+        require block_t.round(pB,R) -> R < r_c;#_#
     }
+} with block_t
+
+isolate types_proposal_n_t_requires = {
 
     before proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
-        assume proposal_n_t.cstd(p);#_#
+        require proposal_n_t.cstd(p);#_#
     }
 
     before proposal_n_t.proposal_n(b:block_t) returns (p:proposal_n_t) {
-        assume block_t.cstd(b);#_#
+        require block_t.cstd(b);#_#
     }
+} with proposal_n_t, block_t
 
+isolate types_prepare_t_requires = {
     before prepare_t.get_block(p:prepare_t) returns (b:block_t) {
-        assume prepare_t.cstd(p);#_#
+        require prepare_t.cstd(p);#_#
     }
 
     before prepare_t.prepare(b:block_t) returns (p:prepare_t) {
-        assume block_t.cstd(b);#_#
+        require block_t.cstd(b);#_#
     }
+} with prepare_t, block_t
+
+isolate types_timeout_t_requires = {
 
     before timeout_t.get_round(t:timeout_t) returns (r:round_t) {
-        assume timeout_t.was_constructed(t);#_#
+        require timeout_t.was_constructed(t);#_#
     }
 
+} with timeout_t
+
+isolate types_proposal_f_t_requires = {
     before proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
-        assume proposal_f_t.was_constructed(p);#_#
+        require proposal_f_t.was_constructed(p);#_#
     }
 
     before proposal_f_t.proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) {
-        assume block_t.cstd(b);#_#
+        require block_t.cstd(b);#_#
     }
-} with block_t, proposal_n_t, prepare_t, timeout_t, proposal_f_t
+} with proposal_f_t, block_t
 
-isolate types_ensures = {
+isolate types_block_t_ensures = {
     after block_t.get_round(b:block_t) returns (r:round_t) {
 
         ensure block_t.round(b, r);
@@ -470,12 +475,18 @@ isolate types_ensures = {
 
         ensure block_t.cstd(b);
     }
+} with block_t
+
+isolate types_proposal_n_t_ensures = {
 
     after proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
 
         ensure proposal_n_t.block(p, b);
 
     }
+} with proposal_n_t
+
+isolate types_prepare_t_ensures = {
 
     after prepare_t.get_block(p:prepare_t) returns (b:block_t) {
 
@@ -483,15 +494,23 @@ isolate types_ensures = {
 
     }
 
+} with prepare_t
+
+isolate types_timeout_t_ensures = {
+
     after timeout_t.get_round(t:timeout_t) returns (r:round_t) {
 
         ensure timeout_t.round(t, r);
 
     }
 
+} with timeout_t
+
+isolate types_proposal_f_t_ensures = {
+
     after proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
 
         ensure proposal_f_t.block(p, b);
 
     }
-} with block_t, proposal_n_t, prepare_t, timeout_t, proposal_f_t
+} with proposal_f_t
