@@ -10,11 +10,10 @@ relation is_good(N:process_index_t)
 
 function leader(R:round_t) : process_index_t
 
-# isolate round_properties = {
-#     property round_t.succ(R1,R2) & round_t.succ(R3,R2) -> R1 = R3
-
-#     property forall Rc,Rq,Rt:round_t. Rc > 0 & (forall Rs1:round_t. round_t.succ(Rs1,Rc) -> Rq < Rs1) & (forall Rs2:round_t. round_t.succ(Rs2,Rc) -> Rs2 <= Rt) -> Rq < Rt
-# } with round_t
+isolate round_t_conv = {
+    relation round_pred_pred(Rp:round_t, Rl:round_t)
+    definition  round_pred_pred(Rp, Rl) = forall Rm:round_t. round_t.succ(Rm,Rl) -> round_t.succ(Rp,Rm)
+}
 
 # There are two ways to access a type's member. Example
 # [block_t.parent(b, p)] is a relation that is set to true when [p] is the parent of [b].
@@ -38,16 +37,8 @@ isolate block_t = {
 
     individual genesis : block_t
 
-    individual unused : block_t
-
-    # function blocks_round(B:block_t) : round_t
-
-    # function blocks_parents_round(B:block_t) : round_t
-
     after init {
-        assume genesis ~= unused;
         cstd(B) := B = genesis;
-        cstd(unused) := false;
 
         round(B, R) := B = genesis & R = 0;
         parent(B, P) := B = genesis & P = genesis;
@@ -55,20 +46,20 @@ isolate block_t = {
         height(B, H) := B = genesis & H = 0;
     }
 
-    export action get_round(b:block_t) returns (r:round_t) = {
-        if some b_r:round_t. round(b, b_r) {
-            r := b_r;
-        }
-    }
+    # action get_round(b:block_t) returns (r:round_t) = {
+    #     if some b_r:round_t. round(b, b_r) {
+    #         r := b_r;
+    #     }
+    # }
 
-    export action get_parent(b:block_t) returns (pB:block_t) = {
+    # action get_parent(b:block_t) returns (pB:block_t) = {
 
-        if some b_pB:block_t. parent(b, b_pB) {
-            pB := b_pB;
-        }
-    }
+    #     if some b_pB:block_t. parent(b, b_pB) {
+    #         pB := b_pB;
+    #     }
+    # }
 
-    export action get_height(b:block_t) returns (h:height_t) = {
+    action get_height(b:block_t) returns (h:height_t) = {
 
         if some b_h:height_t. height(b, b_h) {
             h := b_h;
@@ -77,12 +68,11 @@ isolate block_t = {
 
     export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
         assume ~cstd(b);
-        assume b ~= unused;
 
         round(b, R) := R = r_c;
         #parent(B, P) := parent(B, P) | (B = b & P = pB);
         #ancestor(B, A) := ancestor(B, A) | (B = b & A = pB) | (B = b & ancestor(pB, A));
-        height(B, H) := height(B, H) | B = b & H = height_t.next(get_height(pB));
+        height(b, H) := H = height_t.next(get_height(pB));
 
         cstd(b) := true;
         
@@ -90,11 +80,12 @@ isolate block_t = {
         parent(b,B) := B = pB;
         ancestor(b,pB) := true;
         ancestor(b,B) := ancestor(pB,B) | B = pB;
+
+        ensure ~ancestor(pB,b);
+        ensure ancestor(b,B) -> ((B = pB | ancestor(pB,B)) & ~ ancestor(B,b));
     }
 
-    invariant genesis ~= unused
     invariant cstd(genesis)
-    invariant ~cstd(unused)
     invariant round(B, 0) <-> B = genesis
     invariant parent(genesis, P) <-> P = genesis
     invariant ancestor(genesis, A) <-> A = genesis
@@ -125,6 +116,8 @@ isolate block_t = {
 } with height_t, round_t, types_block_t_requires, types_block_t_ensures
 
 isolate ancestor_transitive_closure_block = {
+
+    property block_t.round_exists(B) | ~ block_t.round_exists(B)
     invariant [i1] block_t.parent(B, P) -> block_t.ancestor(B, P)
     invariant [i2] block_t.ancestor(A1, A2) & block_t.ancestor(A2, A3) -> block_t.ancestor(A1, A3)
     invariant [i4] block_t.ancestor(B, A1) & block_t.ancestor(B, A2) -> A1 = A2 | block_t.ancestor(A1, A2) | block_t.ancestor(A2, A1)
@@ -132,7 +125,9 @@ isolate ancestor_transitive_closure_block = {
     definition inbetween(D, A) = exists M:block_t. block_t.ancestor(D, M) & block_t.ancestor(M, A)
     invariant [i5] block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
     invariant [i3] block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
-    invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h)
+    invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h))
+    invariant block_t.parent(B,P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_r,P_r:round_t. block_t.round(B,B_r) & block_t.round(P,P_r) -> P_r < B_r)
+    invariant block_t.parent(B,Bp) & block_t.parent(Bp,Ba) & block_t.round(B,R) & block_t.round(Ba,Ra) & B ~= block_t.genesis -> Ra < R
     invariant block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
 } with block_t, height_t, round_t, types_block_t_requires, types_block_t_ensures
 
@@ -148,6 +143,82 @@ isolate parent_same_implications_height = {
     invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
     invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
 } with block_t, ancestor_transitive_closure_block, height_t, types_block_t_requires, types_block_t_ensures
+
+isolate round_predecessor = {
+    axiom [round_induction] {
+        relation rel1(R:round_t)
+        #-------------------------
+        property rel1(0) & (forall R1,R2:round_t. rel1(R1) & round_t.succ(R1,R2) -> rel1(R2)) -> forall R:round_t. rel1(R2)
+    }
+
+    relation pred_exists(R:round_t)
+    definition pred_exists(R) = 0 < R -> exists Rp:round_t. round_t.succ(Rp,R)
+
+    property pred_exists(0)
+    property pred_exists(R1) & round_t.succ(R1,R2) -> pred_exists(R2)
+
+    property pred_exists(0) & (forall R1,R2:round_t. pred_exists(R1) & round_t.succ(R1,R2) -> pred_exists(R2)) -> forall R:round_t. pred_exists(R2)
+    proof {
+        apply round_induction
+    }
+} with block_t, round_t
+
+isolate block_t_conv = {
+
+    property block_t.round_exists(B) | ~ block_t.round_exists(B)
+
+    relation round_lte(Bl:block_t, Bg:block_t)
+    definition round_lte(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl <= Rg)
+
+    relation round_lt(Bl:block_t, Bg:block_t)
+    definition round_lt(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl < Rg)
+
+    relation round_same(B1:block_t,B2:block_t)
+    definition round_same(B1,B2) = block_t.cstd(B1) & block_t.cstd(B2) & (forall R1,R2:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2)
+
+    relation block_lt_predecessor(B:block_t, R:round_t)
+    definition block_lt_predecessor(B,R) = 0 < R & forall Rb,Rp:round_t. block_t.round(B,Rb) & round_t.succ(Rp,R) -> Rb < Rp
+
+    relation block_pred_pred(B:block_t, R:round_t)
+    definition block_pred_pred(B,R) = 0 < R & ~ round_t.succ(0,R) & forall Rb:round_t. block_t.round(B,Rb) -> round_t_conv.round_pred_pred(Rb,R)
+
+    invariant round_lte(B1,B2) & round_lte(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B2,R3) -> R1 <= R2 & R2 <= R3 & R1 <= R3)
+    invariant round_lte(B1,B2) & round_lte(B2,B3) -> round_lte(B1,B3)
+    invariant block_t.cstd(B) -> round_lte(B,B)
+    invariant block_t.cstd(B1) & block_t.cstd(B2) -> round_lte(B1,B2) | round_lte(B2,B1)
+    invariant round_lte(B1,B2) & round_lte(B2,B1) & block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2
+
+    #attribute macro_finder=false
+} with block_t, round_t, round_predecessor
+
+isolate block_t_conv_p1 = {
+
+    property block_t.round_exists(B) | ~ block_t.round_exists(B)
+    
+
+    invariant block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B1,B2)
+    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B3,R3) -> R1 < R2 & R2 < R3 & R1 < R3)
+    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> block_t_conv.round_lt(B1,B3)
+    invariant block_t.cstd(B1) & block_t.cstd(B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_lt(B2,B1) | block_t_conv.round_same(B1,B2)
+    #invariant block_t_conv.round_lt(B1,B2) -> ~ block_t_conv.round_lt(B2,B1)
+
+    invariant block_t_conv.round_lte(B1,B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_same(B1,B2)
+
+    invariant block_t_conv.block_lt_predecessor(B,R1) & R1 <= R2 -> block_t_conv.block_lt_predecessor(B,R2)
+
+    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lte(B2,B3) -> block_t_conv.round_lt(B1,B3)
+
+    property round_t.succ(R1,R2) -> R1 < R2
+
+    invariant block_t.cstd(B1) & block_t.cstd(B2) & ~block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B2,B1)
+
+    # invariant round_t_conv.round_pred_pred(Rb,R) & round_t.succ(Rp,R) -> Rb < Rp
+
+    invariant block_t_conv.block_pred_pred(B,R) -> block_t_conv.block_lt_predecessor(B,R)
+
+    attribute macro_finder=false
+
+} with block_t, round_t, round_predecessor, block_t_conv, round_t_conv
 
 isolate proposal_n_t = {
     type this
@@ -293,12 +364,14 @@ isolate timeout_t = {
 
     relation round(T:timeout_t, R:round_t)
     relation qc(T:timeout_t, QC:qc_t)
+    relation node(T:timeout_t, N:process_index_t)
 
     after init {
         was_constructed(T) := false;
 
         round(T, R) := false;
         qc(T, QC) := false;
+        node(T,N) := false;
     }
 
     export action get_round(t:timeout_t) returns (r:round_t) = {
@@ -308,14 +381,15 @@ isolate timeout_t = {
         }
     }
 
-    export action timeout(r:round_t, q:qc_t) returns (t:timeout_t) = {
+    export action timeout(n:process_index_t, r:round_t, q:qc_t) returns (t:timeout_t) = {
         assume ~was_constructed(t);
 
-        if some t_old:timeout_t. round(t_old, r) & qc(t_old, q) {
+        if some t_old:timeout_t. round(t_old, r) & qc(t_old, q) & node(t_old,n) {
             t := t_old;
         } else {
             round(T, R) := round(T, R) | (T = t & R = r);
             qc(T, QC) := qc(T, QC) | (T = t & QC = q);
+            node(T,N) := node(T,N) | (T = t) & (N = n)
         }
 
         was_constructed(T) := was_constructed(T) | T = t;
@@ -323,12 +397,15 @@ isolate timeout_t = {
 
     invariant round(T, R) -> was_constructed(T)
     invariant qc(T, QC) -> was_constructed(T)
+    invariant node(T,N) -> was_constructed(T)
 
     invariant was_constructed(T) -> exists R:round_t. round(T, R)
     invariant was_constructed(T) -> exists QC:qc_t. qc(T, QC)
+    invariant was_constructed(T) -> exists N:process_index_t. node(T,N)
 
     invariant round(T, R1) & round(T, R2) -> R1 = R2
     invariant qc(T, QC1) & qc(T, QC2) -> QC1 = QC2
+    invariant node(T,N1) & node(T,N2) -> N1 = N2
 } with types_timeout_t_ensures, types_timeout_t_requires, block_t
 
 isolate tc_fplusone_t = {
@@ -346,6 +423,14 @@ isolate tc_t = {
     relation timeout(TC:tc_t, T:timeout_t)
     relation quorum(TC:tc_t, Q:quorum_t)
 }
+
+isolate tc_t_conv = {
+    relation tc_pred_pred(TC:tc_t, R:round_t)
+    definition tc_pred_pred(TC,R) = 0 < R & ~ round_t.succ(0,R) & forall Rt:round_t. tc_t.round(TC,Rt) -> round_t_conv.round_pred_pred(Rt,R)
+
+    relation tc_block_same_round(TC:tc_t, B:block_t)
+    definition tc_block_same_round(TC,B) = forall Rt,Rb:round_t. tc_t.round(TC,Rt) & block_t.round(B,Rb) -> Rt = Rb
+} with tc_t, block_t#, block_t_conv, round_t, round_predecessor
 
 isolate proposal_f_t = {
     type this
@@ -393,13 +478,13 @@ isolate proposal_f_t = {
 } with block_t, types_proposal_f_t_ensures, types_proposal_f_t_requires
 
 isolate types_block_t_requires = {
-    before block_t.get_round(b:block_t) returns (r:round_t) {
-        require block_t.cstd(b);#_#
-    }
+    # before block_t.get_round(b:block_t) returns (r:round_t) {
+    #     require block_t.cstd(b);#_#
+    # }
 
-    before block_t.get_parent(b:block_t) returns (pB:block_t) {
-        require block_t.cstd(b);
-    }
+    # before block_t.get_parent(b:block_t) returns (pB:block_t) {
+    #     require block_t.cstd(b);
+    # }
 
     before block_t.get_height(b:block_t) returns (h:height_t) {
         require block_t.cstd(b);
@@ -452,17 +537,17 @@ isolate types_proposal_f_t_requires = {
 } with proposal_f_t, block_t
 
 isolate types_block_t_ensures = {
-    after block_t.get_round(b:block_t) returns (r:round_t) {
+    # after block_t.get_round(b:block_t) returns (r:round_t) {
 
-        ensure block_t.round(b, r);
+    #     ensure block_t.round(b, r);
 
-    }
+    # }
 
-    after block_t.get_parent(b:block_t) returns (pB:block_t) {
+    # after block_t.get_parent(b:block_t) returns (pB:block_t) {
 
-        ensure block_t.parent(b, pB);
+    #     ensure block_t.parent(b, pB);
 
-    }
+    # }
 
     after block_t.get_height(b:block_t) returns (h:height_t) {
 
@@ -475,7 +560,7 @@ isolate types_block_t_ensures = {
 
         ensure block_t.cstd(b);
     }
-} with block_t
+} with block_t, ancestor_transitive_closure_block
 
 isolate types_proposal_n_t_ensures = {
 
