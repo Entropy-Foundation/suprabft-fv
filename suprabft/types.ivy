@@ -179,6 +179,9 @@ isolate block_t_conv = {
     relation block_lt_predecessor(B:block_t, R:round_t)
     definition block_lt_predecessor(B,R) = 0 < R & forall Rb,Rp:round_t. block_t.round(B,Rb) & round_t.succ(Rp,R) -> Rb < Rp
 
+    relation block_lt_round(B:block_t, R:round_t)
+    definition block_lt_round(B,R) = 0 < R & forall Rb:round_t. block_t.round(B,Rb) -> Rb < R
+
     relation block_pred_pred(B:block_t, R:round_t)
     definition block_pred_pred(B,R) = 0 < R & ~ round_t.succ(0,R) & forall Rb:round_t. block_t.round(B,Rb) -> round_t_conv.round_pred_pred(Rb,R)
 

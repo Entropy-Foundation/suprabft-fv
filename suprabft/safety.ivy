@@ -1061,16 +1061,6 @@ isolate gv_to_has_qc_gte_gl_m1 = {
 
     invariant global_view_instance.process_in_round(N) = R & ~ round_t.succ(0,R) -> (exists B:block_t. round_advance_link_to_qc(N,R,B)) | (exists TC:tc_t. round_advance_link_to_tc(N,R,TC))
 
-    #invariant global_view_instance.process_in_round(N) = R & ~ round_t.succ(0,R) -> (exists B:block_t. block_t_conv.block_pred_pred(B,R) & global_view_instance.process_received_qc(N,B)) | (exists TC:tc_t. global_view_instance.process_received_tc(N,TC) & forall Rt,Rp:round_t. round_t.succ(Rp,R) & tc_t.round(TC,Rt) -> round_t.succ(Rt,Rp))
-
-    # invariant global_view_instance.process_in_round(N) = R2 & round_t.succ(R,R1) & round_t.succ(R1,R2) -> (exists TC:tc_t. tc_t.round(TC,R) & global_view_instance.process_received_tc(N,TC)) | (exists QC:qc_t. (forall B:block_t. qc_t.block(QC,B) -> block_t.round(B,R) & global_view_instance.process_received_qc(N,B)))
-
-    # invariant global_view_instance.process_received_tc(N,TC) & tc_t.quorum(TC,Q) & tc_t.round(TC,R) & quorum_t.member(Q,N1) & is_good(N1) -> (exists QC:qc_t. global_view_instance.process_sent_timeout(N1,R,QC) & (forall B:block_t. qc_t.block(QC,B) -> global_view_instance.process_received_qc(N,B)))
-
-    # invariant global_view_instance.process_received_tc_fplusone(N,TC) & tc_fplusone_t.quorum(TC,Q) & tc_fplusone_t.round(TC,R) & quorum_fplusone_t.member(Q,N1) & is_good(N1) -> (exists QC:qc_t. global_view_instance.process_sent_timeout(N1,R,QC) & (forall B:block_t. qc_t.block(QC,B) -> global_view_instance.process_received_qc(N,B)))
-
-    # invariant global_view_instance.process_sent_timeout(N,R,QC) & is_good(N) & qonv_implies_parent_gl.global_lock(Bl) & block_t.round(Bl,Rl) & Rl < R & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rl <= Rq
-
     #attribute macro_finder=false
 } with global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, block_t_conv, gv_basic_validities.gv_inv_received_qc_cstd#, gv_action_requires
 
@@ -1111,7 +1101,19 @@ isolate gv_to_has_qc_gte_gl_m4 = {
 
     invariant global_view_instance.process_in_round(N) = R & 0 < R & ~ round_t.succ(0,R) & qonv_implies_parent_gl.global_lock(B) & block_t_conv.block_pred_pred(B,R) -> (exists B:block_t. global_view_instance.process_received_qc(N,B) & block_t_conv.block_pred_pred(B,R)) | (exists TC:tc_t. qonv_implies_parent_gl.global_lock(B) & tc_t_conv.tc_pred_pred(TC,R) & block_t_conv.block_pred_pred(B,R) & global_view_instance.process_received_tc(N,TC))
 
-    invariant global_view_instance.process_in_round(N) = R & 0 < R & ~ round_t.succ(0,R) & qonv_implies_parent_gl.global_lock(B) & block_t_conv.block_pred_pred(B,R) -> (exists B:block_t. global_view_instance.process_received_qc(N,B) & block_t_conv.block_pred_pred(B,R))
+    invariant global_view_instance.process_in_round(N) = R & 0 < R & ~ round_t.succ(0,R) & qonv_implies_parent_gl.global_lock(B) & block_t_conv.block_pred_pred(B,R) -> (exists Br:block_t. global_view_instance.process_received_qc(N,Br) & block_t_conv.block_pred_pred(Br,R))
+
+    invariant R <= global_view_instance.process_in_round(N) & 0 < R & ~ round_t.succ(0,R) & qonv_implies_parent_gl.global_lock(B) & block_t_conv.block_pred_pred(B,R) -> (exists Br:block_t. global_view_instance.process_received_qc(N,Br) & block_t_conv.block_pred_pred(Br,R))
 
     attribute macro_finder=false
 } with global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, block_t_conv, tc_t_conv, round_t_conv, round_predecessor, gv_to_has_qc_gte_gl_m2, gv_tc_implies_no_gl_p1, gv_to_has_qc_gte_gl_m3#, gv_action_requires
+
+isolate lv_before_to_qc_ge_gl = {
+    before global_view_instance.timeout(n:process_index_t, r:round_t, maxCommitQC:qc_t, tc_fp1:tc_fplusone_t, tc:tc_t) {
+        round_t.succ(r,global_view_instance.process_in_round(n)) | (exists N1:process_index_t. exists QC:qc_t. global_view_instance.process_sent_timeout(N1,r,QC) & (forall B:block_t. qc_t.block(QC,B) -> local_view_instance.local_view(n).observed_qc(B)))
+    }
+}
+
+isolate gv_to_has_qc_gte_gl = {
+    invariant is_good(N) & global_view_instance.process_sent_timeout(N,R,QC) & qonv_implies_parent_gl.global_lock(Bg) & block_t_conv.block_lt_round(Bg,R) -> qc_t_conv.qc_gte_block(QC,Bg)
+}
