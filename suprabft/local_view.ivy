@@ -327,7 +327,7 @@ object local_view(id:process_index_t) = {
     action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
 
-        #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we contrain the environment to call qc_processing on the qcs before calling timeout_sync
+        #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we constrain the environment to call qc_processing on the qcs before calling timeout_sync
         require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> local_view_instance.local_view(id).observed_qc(B);
 
         var r := tc_fplusone_get_round(tc);
