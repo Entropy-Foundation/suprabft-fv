@@ -303,14 +303,14 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    action timeout(r:round_t, tc_fp1:tc_fplusone_t, tc:tc_t) = {
+    action timeout(r:round_t, tc_fp1:tc_fplusone_t, tc:tc_t, kind:to_kind) = {
         if( ~expired_rounds(r)) {
             if some b_max_commitQ:block_t. max_commitQ(b_max_commitQ) {
                 var qc_max_commitQ := qc_for_block(b_max_commitQ);
                 var t := timeout_t.timeout(id, r, qc_max_commitQ);
                 call broadcast_timeout(t);
                 expired_rounds(r) := true;
-                call global_view.timeout(id, r, qc_max_commitQ, tc_fp1, tc);
+                call global_view.timeout(id, r, qc_max_commitQ, tc_fp1, tc, kind);
             }
         }
     }
@@ -321,7 +321,7 @@ object local_view(id:process_index_t) = {
         timer := true;
         var tc_fp1_temp:tc_fplusone_t;
         var tc_temp:tc_t;
-        call timeout(round_t.prev(r_c), tc_fp1_temp,tc_temp);
+        call timeout(r_c_m1, tc_fp1_temp,tc_temp, to_kind.timer_expire);
     }
 
     action timeout_sync(tc:tc_fplusone_t) = {
@@ -331,9 +331,9 @@ object local_view(id:process_index_t) = {
         require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> local_view_instance.local_view(id).observed_qc(B);
 
         var r := tc_fplusone_get_round(tc);
-        if (round_t.prev(r_c) <= r & 0 < r) {
+        if (r_c_m1 <= r & 0 < r) {
             var tc_temp:tc_t;
-            call timeout(r,tc,tc_temp);
+            call timeout(r,tc,tc_temp, to_kind.timeout_sync);
         }
 
         
@@ -345,7 +345,7 @@ object local_view(id:process_index_t) = {
 
         if(r_c_m1 <= tc_round & tc_round > 0) {
             var tc_fp1_temp:tc_fplusone_t;
-            call timeout(tc_round, tc_fp1_temp, tc);
+            call timeout(tc_round, tc_fp1_temp, tc, to_kind.tc_received);
         }
         var b_temp:block_t;
         advanceToRound(round_t.next(round_t.next(tc_round)), b_temp,tc, false);
@@ -512,7 +512,8 @@ object local_view(id:process_index_t) = {
             call shim.send(id, dst, m);
             var tc_fp1:tc_fplusone_t;
             var tc:tc_t;
-            call global_view.timeout(m.src,timeout_t.get_round(m.t),timeout_get_qc(m.t), tc_fp1, tc);
+            var kind:to_kind;
+            call global_view.timeout(m.src,timeout_t.get_round(m.t),timeout_get_qc(m.t), tc_fp1, tc, kind);
         }
 
     }

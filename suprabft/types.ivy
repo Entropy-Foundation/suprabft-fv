@@ -419,6 +419,10 @@ isolate timeout_t = {
     invariant node(T,N1) & node(T,N2) -> N1 = N2
 } with types_timeout_t_ensures, types_timeout_t_requires, block_t
 
+object to_kind = {
+    type this = {timer_expire, timeout_sync, tc_received}
+}
+
 isolate tc_fplusone_t = {
     type this
 

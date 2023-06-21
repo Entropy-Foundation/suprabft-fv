@@ -209,7 +209,7 @@ module global_view = {
 
     }
 
-    action timeout(n:process_index_t, r:round_t, maxCommitQC:qc_t, tc_fp1: tc_fplusone_t, tc:tc_t) = {
+    action timeout(n:process_index_t, r:round_t, maxCommitQC:qc_t, tc_fp1: tc_fplusone_t, tc:tc_t, kind:to_kind) = {
         
         process_sent_timeout(n, r, maxCommitQC) := true;
         
