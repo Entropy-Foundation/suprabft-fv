@@ -126,9 +126,9 @@ isolate gv_action_timeout_requires_case_split = {
 
         assume ~ is_good(n) | (kind = to_kind.tc_received -> global_view_instance.tc_valid(tc) & tc_t.round(tc,r) & (forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> global_view_instance.process_received_qc(n,B)));
 
-        require ~ is_good(n) | (kind = to_kind.timeout_sync -> exists global_view_instance.process_sent_timeout(N,r,QC));
+        require ~ is_good(n) | (kind = to_kind.timeout_sync -> (exists N:process_index_t. exists QC:qc_t. exists B:block_t. is_good(N) & global_view_instance.process_sent_timeout(N,r,QC) & qc_t.block(QC,B) & global_view_instance.process_received_qc(n,B)));
 
-        require ~ is_good(n) | (kind = to_kind.tc_received -> exists B:block_t. block_t.round(B,r) & global_view_instance.process_received_qc(n,B));
+        require ~ is_good(n) | (kind = to_kind.tc_received -> (exists N:process_index_t. exists QC:qc_t. exists B:block_t. is_good(N) & global_view_instance.process_sent_timeout(N,r,QC) & qc_t.block(QC,B) & global_view_instance.process_received_qc(n,B)));
     }
 }
 
