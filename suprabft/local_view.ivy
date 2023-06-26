@@ -306,6 +306,7 @@ object local_view(id:process_index_t) = {
     action timeout(r:round_t, tc_fp1:tc_fplusone_t, tc:tc_t, kind:to_kind) = {
         if( ~expired_rounds(r)) {
             if some b_max_commitQ:block_t. max_commitQ(b_max_commitQ) {
+                var temp_block := b_max_commitQ;
                 var qc_max_commitQ := qc_for_block(b_max_commitQ);
                 var t := timeout_t.timeout(id, r, qc_max_commitQ);
                 call broadcast_timeout(t);
