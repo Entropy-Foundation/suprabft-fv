@@ -140,6 +140,9 @@ module global_view = {
     relation eligible_to_commit(N:process_index_t, Bp:block_t)
     definition eligible_to_commit(N,Bp) = process_received_qc(N,Bp) & ldc(Bp) & block_t.ancestor(Bp,process_last_committed(N)) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> process_received_qc(N,Ba))
 
+    relation max_received_qc(N:process_index_t, B:block_t)
+    definition max_received_qc(N,B) = process_received_qc(N,B) & (forall Br:block_t. process_received_qc(N,Br) -> block_t_conv.round_lte(Br,B))
+
     after init {
         process_in_round(N) := round_t.next(0);
         process_received_normal_proposal(N,P) := false;

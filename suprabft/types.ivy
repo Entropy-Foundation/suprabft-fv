@@ -446,6 +446,9 @@ isolate tc_t_conv = {
     relation tc_pred_pred(TC:tc_t, R:round_t)
     definition tc_pred_pred(TC,R) = 0 < R & ~ round_t.succ(0,R) & forall Rt:round_t. tc_t.round(TC,Rt) -> round_t_conv.round_pred_pred(Rt,R)
 
+    relation tc_pred(TC:tc_t, R:round_t)
+    definition tc_pred(TC,R) = 0 < R & forall Rt:round_t. tc_t.round(TC,Rt) -> round_t.succ(Rt,R)
+
     relation tc_block_same_round(TC:tc_t, B:block_t)
     definition tc_block_same_round(TC,B) = forall Rt,Rb:round_t. tc_t.round(TC,Rt) & block_t.round(B,Rb) -> Rt = Rb
 } with tc_t, block_t#, block_t_conv, round_t, round_predecessor
