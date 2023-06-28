@@ -130,9 +130,11 @@ isolate gv_action_timeout_requires_case_split = {
 
         assume ~ is_good(n) | (kind = to_kind.tc_received -> (exists N:process_index_t. exists QC:qc_t. exists B:block_t. is_good(N) & global_view_instance.process_sent_timeout(N,r,QC) & qc_t.block(QC,B) & global_view_instance.process_received_qc(n,B)));
 
-        assume ~ is_good(n) | (kind = to_kind.timer_expire & r ~= 0 -> ((exists B:block_t. global_view_instance.process_received_qc(n,B) & block_t_conv.block_pred_pred(B,global_view_instance.process_in_round(n))) | (exists TC:tc_t. global_view_instance.process_received_tc(n,TC) & tc_t_conv.tc_pred_pred(TC,global_view_instance.process_in_round(n)))));
+        assume ~ is_good(n) | (kind = to_kind.timer_expire ->  (r ~= 0 | ((exists B:block_t. global_view_instance.process_received_qc(n,B) & block_t_conv.block_pred_pred(B,global_view_instance.process_in_round(n))) | (exists TC:tc_t. global_view_instance.process_received_tc(n,TC) & tc_t_conv.tc_pred_pred(TC,global_view_instance.process_in_round(n))))));
 
-        require ~ is_good(n) | (exists B:block_t. global_view_instance.process_received_qc(n,B) & block_t_conv.block_pred_pred(B,global_view_instance.process_in_round(n))) | (exists TC:tc_t. global_view_instance.process_received_tc(n,TC) & tc_t_conv.tc_pred_pred(TC,global_view_instance.process_in_round(n))) | (exists Na:process_index_t. exists QCa:qc_t. exists Ba:block_t. is_good(Na) & global_view_instance.process_sent_timeout(Na,r,Qca) & qc_t.block(QCa,Ba) & global_view_instance.process_received_qc(N,Ba))
+        assume kind = to_kind.timer_expire | kind = to_kind.tc_received | kind = to_kind.timeout_sync;
+
+        require ~ is_good(n) | r = 0 | (exists B:block_t. global_view_instance.process_received_qc(n,B) & block_t_conv.block_pred_pred(B,global_view_instance.process_in_round(n))) | (exists TC:tc_t. global_view_instance.process_received_tc(n,TC) & tc_t_conv.tc_pred_pred(TC,global_view_instance.process_in_round(n))) | (exists Na:process_index_t. exists QCa:qc_t. exists Ba:block_t. is_good(Na) & global_view_instance.process_sent_timeout(Na,r,Qca) & qc_t.block(QCa,Ba) & global_view_instance.process_received_qc(N,Ba))
     }
 }
 
