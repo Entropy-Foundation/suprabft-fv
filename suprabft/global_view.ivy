@@ -104,8 +104,8 @@ module global_view = {
                 (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
                 (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
                 (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                quorum_is_subset(TC) &
-                forall Q:quorum_t. forall N:process_index_t. forall Rt:round_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) & tc_t.round(TC,Rt) -> exists QC:qc_t. process_sent_timeout(N,Rt,QC) & qc_round_in_tc(N,QC,Rt,TC)
+                (forall Q:quorum_t,N:process_index_t,R:round_t. tc_t.quorum(TC, Q) & tc_t.round(TC,R) -> (quorum_t.member(Q, N) & is_good(N) ->
+                        exists QC:qc_t. qc_round_in_tc(N,QC,R,TC) & process_sent_timeout(N, R, QC)))
 
     relation proposal_f_valid(P:proposal_f_t)
     definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) & (forall TC:tc_t. proposal_f_t.tc(P, TC) -> tc_valid(TC)) &
