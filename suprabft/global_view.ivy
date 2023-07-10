@@ -67,9 +67,9 @@ module global_view = {
     relation timeout_qc_exists(T:timeout_t)
     definition timeout_qc_exists(T) = exists QC:qc_t. timeout_t.qc(T,QC) & qc_valid(QC)
     relation timeout_valid(T:timeout_t)
-    definition timeout_valid(T) = timeout_t.was_constructed(T) & timeout_round_exists(T) & timeout_qc_exists(T) &
-                (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
-                & (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
+    definition timeout_valid(T) = timeout_t.was_constructed(T) & timeout_round_exists(T) & timeout_qc_exists(T)
+                & (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
+                # & (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
 
     relation qc_round_in_tc_fplusone(N:process_index_t, QC:qc_t, R:round_t, TC:tc_fplusone_t)
     definition qc_round_in_tc_fplusone(N,QC,R,TC) = exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC) & timeout_t.node(T,N)

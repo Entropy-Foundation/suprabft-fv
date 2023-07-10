@@ -362,7 +362,7 @@ object local_view(id:process_index_t) = {
     action proposal_f_processing(p:proposal_f_t) = {
         require ~timer;
 
-        require received_proposal_f(p, leader(round_t.prev(r_c)));
+        require received_proposal_f(p, leader(r_c_m1));
 
         require proposal_f_t.tc(p,TC) -> received_tc(TC) & qcs_in_tc_processed(TC);
 

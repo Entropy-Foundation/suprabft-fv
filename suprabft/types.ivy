@@ -108,7 +108,7 @@ isolate block_t_properties = {
     definition height_exists(B) = exists H:height_t. block_t.height(B, H)
     invariant [cstd_block_height_exists] block_t.cstd(B) -> height_exists(B)
 
-    invariant block_t.round(B, R1) & block_t.round(B, R2) -> R1 = R2
+    invariant [block_t_inv_round_unique] block_t.round(B, R1) & block_t.round(B, R2) -> R1 = R2
     invariant block_t.parent(B, P1) & block_t.parent(B, P2) -> P1 = P2
     invariant block_t.height(B, H1) & block_t.height(B, H2) -> H1 = H2
 
