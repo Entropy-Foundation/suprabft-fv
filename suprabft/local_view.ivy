@@ -202,8 +202,8 @@ object local_view(id:process_index_t) = {
 
     action proposeNormal(pB:block_t) = {
         if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
-            var b := block_t.block(r_c, pB);
-            var p := proposal_n_t.proposal_n(b);
+            last_prop_n := block_t.block(r_c, pB);
+            var p := proposal_n_t.proposal_n(last_prop_n);
             call broadcast_proposal_n(p);
         }
     }
@@ -234,7 +234,7 @@ object local_view(id:process_index_t) = {
         if some bp:block_t. commit_candidate(bp){
             call global_view.commit(id,bp,last_committed);
             last_committed := bp;
-            commitQ(B) := commitQ(B) & block_t.ancestor(B,last_committed);
+            commitQ(B) := commitQ(B) & block_t_conv.round_lt(last_committed,B);
         }
     }
 
@@ -243,7 +243,7 @@ object local_view(id:process_index_t) = {
         require qc_t.block(qc,b_qc);
 
         if ~observed_qc(b_qc) {
-            if (forall R:round_t. block_t.round(b_qc,R) -> round_t.succ(R,r_c))
+            if (forall R:round_t. block_t.round(b_qc,R) -> r_c <= round_t.next(R))
             {
                 call proposeNormal(b_qc);
             }
@@ -262,13 +262,12 @@ object local_view(id:process_index_t) = {
     action proposal_n_processing(p:proposal_n_t) = {
         require ~timer;
 
-        require received_proposal_n(p, leader(round_t.prev(local_view_instance.local_view(id).r_c)));
+        require received_proposal_n(p, leader(r_c_m1));
 
         call global_view.receive_normal_proposal(id,p);
 
         var ok := true;
         ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> round_t.succ(R, r_c);
-        ok := ok & forall B,Bp:block_t. proposal_n_t.block(p, B) & block_t.parent(B,Bp) -> commitQ(Bp);
         ok := ok & ~timer;
         ok := ok & forall R:round_t. block_t.round(last_prop_n,R) -> R < r_c;
         if ok {
@@ -276,18 +275,18 @@ object local_view(id:process_index_t) = {
         }
         ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> ~expired_rounds(R);
         ok := ok & forall B:block_t. forall R:round_t. proposal_n_t.block(p, B) & block_t.round(B, R) -> r_vn < R;
-        ok := ok & forall B1,B2:block_t. proposal_n_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(locked, B2);
+        ok := ok & forall B1,B2:block_t. proposal_n_t.block(p, B1) & block_t.parent(B1, B2) -> qc_t.block(locked, B2) & global_view.successive_blocks(B2,B1);
         if ok {
             call broadcast_prepare(prepare_t.prepare(proposal_n_t.get_block(p)));
             call global_view.vote_normal(id,p);
-            r_vn := r_c;
+            r_vn := round_t.prev(r_c);
         }
     }
 
-    action proposeFR(tc:tc_t, r:round_t) = {
+    action proposeFR(tc:tc_t) = {
 
+        var r = round_t.next(tc_get_round(tc));
         var ok := true;
-        ok := ok & round_t.succ(r, r_c);
         ok := ok & leader(r) = id;
 
         if ok {
@@ -306,7 +305,6 @@ object local_view(id:process_index_t) = {
     action timeout(r:round_t, tc_fp1:tc_fplusone_t, tc:tc_t, kind:to_kind) = {
         if( ~expired_rounds(r)) {
             if some b_max_commitQ:block_t. max_commitQ(b_max_commitQ) {
-                var temp_block := b_max_commitQ;
                 var qc_max_commitQ := qc_for_block(b_max_commitQ);
                 var t := timeout_t.timeout(id, r, qc_max_commitQ);
                 call broadcast_timeout(t);
@@ -329,10 +327,13 @@ object local_view(id:process_index_t) = {
         require received_tc_fplusone(tc);
 
         #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we constrain the environment to call qc_processing on the qcs before calling timeout_sync
-        require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> local_view_instance.local_view(id).observed_qc(B);
+        require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> observed_qc(B);
 
         var r := tc_fplusone_get_round(tc);
-        if (r_c_m1 <= r & 0 < r) {
+        var ok := true;
+        ok := ok & forall Rlc:round_t. block_t.round(last_committed, Rlc) -> Rlc < r;
+        ok := ok & forall Bcq:block_t. forall Rcq:round_t. commitQ(Bcq) & block_t.round(Bcq,Rcq) -> Rcq ~= r;
+        if (ok) {
             var tc_temp:tc_t;
             call timeout(r,tc,tc_temp, to_kind.timeout_sync);
         }
@@ -555,10 +556,10 @@ object local_view(id:process_index_t) = {
     export byzantine_send_qc
     export byzantine_send_tc
     export byzantine_send_timeout
-    # export proposal_f_processing
-    # export proposal_n_processing
-    # export qc_processing
-    # export tc_processing
+    export proposal_f_processing
+    export proposal_n_processing
+    export qc_processing
+    export tc_processing
     export timeout_sync
     export timer_expire
 
