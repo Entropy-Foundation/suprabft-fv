@@ -555,10 +555,10 @@ object local_view(id:process_index_t) = {
     export byzantine_send_qc
     export byzantine_send_tc
     export byzantine_send_timeout
-    export proposal_f_processing
-    export proposal_n_processing
-    export qc_processing
-    export tc_processing
+    # export proposal_f_processing
+    # export proposal_n_processing
+    # export qc_processing
+    # export tc_processing
     export timeout_sync
     export timer_expire
 

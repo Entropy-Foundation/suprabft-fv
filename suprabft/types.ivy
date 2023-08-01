@@ -66,8 +66,8 @@ isolate block_t = {
         }
     }
 
-    export action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
-        assume ~cstd(b);
+    action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
+        require ~cstd(b);
 
         round(b, R) := R = r_c;
         height(b, H) := H = height_t.next(get_height(pB));
