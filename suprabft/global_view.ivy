@@ -67,15 +67,10 @@ module global_view = {
     relation timeout_qc_exists(T:timeout_t)
     definition timeout_qc_exists(T) = exists QC:qc_t. timeout_t.qc(T,QC) & qc_valid(QC)
     relation timeout_valid(T:timeout_t)
-    definition timeout_valid(T) = timeout_t.was_constructed(T) & timeout_round_exists(T) & timeout_qc_exists(T)
-                & (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
-                # & (forall Rt,Rq:round_t. forall QC:qc_t. forall B:block_t. timeout_t.qc(T,QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & timeout_t.round(T,Rt) -> Rq < Rt)
+    definition timeout_valid(T) = timeout_t.was_constructed(T) & timeout_round_exists(T) & timeout_qc_exists(T) & (forall QC:qc_t. timeout_t.qc(T, QC) -> qc_valid(QC))
 
     relation qc_round_in_tc_fplusone(N:process_index_t, QC:qc_t, R:round_t, TC:tc_fplusone_t)
     definition qc_round_in_tc_fplusone(N,QC,R,TC) = exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC) & timeout_t.node(T,N)
-
-    relation quorum_fplusone_is_subset(TC:tc_fplusone_t)
-    definition quorum_fplusone_is_subset(TC) = forall Q:quorum_fplusone_t. forall N:process_index_t. forall Rt:round_t. forall QC:qc_t. tc_fplusone_t.quorum(TC,Q) & quorum_fplusone_t.member(Q,N) & is_good(N) & tc_fplusone_t.round(TC,Rt) & process_sent_timeout(N,Rt,QC) -> qc_round_in_tc_fplusone(N,QC,Rt,TC)
 
     relation tc_fplusone_valid(TC:tc_fplusone_t)
     definition tc_fplusone_valid(TC) =
@@ -91,9 +86,6 @@ module global_view = {
 
     relation qc_round_in_tc(N:process_index_t, QC:qc_t, R:round_t, TC:tc_t)
     definition qc_round_in_tc(N,QC,R,TC) = exists T:timeout_t. tc_t.timeout(TC,T) & timeout_t.round(T,R) & timeout_t.qc(T,QC) & timeout_t.node(T,N)
-
-    relation quorum_is_subset(TC:tc_t)
-    definition quorum_is_subset(TC) = forall Q:quorum_t. forall N:process_index_t. forall Rt:round_t. forall QC:qc_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) & tc_t.round(TC,Rt) & process_sent_timeout(N,Rt,QC) -> qc_round_in_tc(N,QC,Rt,TC)
 
     relation tc_valid(TC:tc_t)
     definition tc_valid(TC) =

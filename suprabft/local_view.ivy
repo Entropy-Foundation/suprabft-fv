@@ -243,7 +243,7 @@ object local_view(id:process_index_t) = {
         require qc_t.block(qc,b_qc);
 
         if ~observed_qc(b_qc) {
-            if (forall R:round_t. block_t.round(b_qc,R) -> r_c <= round_t.next(R))
+            if (forall R, Rs1, Rs2:round_t. block_t.round(b_qc,R) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) -> r_c < Rs2)
             {
                 call proposeNormal(b_qc);
             }
@@ -285,7 +285,7 @@ object local_view(id:process_index_t) = {
 
     action proposeFR(tc:tc_t) = {
 
-        var r = round_t.next(tc_get_round(tc));
+        var r := round_t.next(tc_get_round(tc));
         var ok := true;
         ok := ok & leader(r) = id;
 
@@ -346,17 +346,12 @@ object local_view(id:process_index_t) = {
         var tc_round := tc_get_round(tc);
 
         if(r_c_m1 <= tc_round & tc_round > 0) {
-            var tc_fp1_temp:tc_fplusone_t;
-            call timeout(tc_round, tc_fp1_temp, tc, to_kind.tc_received);
+            call proposeFR(tc);
         }
+        var tc_fp1_temp:tc_fplusone_t;
+        call timeout(tc_round, tc_fp1_temp, tc, to_kind.tc_received);
         var b_temp:block_t;
         advanceToRound(round_t.next(round_t.next(tc_round)), b_temp,tc, false);
-        call proposeFR(tc,tc_round);
-        if round_t.succ(round_t.next(tc_round),r_c)
-        {
-            #in real implementation, the timer has to be extended by \Delta. Here in IVy, timer is not maintained explicitly, but only maintained implecitly through a Boolean variable, so there is nothing to do
-            #timer := false;
-        }
         global_view.received_tc(id,tc);
     }
 
