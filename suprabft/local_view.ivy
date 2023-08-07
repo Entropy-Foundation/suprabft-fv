@@ -283,6 +283,9 @@ object local_view(id:process_index_t) = {
         }
     }
 
+    action arbitrary_qc(tc:tc_t) returns (qc:qc_t) = {
+        require global_view_instance.tc_valid(tc);
+    }
     action proposeFR(tc:tc_t) = {
 
         var r := round_t.next(tc_get_round(tc));
@@ -290,13 +293,17 @@ object local_view(id:process_index_t) = {
         ok := ok & leader(r) = id;
 
         if ok {
-            var qcp := tc_getMaxQC(tc);
+            # var qcp := tc_getMaxQC(tc);
+            var qcp := arbitrary_qc(tc);
+            # var qcp : qc_t;
 
             #ensure that qcp has been processed already. In implementation, this is done by calling the subroutine for processing qc. Here, we contrain the environment to call qc_processing on qcp before calling proposal_f_processing
             #require qc_t.block(qcp,B) & qcp ~= qc_t.genesis -> observed_qc(B);
 
             var b := block_t.block(r, qc_get_block(qcp));
+            # var b : block_t;
             var p := proposal_f_t.proposal_f(b,tc);
+            # var p : proposal_f_t;
             call broadcast_proposal_f(p);
             r_pf := r;
         }

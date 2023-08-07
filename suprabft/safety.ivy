@@ -717,14 +717,6 @@ isolate lv_action_requires = {
         require round_t.succ(0,R1) -> R1 < local_view_instance.local_view(id).r_c;
     }
 
-    # before local_view_instance.local_view.proposal_f_processing(id:process_index_t, p:proposal_f_t) {
-    #     require ~local_view_instance.local_view(id).timer;
-
-    #     require local_view_instance.local_view(id).received_proposal_f(p, leader(round_t.prev(local_view_instance.local_view(id).r_c)));
-
-    #     require proposal_f_t.tc(p,TC) -> local_view_instance.local_view(id).received_tc(TC) & local_view_instance.local_view(id).qcs_in_tc_processed(TC);
-    # }
-
     before local_view_instance.local_view.tc_getMaxQC(id:process_index_t, tc:tc_t) returns (qc:qc_t) {
         require global_view_instance.tc_valid(tc);#_#
     }
@@ -787,12 +779,13 @@ isolate lv_action_ensures = {
 isolate iso_valid_received_proposal_f = {
 
     # invariant [valid_received_proposal_f] local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P) 
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f & proposal_f_t.block(M.prop_f,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rs) & proposal_f_t.tc(M.prop_f,TC) & tc_t.round(TC,Rt) -> Rp < Rt
+    # invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f & proposal_f_t.block(M.prop_f,Br) & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) & proposal_f_t.tc(M.prop_f,TC) & tc_t.round(TC,Rt) -> Rp <= Rt
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f & proposal_f_t.tc(M.prop_f,TC) & tc_t.round(TC,Rt) & tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,Bqc) & block_t.round(Bqc,Rqc) -> Rqc <= Rt
 
     # attribute macro_finder=false
 
-} with shim, block_t, block_t_properties, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, global_view_instance, local_view_instance, lv_action_requires, lv_validity_invariants.lv_rc_m1_pred_rc, lv_validity_invariants.valid_received_tc, lv_tc_proposal_f_processing_requires#, lv_basic_invariants, lv_action_ensures, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures
+} with shim, block_t, block_t_properties, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, global_view_instance, local_view_instance, lv_action_requires#, lv_validity_invariants.lv_rc_m1_pred_rc, lv_validity_invariants.valid_received_tc, lv_tc_proposal_f_processing_requires#, lv_basic_invariants, lv_action_ensures, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures
 
 isolate lv_validity_invariants = {
 

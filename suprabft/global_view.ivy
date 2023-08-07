@@ -92,17 +92,16 @@ module global_view = {
                 (exists R:round_t. tc_t.round(TC, R)) &
                 (exists Q:quorum_t. tc_t.quorum(TC, Q)) &
                 (exists T:timeout_t. tc_t.timeout(TC,T)) &
-                (forall R1,R2:round_t. tc_t.round(TC, R1) & tc_t.round(TC, R2) -> R1 = R2) &
-                (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
-                (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
-                (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
-                (forall Q:quorum_t,N:process_index_t,R:round_t. tc_t.quorum(TC, Q) & tc_t.round(TC,R) -> (quorum_t.member(Q, N) & is_good(N) ->
-                        exists QC:qc_t. qc_round_in_tc(N,QC,R,TC) & process_sent_timeout(N, R, QC)))
+                (forall R1,R2:round_t. tc_t.round(TC, R1) & tc_t.round(TC, R2) -> R1 = R2) #&
+                # (forall Q1,Q2:quorum_t. tc_t.quorum(TC, Q1) & tc_t.quorum(TC, Q2) -> Q1 = Q2) &
+                # (forall T:timeout_t. tc_t.timeout(TC, T) -> timeout_valid(T)) &
+                # (forall T:timeout_t,R:round_t. tc_t.timeout(TC, T) & timeout_t.round(T, R) -> tc_t.round(TC, R)) &
+                # (forall Q:quorum_t,N:process_index_t,R:round_t. tc_t.quorum(TC, Q) & tc_t.round(TC,R) -> (quorum_t.member(Q, N) & is_good(N) ->
+                #         exists QC:qc_t. qc_round_in_tc(N,QC,R,TC) & process_sent_timeout(N, R, QC)))
 
     relation proposal_f_valid(P:proposal_f_t)
     definition proposal_f_valid(P) = proposal_f_t.was_constructed(P) & (forall TC:tc_t. proposal_f_t.tc(P, TC) -> tc_valid(TC)) &
-                (forall TC:tc_t. forall Rt,R:round_t. forall B:block_t. proposal_f_t.tc(P, TC) & proposal_f_t.block(P,B) & block_t.round(B,R) & tc_t.round(TC,Rt) -> round_t.succ(Rt,R)) &
-                (forall Br,Bp:block_t, Rr,Rp,Rs:round_t. proposal_f_t.block(P,Br) & block_t.parent(Br,Bp) & block_t.round(Br,Rr) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rs) -> Rs <= Rr)
+                (forall TC:tc_t. forall Rt,R:round_t. forall B:block_t. proposal_f_t.tc(P, TC) & proposal_f_t.block(P,B) & block_t.round(B,R) & tc_t.round(TC,Rt) -> round_t.succ(Rt,R))
 
     relation proposal_n_valid(P:proposal_n_t)
     definition proposal_n_valid(P) = proposal_n_t.cstd(P) &

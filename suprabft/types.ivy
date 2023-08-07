@@ -499,11 +499,11 @@ isolate proposal_f_t = {
         if some p_old:proposal_f_t. block(p_old, b) & tc(p_old, t) {
             p := p_old;
         } else {
-            block(P, B) := block(P, B) | (P = p & B = b);
-            tc(P, TC) := tc(P, TC) | (P = p & TC = t);
+            block(p, b) := true;
+            tc(p, t) := true;
         }
 
-        was_constructed(P) := was_constructed(P) | P = p;
+        was_constructed(p) := true;
     }
 } with block_t, types_proposal_f_t_ensures, types_proposal_f_t_requires, proposal_f_t_properties
 
