@@ -67,7 +67,7 @@ isolate block_t = {
     }
 
     action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
-        require ~cstd(b);
+        assume ~cstd(b);
 
         round(b, R) := R = r_c;
         height(b, H) := H = height_t.next(get_height(pB));
@@ -87,7 +87,7 @@ isolate block_t_properties = {
     invariant block_t.cstd(block_t.genesis)
     invariant block_t.round(B, 0) <-> B = block_t.genesis
     invariant block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
-    invariant block_t.ancestor(block_t.genesis, A) <-> A = block_t.genesis
+    invariant [block_genesis_ancestor] block_t.ancestor(block_t.genesis, A) <-> A = block_t.genesis
     invariant block_t.height(B, 0) <-> B = block_t.genesis
 
     invariant block_t.parent(B, B) <-> B = block_t.genesis
@@ -100,7 +100,7 @@ isolate block_t_properties = {
 
     relation round_exists(B:block_t)
     definition round_exists(B) = exists R:round_t. block_t.round(B, R)
-    invariant block_t.cstd(B) -> round_exists(B)
+    invariant [block_t_inv_round_exists] block_t.cstd(B) -> round_exists(B)
     relation parent_exists(B:block_t)
     definition parent_exists(B) = exists P:block_t. block_t.parent(B, P)
     invariant block_t.cstd(B) -> parent_exists(B)
@@ -112,7 +112,7 @@ isolate block_t_properties = {
     invariant block_t.parent(B, P1) & block_t.parent(B, P2) -> P1 = P2
     invariant block_t.height(B, H1) & block_t.height(B, H2) -> H1 = H2
 
-    invariant (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rp < Rb
+    invariant [block_parent_round_lesser] (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rp < Rb
     invariant (block_t.parent(B,P) & block_t.height(B,Hb) & block_t.height(P,Hp) & B ~= block_t.genesis) -> height_t.succ(Hp,Hb)
 
 } with block_t, round_t, height_t, types_block_t_requires, types_block_t_ensures
@@ -130,7 +130,7 @@ isolate ancestor_transitive_closure_block = {
     invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h))
     invariant block_t.parent(B,P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_r,P_r:round_t. block_t.round(B,B_r) & block_t.round(P,P_r) -> P_r < B_r)
     invariant block_t.parent(B,Bp) & block_t.parent(Bp,Ba) & block_t.round(B,R) & block_t.round(Ba,Ra) & B ~= block_t.genesis -> Ra < R
-    invariant block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
+    invariant [block_ancestor_lesser_round] block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
 } with block_t, height_t, round_t, block_t_properties, types_block_t_requires, types_block_t_ensures
 
 isolate parent_same_implications = {

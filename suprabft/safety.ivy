@@ -107,8 +107,8 @@ isolate gv_action_timeout_requires = {
         # require round_t.succ(Rp,global_view_instance.process_in_round(n)) & is_good(n) & block_t.round(global_view_instance.process_locked(n),Rl) & global_view_instance.process_locked(n) ~= block_t.genesis ->  Rl < Rp & Rp <= r;#_#Rl < Rp & Rp <= r
         # require round_t.succ(Rp,global_view_instance.process_in_round(n)) & is_good(n) & block_t.round(global_view_instance.process_locked_completely(n),Rl) & global_view_instance.process_locked_completely(n) ~= block_t.genesis ->  Rl < Rp & Rp <= r;
         # require round_t.succ(Rp,global_view_instance.process_in_round(n)) & is_good(n) & gv_normal_vote_requires_gl_candidate.gl_candidate(n,B) & block_t.round(B,R) & B ~= block_t.genesis -> R < Rp & Rp <= r;
-        require block_t.round(global_view_instance.process_locked(n),Rl) -> Rl ~= r;
-        require block_t.round(global_view_instance.process_locked_completely(n),Rl) -> Rl ~= r;
+        require ~ is_good(n) | (block_t.round(global_view_instance.process_locked(n),Rl) -> Rl ~= r);
+        require ~ is_good(n) | (block_t.round(global_view_instance.process_locked_completely(n),Rl) -> Rl ~= r);
         require ~ is_good(n) | ~global_view_instance.process_sent_timeout(n,r,QC);
         require r ~= 0;
 
@@ -684,8 +684,6 @@ isolate lv_verify_tc_proposal_f_processing_requires = local_view_instance with l
 
 isolate lv_verify_action_timeout_requires = local_view_instance with gv_action_timeout_requires, global_view_instance, gv_normal_vote_requires_gl_candidate, round_t, block_t, proposal_n_t, prepare_t, qc_t, timeout_t, proposal_f_t, lv_max_commitQ_not_empty.inv_commitQ_is_processed, lv_qc_for_block.inv_qc_for_block, lv_tc_proposal_f_processing_requires, lv_validity_invariants.valid_received_tc,iso_valid_received_proposal_f.valid_received_proposal_f,gv_basic_validities.gv_inv_genesis_qc_valid, lv_qc_for_block.inv_qc_for_block_genesis, lv_validity_invariants.inv_rc_gt_observed_qc, lv_validity_invariants.lv_rc_m1_pred_rc, lv_validity_invariants.inv_locked_is_observed, lv_validity_invariants.inv_locked_cpl_is_observed, lv_basic_invariants.lv_process_in_round_r_c, lv_basic_invariants.lv_inv_locked_local_global,lv_basic_invariants.lv_inv_first_locked_local_global, gv_normal_vote_requires_gl_candidate.gv_inv_gl_candidate_lte_locked_cpl, lv_basic_exprd_rd.lv_inv_to_implies_exprd_round
 
-isolate lv_verify_before_to_maxCommitQ_is_max = local_view_instance with lv_before_to_maxCommitQ_is_max, global_view_instance, gv_normal_vote_requires_gl_candidate, round_t, block_t, proposal_n_t, prepare_t, qc_t, timeout_t, proposal_f_t, lv_max_commitQ_not_empty.inv_commitQ_is_processed, lv_max_commitQ_gte_observed_qc, lv_qc_for_block.inv_qc_for_block, lv_qc_for_block.inv_qc_for_block_genesis, gv_processed_qc_observed_locally
-
 isolate lv_action_requires = {
     before local_view_instance.local_view.block_t_get_round(id:process_index_t,b:block_t) returns (r:round_t) {
         require block_t.cstd(b);#_#
@@ -778,14 +776,12 @@ isolate lv_action_ensures = {
 
 isolate iso_valid_received_proposal_f = {
 
-    # invariant [valid_received_proposal_f] local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P) 
-    # invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f & proposal_f_t.block(M.prop_f,Br) & block_t.parent(Br,Bp) & block_t.round(Bp,Rp) & proposal_f_t.tc(M.prop_f,TC) & tc_t.round(TC,Rt) -> Rp <= Rt
-    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f & proposal_f_t.tc(M.prop_f,TC) & tc_t.round(TC,Rt) & tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,Bqc) & block_t.round(Bqc,Rqc) -> Rqc <= Rt
+    invariant [valid_received_proposal_f] local_view_instance.local_view.received_proposal_f(Id, P, N) -> global_view_instance.proposal_f_valid(P) 
+    invariant forall M:msg. shim.sent(M,D) & M.kind = msg_kind.proposal_f -> global_view_instance.proposal_f_valid(M.prop_f)
 
     # attribute macro_finder=false
 
-} with shim, block_t, block_t_properties, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, global_view_instance, local_view_instance, lv_action_requires#, lv_validity_invariants.lv_rc_m1_pred_rc, lv_validity_invariants.valid_received_tc, lv_tc_proposal_f_processing_requires#, lv_basic_invariants, lv_action_ensures, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures
+} with shim, block_t, block_t_properties, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, global_view_instance, local_view_instance, lv_action_requires, lv_validity_invariants.lv_rc_m1_pred_rc, lv_validity_invariants.valid_received_tc, lv_tc_proposal_f_processing_requires#, lv_basic_invariants, lv_action_ensures, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures
 
 isolate lv_validity_invariants = {
 
@@ -869,11 +865,19 @@ isolate lv_basic_invariants = {
 
     invariant [lv_inv_first_locked_local_global] qc_t.block(local_view_instance.local_view(Id).locked,global_view_instance.process_locked(Id))
 
+    invariant block_t.cstd(local_view_instance.local_view(Id).last_committed)
+
+    invariant block_t.cstd(Bl) & block_t.cstd(Bg) & ~ block_t_conv.round_lt(Bl,Bg) & block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rg <= Rl
+
+    # invariant local_view_instance.local_view(Id).observed_qc(B) & block_t_conv.round_lt(local_view_instance.local_view(Id).last_committed,B) & B ~= block_t.genesis -> local_view_instance.local_view(Id).commitQ(B)
+
+    invariant local_view_instance.local_view(Id).observed_qc(B) & ~ local_view_instance.local_view(Id).commitQ(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(Id).last_committed,Rl) & B ~= block_t.genesis -> ~ block_t_conv.round_lt(local_view_instance.local_view(Id).last_committed,B)
+
     invariant local_view_instance.local_view(Id).observed_qc(B) & ~ local_view_instance.local_view(Id).commitQ(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(Id).last_committed,Rl) -> R <= Rl
 
-    # attribute macro_finder=false
+    attribute macro_finder=false
 
-} with shim, block_t, block_t_properties.block_t_inv_round_unique, proposal_n_t,proposal_n_t_properties, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, local_view_instance, global_view_instance, lv_action_ensures, lv_action_requires, gv_basic_validities.gv_voted_n_block_cstd, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures, block_t_conv, lv_max_commitQ_not_empty, lv_validity_invariants
+} with shim, block_t, block_t_properties, proposal_n_t,proposal_n_t_properties, round_t, prepare_t, timeout_t, proposal_f_t, proposal_f_t_properties, quorum_t, qc_t, local_view_instance, global_view_instance, lv_action_ensures, lv_action_requires, gv_basic_validities.gv_voted_n_block_cstd, types_block_t_ensures, types_proposal_n_t_ensures, types_timeout_t_ensures, types_proposal_f_t_ensures, block_t_conv, lv_max_commitQ_not_empty, lv_validity_invariants, ancestor_transitive_closure_block.block_ancestor_lesser_round
 
 isolate lv_qc_for_block = {
 
@@ -941,7 +945,15 @@ isolate lv_ldc_simulates_gv_ldc = {
 isolate lv_commit_invariants = {
     property global_view_instance.successive_blocks(Bc,Bp) | ~ global_view_instance.successive_blocks(Bc,Bp)
 
+    property block_t_conv.round_lt(B1,B2) | ~ block_t_conv.round_lt(B1,B2)
+
+    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
     invariant [lv_inv_last_committed_local_global] local_view_instance.local_view(Id).last_committed = global_view_instance.process_last_committed(Id)
+
+    invariant local_view_instance.local_view(Id).commitQ(B) -> block_t_conv.round_lt(local_view_instance.local_view(Id).last_committed, B)
+
+    invariant ~ block_t_conv.round_lt(B,B)
 
     invariant ~local_view_instance.local_view(Id).commitQ(local_view_instance.local_view(Id).last_committed)
 
@@ -962,17 +974,19 @@ isolate lv_commit_invariants = {
     #invariant global_view_instance.process_committed(Id,B) & block_t.height(B,Hb) & block_t.height(local_view_instance.local_view(Id).last_committed,Hl) -> Hb <= Hl
 
     #attribute macro_finder=false
-} with block_t, block_t_properties, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, local_view_instance, global_view_instance, lv_action_ensures, lv_action_requires, lv_basic_invariants.lv_observed_qc_in_gv, gv_qc_implies_qov, lv_ldc_simulates_gv_ldc
+} with block_t, block_t_properties.block_t_inv_round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.block_genesis_ancestor, block_t_properties.block_parent_round_lesser, block_t_conv.round_lt, proposal_n_t, round_t, prepare_t, timeout_t, proposal_f_t, local_view_instance, global_view_instance, lv_action_ensures, lv_action_requires, lv_basic_invariants.lv_observed_qc_in_gv, gv_qc_implies_qov, lv_ldc_simulates_gv_ldc
 
 isolate lv_verify_gv_action_commit_requires = local_view_instance with gv_action_commit_requires, global_view_instance,lv_commit_invariants, round_t, height_t, block_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, ancestor_transitive_closure_block, parent_same_implications, lv_basic_invariants.lv_observed_qc_in_gv, lv_validity_invariants.lv_valid_received_qc
 
 isolate lv_last_committed_ldc = {
     property local_view_instance.local_view(Id).commit_candidate(B) -> local_view_instance.local_view(Id).ldc(B)
 
+    invariant local_view_instance.local_view(Id).commit_candidate(Bp) & local_view_instance.local_view(Id).ldc_pair(Bp,Bc) -> local_view_instance.local_view(Id).commitQ(Bc)
+
     invariant local_view_instance.local_view(Id).last_committed = block_t.genesis | local_view_instance.local_view(Id).ldc(local_view_instance.local_view(Id).last_committed)
 
-    #attribute macro_finder=false
-} with local_view_instance, global_view_instance, block_t, block_t_properties, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, ancestor_transitive_closure_block, parent_same_implications
+    # attribute macro_finder=false
+} with local_view_instance, global_view_instance, block_t, block_t_properties, block_t_conv, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, ancestor_transitive_closure_block, parent_same_implications
 
 isolate lv_observed_qc_has_qov = {
 
@@ -988,14 +1002,5 @@ isolate max_observed_qc_unique = {
 
     attribute macro_finder=false
 } with local_view_instance, global_view_instance, gv_round_safety.gv_inv_round_safety, lv_ldc_simulates_gv_ldc_m1.lv_inv_observed_qc_qov, lv_max_commitQ_not_empty.inv_commitQ_is_processed, block_t, block_t_properties, block_t_conv, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t
-
-isolate lv_max_commitQ_gte_observed_qc = {
-    invariant local_view_instance.local_view(Id).max_commitQ(Bq) -> local_view_instance.local_view(Id).max_observed_qc(Bq)
-
-    invariant local_view_instance.local_view(Id).max_commitQ(Bq) & local_view_instance.local_view(Id).observed_qc(Bo) -> block_t_conv.round_lte(Bo,Bq)
-
-    attribute macro_finder=false
-} with local_view_instance, global_view_instance, max_observed_qc_unique, block_t, block_t_conv, round_t, proposal_n_t, prepare_t, qc_t, timeout_t,proposal_f_t
-
 
 isolate lv_verify_types_requires = local_view_instance with global_view_instance, block_t, round_t, prepare_t, proposal_f_t, proposal_n_t, timeout_t, types_prepare_t_requires, types_proposal_n_t_requires, gv_action_received_tc_requires

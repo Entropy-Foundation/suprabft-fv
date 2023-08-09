@@ -247,7 +247,9 @@ object local_view(id:process_index_t) = {
             {
                 call proposeNormal(b_qc);
             }
-            commitQ(b_qc) := true;
+            if block_t_conv.round_lt(last_committed,b_qc) {
+                commitQ(b_qc) := true;
+            }
             observed_qc(b_qc) := true;
             call global_view.receive_qc(id,qc_get_block(qc),qc);
             qc_for_block(b_qc) := qc;
@@ -283,9 +285,6 @@ object local_view(id:process_index_t) = {
         }
     }
 
-    action arbitrary_qc(tc:tc_t) returns (qc:qc_t) = {
-        require global_view_instance.tc_valid(tc);
-    }
     action proposeFR(tc:tc_t) = {
 
         var r := round_t.next(tc_get_round(tc));
@@ -293,9 +292,7 @@ object local_view(id:process_index_t) = {
         ok := ok & leader(r) = id;
 
         if ok {
-            # var qcp := tc_getMaxQC(tc);
-            var qcp := arbitrary_qc(tc);
-            # var qcp : qc_t;
+            var qcp := tc_getMaxQC(tc);
 
             #ensure that qcp has been processed already. In implementation, this is done by calling the subroutine for processing qc. Here, we contrain the environment to call qc_processing on qcp before calling proposal_f_processing
             #require qc_t.block(qcp,B) & qcp ~= qc_t.genesis -> observed_qc(B);
@@ -551,16 +548,16 @@ object local_view(id:process_index_t) = {
     #     }
     # }
 
-    # export byzantine_send_prepare_f
-    # export byzantine_send_prepare_n
-    # export byzantine_send_proposal_f
-    # export byzantine_send_proposal_n
-    # export byzantine_send_qc
-    # export byzantine_send_tc
+    export byzantine_send_prepare_f
+    export byzantine_send_prepare_n
+    export byzantine_send_proposal_f
+    export byzantine_send_proposal_n
+    export byzantine_send_qc
+    export byzantine_send_tc
     # export byzantine_send_timeout
-    # export proposal_f_processing
-    # export proposal_n_processing
-    # export qc_processing
+    export proposal_f_processing
+    export proposal_n_processing
+    export qc_processing
     export tc_processing
     export timeout_sync
     export timer_expire
