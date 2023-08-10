@@ -319,7 +319,7 @@ object local_view(id:process_index_t) = {
     }
 
     action timer_expire = {
-        require 0 < round_t.prev(r_c);
+        require 0 < r_c_m1;
         
         timer := true;
         var tc_fp1_temp:tc_fplusone_t;
@@ -329,6 +329,7 @@ object local_view(id:process_index_t) = {
 
     action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
+        require tc_fplusone_t.round(tc,R) -> 0 < R;
 
         #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we constrain the environment to call qc_processing on the qcs before calling timeout_sync
         require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> observed_qc(B);
@@ -346,7 +347,6 @@ object local_view(id:process_index_t) = {
     }
 
     action tc_processing(tc:tc_t) = {
-
         var tc_round := tc_get_round(tc);
 
         if(r_c_m1 <= tc_round & tc_round > 0) {
@@ -365,6 +365,8 @@ object local_view(id:process_index_t) = {
         require received_proposal_f(p, leader(r_c_m1));
 
         require proposal_f_t.tc(p,TC) -> received_tc(TC) & qcs_in_tc_processed(TC);
+
+        require proposal_f_t.tc(p,TC) & tc_t.round(TC,R) -> 0 < R;
 
         call global_view.receive_fallback_proposal(id,p);
 
@@ -554,7 +556,7 @@ object local_view(id:process_index_t) = {
     export byzantine_send_proposal_n
     export byzantine_send_qc
     export byzantine_send_tc
-    # export byzantine_send_timeout
+    export byzantine_send_timeout
     export proposal_f_processing
     export proposal_n_processing
     export qc_processing
