@@ -3,23 +3,49 @@
 include types
 include network
 
-module supraBFT(global_view) = {
-object local_view(id:process_index_t) = {
-    individual last_committed : block_t
-    individual last_prop_n : block_t
+object process(id:process_index_t) = {
+    # The highest round for which this process has accepted a Fallback Recovery Proposal by broadcasting a PF message.
+    individual a_f: round
 
-    individual locked : qc_t
-    individual r_c : round_t
-    individual r_c_m1 : round_t
-    individual timer : bool
-    # simplified, no need to store QCs here for our purposes
-    relation commitQ(B:block_t)
-    individual r_vf : round_t
-    individual r_vn : round_t
-    individual r_pf : round_t
+    # The highest round for which this process has accepted a Normal Proposal by broadcasting a PN message.
+    individual a_n: round
+
+    # The highest round for which this process has accepted an Optimistic Proposal by broadcasting a PO message.
+    individual a_o: round
+
+    # The block most recently appended to Bv, the block chain of this validator
+    individual b_h: block_t
+
+    # A representation of all blocks that are committed by this process
+    relation b_v(B:block_t)
+
+    # The block for which this process last broadcasted a PO message. In the specs, what is actually stored is the digest d_o of b_o, but we store b_o here to reduce complexity
+    individual b_o: block_t
+
+    # A set containing the identifiers of all rounds that this process considers to have expired due to having sent the corresponding Timeout message.
+    relation expired_rounds(R:round_t)
+
+    # The highest ranked QC observed by this process
+    individual qc_h: qc_t
+
+    # The currently locked QC
+    individual qc_l: qc_t
+
+    # The current round
+    individual r_c: round_t
+
+    # The highest round for which this process has broadcasted a Timeout message
+    individual t_l: round_t
+
+    # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean
+    individual t_r: bool
+
+    # The set of all QCs observed by this process
+    relation observed_qc(Q:qc_t)
 
     relation received_proposal_n(P:proposal_n_t, Src:process_index_t)
     relation received_proposal_f(P:proposal_f_t, Src:process_index_t)
+    relation received_proposal_o(P:proposal_o_t, Src:process_index_t)
     relation received_prepare(P:prepare_t, Src:process_index_t)
     relation received_qc(QC:qc_t)
     relation received_timeout(T:timeout_t, Src:process_index_t)
@@ -566,4 +592,3 @@ object local_view(id:process_index_t) = {
 
     
 } # object local_view
-} # module supraBFT

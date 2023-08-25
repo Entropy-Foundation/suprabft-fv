@@ -280,6 +280,55 @@ isolate proposal_n_t_properties = {
 
 } with block_t, proposal_n_t, types_proposal_n_t_ensures, types_proposal_n_t_requires
 
+isolate proposal_o_t = {
+    type this
+
+    relation cstd(P:proposal_o_t)
+
+    relation block(P:proposal_o_t, B:block_t)
+
+    individual genesis : proposal_o_t
+
+    after init {
+        cstd(P) := P = genesis;
+
+        block(P, B) := P = genesis & B = block_t.genesis;
+    }
+
+    export action get_block(p:proposal_o_t) returns (b:block_t) = {
+
+        if some p_b:block_t. block(p, p_b) {
+            b := p_b;
+        }
+    }
+
+    export action proposal_o(b:block_t) returns (p:proposal_n_t) = {
+        assume ~cstd(p);
+
+        if some p_old:proposal_o_t. block(p_old, b) {
+            p := p_old;
+        } else {
+            block(P, B) := block(P, B) | (P = p & B = b);
+        }
+
+        cstd(P) := cstd(P) | P = p;
+    }
+} with block_t, types_proposal_o_t_ensures, types_proposal_o_t_requires, proposal_o_t_properties
+
+isolate proposal_o_t_properties = {
+
+    invariant proposal_o_t.cstd(proposal_o_t.genesis)
+    invariant proposal_o_t.block(proposal_o_t.genesis, B) <-> B = block_t.genesis
+
+    invariant proposal_o_t.block(P, B) -> proposal_o_t.cstd(P) & block_t.cstd(B)
+
+    invariant proposal_o_t.cstd(P) -> exists B:block_t. proposal_o_t.block(P, B)
+
+    invariant proposal_o_t.block(P, B1) & proposal_o_t.block(P, B2) -> B1 = B2
+    invariant proposal_o_t.block(P1, B) & proposal_o_t.block(P2, B) -> P1 = P2
+
+} with block_t, proposal_o_t, types_proposal_o_t_ensures, types_proposal_o_t_requires
+
 isolate prepare_t = {
     type this
 
@@ -551,6 +600,17 @@ isolate types_proposal_n_t_requires = {
     }
 } with proposal_n_t, block_t
 
+isolate types_proposal_o_t_requires = {
+
+    before proposal_o_t.get_block(p:proposal_o_t) returns (b:block_t) {
+        require proposal_o_t.cstd(p);#_#
+    }
+
+    before proposal_o_t.proposal_o(b:block_t) returns (p:proposal_o_t) {
+        require block_t.cstd(b);#_#
+    }
+} with proposal_o_t, block_t
+
 isolate types_prepare_t_requires = {
     before prepare_t.get_block(p:prepare_t) returns (b:block_t) {
         require prepare_t.cstd(p);#_#
@@ -614,6 +674,15 @@ isolate types_proposal_n_t_ensures = {
 
     }
 } with proposal_n_t
+
+isolate types_proposal_o_t_ensures = {
+
+    after proposal_o_t.get_block(p:proposal_o_t) returns (b:block_t) {
+
+        ensure proposal_o_t.block(p, b);
+
+    }
+} with proposal_o_t
 
 isolate types_prepare_t_ensures = {
 
