@@ -13,6 +13,7 @@ object msg = {
         kind : msg_kind,
         prop_n : proposal_n_t,
         prop_f : proposal_f_t,
+        prop_o : proposal_o_t,
         prep : prepare_t,
         qc : qc_t,
         t : timeout_t,
@@ -39,6 +40,7 @@ isolate shim = {
 
     instance proposal_n_handler : handler(msg_kind.proposal_n)
     instance proposal_f_handler : handler(msg_kind.proposal_f)
+    instance proposal_o_handler : handler(msg_kind.proposal_o)
     instance prepare_handler : handler(msg_kind.prepare)
     instance qc_handler : handler(msg_kind.qc)
     instance timeout_handler : handler(msg_kind.timeout)
@@ -69,6 +71,8 @@ isolate shim = {
                 call proposal_n_handler.handle(dst, m)
             } else if m.kind = msg_kind.proposal_f {
                 call proposal_f_handler.handle(dst, m)
+            } else if m.kind = msg_kind.proposal_o {
+                call proposal_o_handler.handle(dst, m)
             } else if m.kind = msg_kind.prepare {
                 call prepare_handler.handle(dst, m)
             } else if m.kind = msg_kind.qc {

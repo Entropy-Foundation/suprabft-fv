@@ -37,6 +37,8 @@ isolate block_t = {
 
     individual genesis : block_t
 
+    individual unused : block_t
+
     after init {
         cstd(B) := B = genesis;
 
@@ -68,6 +70,7 @@ isolate block_t = {
 
     action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
         assume ~cstd(b);
+        assume b ~= block_t.unused;
 
         round(b, R) := R = r_c;
         height(b, H) := H = height_t.next(get_height(pB));
@@ -85,6 +88,7 @@ isolate block_t = {
 isolate block_t_properties = {
 
     invariant block_t.cstd(block_t.genesis)
+    invariant ~block_t.cstd(block_t.unused)
     invariant block_t.round(B, 0) <-> B = block_t.genesis
     invariant block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
     invariant [block_genesis_ancestor] block_t.ancestor(block_t.genesis, A) <-> A = block_t.genesis
@@ -168,6 +172,9 @@ isolate round_predecessor = {
 isolate block_t_conv = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
+    relation successive_blocks(Bp:block_t, Bc:block_t)
+    definition successive_blocks(Bp,Bc) = forall Rp,Rc:round_t. block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
 
     relation round_lte(Bl:block_t, Bg:block_t)
     definition round_lte(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl <= Rg)

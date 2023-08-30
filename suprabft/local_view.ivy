@@ -37,7 +37,7 @@ object process(id:process_index_t) = {
     # The highest round for which this process has broadcasted a Timeout message
     individual t_l: round_t
 
-    # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean
+    # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean, which will be true whenever the timer expires beyond the set limit
     individual t_r: bool
 
     # The set of all QCs observed by this process
@@ -52,11 +52,6 @@ object process(id:process_index_t) = {
     relation received_tc(TC:tc_t)
     relation received_tc_fplusone(TC:tc_fplusone_t)
 
-    relation observed_qc(B:block_t)
-    function qc_for_block(B:block_t) : qc_t
-
-    relation expired_rounds(R:round_t)
-
     relation qcs_in_tc_processed(TC:tc_t)
 
     definition qcs_in_tc_processed(TC) = forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_t.timeout(TC,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> observed_qc(B)
@@ -65,56 +60,55 @@ object process(id:process_index_t) = {
 
     definition qc_in_tc(TC,QC) = exists T:timeout_t. tc_t.timeout(TC,T) & timeout_t.qc(T,QC)
 
+    relation qc_in_tc_fp1(TC:tc_t,QC:qc_t)
+
+    definition qc_in_tc_fp1(TC,QC) = exists T:timeout_t. tc_fplusone_t.timeout(TC,T) & timeout_t.qc(T,QC)
+
     relation ldc_pair(Bp:block_t, Bc:block_t)
-    definition ldc_pair(Bp, Bc) = Bc ~= block_t.genesis & block_t.parent(Bc,Bp) & global_view.successive_blocks(Bp,Bc) & observed_qc(Bp) & commitQ(Bc)
+    definition ldc_pair(Bp, Bc) = Bc ~= block_t.genesis & block_t.parent(Bc,Bp) & block_t_conv.successive_blocks(Bp,Bc) & observed_qc(Bp) & observed_qc(Bc)
 
     relation ldc(B:block_t)
     definition ldc(B) = exists Bc:block_t. ldc_pair(B,Bc)
 
     relation eligible_to_commit(Bp:block_t)
-    definition eligible_to_commit(Bp) = commitQ(Bp) & ldc(Bp) & block_t.ancestor(Bp,last_committed) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> (commitQ(Ba) | Ba = last_committed | block_t.ancestor(last_committed,Ba)))
+    definition eligible_to_commit(Bp) = ldc(Bp) & block_t.ancestor(Bp,b_h) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> (observed_qc(Ba) | Ba = b_h | block_t.ancestor(b_h,Ba)))
 
     relation commit_candidate(Bp:block_t)
     definition commit_candidate(Bp) = eligible_to_commit(Bp) & (forall B:block_t. forall Rp,R:round_t. eligible_to_commit(B) & block_t.round(B,R) & block_t.round(Bp,Rp) -> R <= Rp)
-
-    relation commitQ_empty
-    definition commitQ_empty = forall B:block_t. ~ commitQ(B)
-
-    relation commitQUgenesis(B:block_t)
-    definition commitQUgenesis(B) = B = block_t.genesis | commitQ(B)
-
-    relation max_commitQ(B:block_t)
-    definition max_commitQ(B) = commitQUgenesis(B) & (forall Bq:block_t. commitQUgenesis(Bq) -> block_t_conv.round_lte(Bq,B))
 
     relation max_observed_qc(B:block_t)
     definition max_observed_qc(B) = observed_qc(B) & (forall Bp:block_t. observed_qc(Bp) -> block_t_conv.round_lte(Bp,B))
 
     after init {
-        last_committed := block_t.genesis;
-        last_prop_n := block_t.genesis;
+        a_f := 0;
+        a_n := 0;
+        a_0 := 0;
 
-        locked := qc_t.genesis;
+        b_h := block_t.genesis;
+        b_v(B) := B = block_t.genesis;
+
+        b_o := block_t.unused;
+
+        expired_rounds(R) := false;
+        qc_h := qc_t.genesis;
+        qc_l := qc_t.genesis;
+
         r_c := *;
         assume round_t.succ(0, r_c);
-        r_c_m1 := 0;
-        timer := false;
-        commitQ(B) := false;
-        r_vf := 0;
-        r_vn := 0;
-        r_pf := 0;
+
+        t_l := 0;
+
+        t_r := false;
+        observed_qc(Q) := Q = qc_t.genesis;
 
         received_proposal_n(P, Src) := P = proposal_n_t.genesis & Src = leader(0);
         received_proposal_f(P, Src) := false;
+        received_proposal_o(P, Src) := false;
         received_prepare(P, Src) := P = prepare_t.genesis;
         received_qc(QC) := QC = qc_t.genesis;
         received_timeout(T, Src) := false;
         received_tc(TC) := false;
         received_tc_fplusone(TC) := false;
-
-        observed_qc(B) := B = block_t.genesis;
-        qc_for_block(block_t.genesis) := qc_t.genesis;
-
-        expired_rounds(R) := false;
     }
 
     implement shim.proposal_n_handler.handle(m:msg) {
@@ -126,6 +120,10 @@ object process(id:process_index_t) = {
             var temp_tc := proposal_f_get_tc(m.prop_f);
             received_tc(temp_tc) := true;
             received_qc(QC) := received_qc(QC) | qc_in_tc(temp_tc,QC);
+    }
+
+    implement shim.proposal_o_handler.handle(m:msg) {
+            received_proposal_o(m.prop_o, m.src) := true;
     }
 
     implement shim.prepare_handler.handle(m:msg) {
@@ -148,6 +146,7 @@ object process(id:process_index_t) = {
 
     implement shim.tc_fplusone_handler.handle(m:msg) {
         received_tc_fplusone(m.tc_po) := true;
+        received_qc(QC) := received_qc(QC) | qc_in_tc_fp1(m.tc,QC);
     }
 
     action proposal_f_get_tc(p:proposal_f_t) returns (tc:tc_t) = {
@@ -181,6 +180,15 @@ object process(id:process_index_t) = {
         var m : msg;
         m.kind := msg_kind.proposal_f;
         m.prop_f := p;
+        m.src := id;
+
+        call shim.broadcast(id, m);
+    }
+
+    action broadcast_proposal_o(p:proposal_o_t) = {
+        var m : msg;
+        m.kind := msg_kind.proposal_o;
+        m.prop_o := p;
         m.src := id;
 
         call shim.broadcast(id, m);
@@ -222,10 +230,6 @@ object process(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    action cleanup(r:round_t) = {
-        expired_rounds(R) := expired_rounds(R) & r < R;
-    }
-
     action proposeNormal(pB:block_t) = {
         if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
             last_prop_n := block_t.block(r_c, pB);
@@ -264,9 +268,8 @@ object process(id:process_index_t) = {
         }
     }
 
-    action qc_processing(qc:qc_t, b_qc:block_t) = {
+    action qc_processing(qc:qc_t) = {
         require received_qc(qc);
-        require qc_t.block(qc,b_qc);
 
         if ~observed_qc(b_qc) {
             if (forall R, Rs1, Rs2:round_t. block_t.round(b_qc,R) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) -> r_c < Rs2)
