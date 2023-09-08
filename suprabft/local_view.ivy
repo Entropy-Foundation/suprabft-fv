@@ -230,64 +230,78 @@ object process(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
-    action proposeNormal(pB:block_t) = {
-        if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
-            last_prop_n := block_t.block(r_c, pB);
-            var p := proposal_n_t.proposal_n(last_prop_n);
-            call broadcast_proposal_n(p);
-        }
-    }
+    # action proposeNormal(pB:block_t) = {
+    #     if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
+    #         last_prop_n := block_t.block(r_c, pB);
+    #         var p := proposal_n_t.proposal_n(last_prop_n);
+    #         call broadcast_proposal_n(p);
+    #     }
+    # }
 
-    action advanceToRound(r:round_t, b:block_t, tc:tc_t, qc_observed:bool) = {
-        if r > r_c {
-            r_c := r;
-            global_view.enter_round(id,r,b,tc,qc_observed);
-            r_c_m1 := round_t.prev(r_c);
-            timer := false;
-            call cleanup(round_t.prev(round_t.prev(r)));
-        }
-        else {
-            global_view.enter_round(id,r_c,b,tc,qc_observed);
-        }
-    }
+    # action advanceToRound(r:round_t, b:block_t, tc:tc_t, qc_observed:bool) = {
+    #     if r > r_c {
+    #         r_c := r;
+    #         global_view.enter_round(id,r,b,tc,qc_observed);
+    #         r_c_m1 := round_t.prev(r_c);
+    #         timer := false;
+    #         call cleanup(round_t.prev(round_t.prev(r)));
+    #     }
+    #     else {
+    #         global_view.enter_round(id,r_c,b,tc,qc_observed);
+    #     }
+    # }
 
-    action tryLock(qc:qc_t) = {
-        var r := qc_get_round(qc);
-        if (forall Bl:block_t. forall Rl:round_t. qc_t.block(locked, Bl) & block_t.round(Bl, Rl) -> r > Rl) & ~ expired_rounds(r) & r_c <= round_t.next(r) {
-            locked := qc;
+    # action tryLock(qc:qc_t) = {
+    #     var r := qc_get_round(qc);
+    #     if (forall Bl:block_t. forall Rl:round_t. qc_t.block(locked, Bl) & block_t.round(Bl, Rl) -> r > Rl) & ~ expired_rounds(r) & r_c <= round_t.next(r) {
+    #         locked := qc;
 
-            call global_view.lock(id, qc_get_block(qc), qc);
-        }
-    }
+    #         call global_view.lock(id, qc_get_block(qc), qc);
+    #     }
+    # }
 
-    action tryCommit(b_qc:block_t) = {
-        if some bp:block_t. commit_candidate(bp){
-            call global_view.commit(id,bp,last_committed);
-            last_committed := bp;
-            commitQ(B) := commitQ(B) & block_t_conv.round_lt(last_committed,B);
-        }
-    }
+    # action tryCommit(b_qc:block_t) = {
+    #     if some bp:block_t. commit_candidate(bp){
+    #         call global_view.commit(id,bp,last_committed);
+    #         last_committed := bp;
+    #         commitQ(B) := commitQ(B) & block_t_conv.round_lt(last_committed,B);
+    #     }
+    # }
 
     action qc_processing(qc:qc_t) = {
         require received_qc(qc);
 
-        if ~observed_qc(b_qc) {
-            if (forall R, Rs1, Rs2:round_t. block_t.round(b_qc,R) & round_t.succ(R,Rs1) & round_t.succ(Rs1,Rs2) -> r_c < Rs2)
-            {
-                call proposeNormal(b_qc);
-            }
-            if block_t_conv.round_lt(last_committed,b_qc) {
-                commitQ(b_qc) := true;
-            }
-            observed_qc(b_qc) := true;
-            call global_view.receive_qc(id,qc_get_block(qc),qc);
-            qc_for_block(b_qc) := qc;
-            call tryLock(qc);
-            call tryCommit(b_qc);
-            call broadcast_qc(qc);
-            var tc_temp:tc_t;
-            advanceToRound(round_t.next(round_t.next(block_t_get_round(b_qc))), b_qc,tc_temp, true);
+        var b_qc : block_t;
+        if some b:block_t. qc_t.block(qc,b) {
+            b_qc := b;
         }
+
+        if (forall R, Rs1, Rs2:round_t. block_t.round(b_qc,R) & round_t.succ(Rs1,r_c) & round_t.succ(Rs2,Rs1) -> Rs2 < R)
+        {
+            var r : round_t;
+            if some r_b:round_t. block_t.round(b_qc,r_b) {
+                r := round_t.next(r_b);
+            }
+            ### proposeNormal ###
+            if leader(r) = id {
+                var b = block_t.block(r,b_qc)
+                var p := proposal_n_t.proposal_n(b);
+                        var m : msg;
+                        m.kind := msg_kind.proposal_n;
+                        m.prop_n := p;
+                        m.src := id;
+                        call shim.broadcast(id, m);
+                }
+        }
+        
+        observed_qc(b_qc) := true;
+        call global_view.receive_qc(id,qc_get_block(qc),qc);
+        qc_for_block(b_qc) := qc;
+        call tryLock(qc);
+        call tryCommit(b_qc);
+        call broadcast_qc(qc);
+        var tc_temp:tc_t;
+        advanceToRound(round_t.next(round_t.next(block_t_get_round(b_qc))), b_qc,tc_temp, true);
     }
 
     action proposal_n_processing(p:proposal_n_t) = {
