@@ -149,124 +149,124 @@ object process(id:process_index_t) = {
         received_qc(QC) := received_qc(QC) | qc_in_tc_fp1(m.tc,QC);
     }
 
-    action proposal_f_get_tc(p:proposal_f_t) returns (tc:tc_t) = {
-        if some p_tc:tc_t. proposal_f_t.tc(p, p_tc) {
-            tc := p_tc;
-        }
-    }
+    # action proposal_f_get_tc(p:proposal_f_t) returns (tc:tc_t) = {
+    #     if some p_tc:tc_t. proposal_f_t.tc(p, p_tc) {
+    #         tc := p_tc;
+    #     }
+    # }
 
-    action timeout_get_qc(t:timeout_t) returns (qc:qc_t) = {
-        if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
-            qc := t_qc;
-        }
-    }
+    # action timeout_get_qc(t:timeout_t) returns (qc:qc_t) = {
+    #     if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
+    #         qc := t_qc;
+    #     }
+    # }
 
-    action qc_get_block(qc:qc_t) returns (b:block_t) = {
-        if some qc_b:block_t. qc_t.block(qc, qc_b) {
-            b := qc_b;
-        }
-    }
+    # action qc_get_block(qc:qc_t) returns (b:block_t) = {
+    #     if some qc_b:block_t. qc_t.block(qc, qc_b) {
+    #         b := qc_b;
+    #     }
+    # }
 
-    action broadcast_proposal_n(p:proposal_n_t) = {
-        var m : msg;
-        m.kind := msg_kind.proposal_n;
-        m.prop_n := p;
-        m.src := id;
+    # action broadcast_proposal_n(p:proposal_n_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.proposal_n;
+    #     m.prop_n := p;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_proposal_f(p:proposal_f_t) = {
-        var m : msg;
-        m.kind := msg_kind.proposal_f;
-        m.prop_f := p;
-        m.src := id;
+    # action broadcast_proposal_f(p:proposal_f_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.proposal_f;
+    #     m.prop_f := p;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_proposal_o(p:proposal_o_t) = {
-        var m : msg;
-        m.kind := msg_kind.proposal_o;
-        m.prop_o := p;
-        m.src := id;
+    # action broadcast_proposal_o(p:proposal_o_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.proposal_o;
+    #     m.prop_o := p;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_prepare(p:prepare_t) = {
-        var m : msg;
-        m.kind := msg_kind.prepare;
-        m.prep := p;
-        m.src := id;
+    # action broadcast_prepare(p:prepare_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.prepare;
+    #     m.prep := p;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_qc(q:qc_t) = {
-        var m : msg;
-        m.kind := msg_kind.qc;
-        m.qc := q;
-        m.src := id;
+    # action broadcast_qc(q:qc_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.qc;
+    #     m.qc := q;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_timeout(t:timeout_t) = {
-        var m : msg;
-        m.kind := msg_kind.timeout;
-        m.t := t;
-        m.src := id;
+    # action broadcast_timeout(t:timeout_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.timeout;
+    #     m.t := t;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action broadcast_tc(t:tc_t) = {
-        var m : msg;
-        m.kind := msg_kind.tc;
-        m.tc := t;
-        m.src := id;
+    # action broadcast_tc(t:tc_t) = {
+    #     var m : msg;
+    #     m.kind := msg_kind.tc;
+    #     m.tc := t;
+    #     m.src := id;
 
-        call shim.broadcast(id, m);
-    }
+    #     call shim.broadcast(id, m);
+    # }
 
-    action proposeNormal(pB:block_t) = {
-        if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
-            last_prop_n := block_t.block(r_c, pB);
-            var p := proposal_n_t.proposal_n(last_prop_n);
-            call broadcast_proposal_n(p);
-        }
-    }
+    # action proposeNormal(pB:block_t) = {
+    #     if leader(r_c) = id & r_pf < r_c & ~ block_t.parent(last_prop_n,pB) {
+    #         last_prop_n := block_t.block(r_c, pB);
+    #         var p := proposal_n_t.proposal_n(last_prop_n);
+    #         call broadcast_proposal_n(p);
+    #     }
+    # }
 
-    action advanceToRound(r:round_t, b:block_t, tc:tc_t, qc_observed:bool) = {
-        if r > r_c {
-            r_c := r;
-            global_view.enter_round(id,r,b,tc,qc_observed);
-            r_c_m1 := round_t.prev(r_c);
-            timer := false;
-            call cleanup(round_t.prev(round_t.prev(r)));
-        }
-        else {
-            global_view.enter_round(id,r_c,b,tc,qc_observed);
-        }
-    }
+    # action advanceToRound(r:round_t, b:block_t, tc:tc_t, qc_observed:bool) = {
+    #     if r > r_c {
+    #         r_c := r;
+    #         global_view.enter_round(id,r,b,tc,qc_observed);
+    #         r_c_m1 := round_t.prev(r_c);
+    #         timer := false;
+    #         call cleanup(round_t.prev(round_t.prev(r)));
+    #     }
+    #     else {
+    #         global_view.enter_round(id,r_c,b,tc,qc_observed);
+    #     }
+    # }
 
-    action tryLock(qc:qc_t) = {
-        var r := qc_get_round(qc);
-        if (forall Bl:block_t. forall Rl:round_t. qc_t.block(locked, Bl) & block_t.round(Bl, Rl) -> r > Rl) & ~ expired_rounds(r) & r_c <= round_t.next(r) {
-            locked := qc;
+    # action tryLock(qc:qc_t) = {
+    #     var r := qc_get_round(qc);
+    #     if (forall Bl:block_t. forall Rl:round_t. qc_t.block(locked, Bl) & block_t.round(Bl, Rl) -> r > Rl) & ~ expired_rounds(r) & r_c <= round_t.next(r) {
+    #         locked := qc;
 
-            call global_view.lock(id, qc_get_block(qc), qc);
-        }
-    }
+    #         call global_view.lock(id, qc_get_block(qc), qc);
+    #     }
+    # }
 
-    action tryCommit(b_qc:block_t) = {
-        if some bp:block_t. commit_candidate(bp){
-            call global_view.commit(id,bp,last_committed);
-            last_committed := bp;
-            commitQ(B) := commitQ(B) & block_t_conv.round_lt(last_committed,B);
-        }
-    }
+    # action tryCommit(b_qc:block_t) = {
+    #     if some bp:block_t. commit_candidate(bp){
+    #         call global_view.commit(id,bp,last_committed);
+    #         last_committed := bp;
+    #         commitQ(B) := commitQ(B) & block_t_conv.round_lt(last_committed,B);
+    #     }
+    # }
 
     action qc_processing(qc:qc_t) = {
         require received_qc(qc);
