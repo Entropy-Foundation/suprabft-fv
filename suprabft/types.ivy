@@ -238,152 +238,7 @@ isolate block_t_conv_p1 = {
 
 } with block_t, round_t, round_predecessor, block_t_conv, round_t_conv, block_t_properties
 
-isolate proposal_n_t = {
-    type this
 
-    relation cstd(P:proposal_n_t)
-
-    relation block(P:proposal_n_t, B:block_t)
-
-    individual genesis : proposal_n_t
-
-    after init {
-        cstd(P) := P = genesis;
-
-        block(P, B) := P = genesis & B = block_t.genesis;
-    }
-
-    export action get_block(p:proposal_n_t) returns (b:block_t) = {
-
-        if some p_b:block_t. block(p, p_b) {
-            b := p_b;
-        }
-    }
-
-    export action proposal_n(b:block_t) returns (p:proposal_n_t) = {
-        assume ~cstd(p);
-
-        if some p_old:proposal_n_t. block(p_old, b) {
-            p := p_old;
-        } else {
-            block(P, B) := block(P, B) | (P = p & B = b);
-        }
-
-        cstd(P) := cstd(P) | P = p;
-    }
-} with block_t, types_proposal_n_t_ensures, types_proposal_n_t_requires, proposal_n_t_properties
-
-isolate proposal_n_t_properties = {
-
-    invariant proposal_n_t.cstd(proposal_n_t.genesis)
-    invariant proposal_n_t.block(proposal_n_t.genesis, B) <-> B = block_t.genesis
-
-    invariant proposal_n_t.block(P, B) -> proposal_n_t.cstd(P) & block_t.cstd(B)
-
-    invariant proposal_n_t.cstd(P) -> exists B:block_t. proposal_n_t.block(P, B)
-
-    invariant proposal_n_t.block(P, B1) & proposal_n_t.block(P, B2) -> B1 = B2
-    invariant proposal_n_t.block(P1, B) & proposal_n_t.block(P2, B) -> P1 = P2
-
-} with block_t, proposal_n_t, types_proposal_n_t_ensures, types_proposal_n_t_requires
-
-isolate proposal_o_t = {
-    type this
-
-    relation cstd(P:proposal_o_t)
-
-    relation block(P:proposal_o_t, B:block_t)
-
-    individual genesis : proposal_o_t
-
-    after init {
-        cstd(P) := P = genesis;
-
-        block(P, B) := P = genesis & B = block_t.genesis;
-    }
-
-    export action get_block(p:proposal_o_t) returns (b:block_t) = {
-
-        if some p_b:block_t. block(p, p_b) {
-            b := p_b;
-        }
-    }
-
-    export action proposal_o(b:block_t) returns (p:proposal_n_t) = {
-        assume ~cstd(p);
-
-        if some p_old:proposal_o_t. block(p_old, b) {
-            p := p_old;
-        } else {
-            block(P, B) := block(P, B) | (P = p & B = b);
-        }
-
-        cstd(P) := cstd(P) | P = p;
-    }
-} with block_t, types_proposal_o_t_ensures, types_proposal_o_t_requires, proposal_o_t_properties
-
-isolate proposal_o_t_properties = {
-
-    invariant proposal_o_t.cstd(proposal_o_t.genesis)
-    invariant proposal_o_t.block(proposal_o_t.genesis, B) <-> B = block_t.genesis
-
-    invariant proposal_o_t.block(P, B) -> proposal_o_t.cstd(P) & block_t.cstd(B)
-
-    invariant proposal_o_t.cstd(P) -> exists B:block_t. proposal_o_t.block(P, B)
-
-    invariant proposal_o_t.block(P, B1) & proposal_o_t.block(P, B2) -> B1 = B2
-    invariant proposal_o_t.block(P1, B) & proposal_o_t.block(P2, B) -> P1 = P2
-
-} with block_t, proposal_o_t, types_proposal_o_t_ensures, types_proposal_o_t_requires
-
-isolate prepare_t = {
-    type this
-
-    relation cstd(P:prepare_t)
-
-    relation block(P:prepare_t, B:block_t)
-
-    individual genesis : prepare_t
-
-    after init {
-        cstd(P) := P = genesis;
-
-        block(P, B) := P = genesis & B = block_t.genesis;
-    }
-
-    export action get_block(p:prepare_t) returns (b:block_t) = {
-
-        if some p_b:block_t. block(p, p_b) {
-            b := p_b;
-        }
-    }
-
-    export action prepare(b:block_t) returns (p:prepare_t) = {
-        assume ~cstd(p);
-
-        if some p_old:prepare_t. block(p_old, b) {
-            p := p_old;
-        } else {
-            block(P, B) := block(P, B) | (P = p & B = b);
-        }
-
-        cstd(P) := cstd(P) | P = p;
-    }
-} with block_t, types_prepare_t_ensures, types_prepare_t_requires, prepare_t_properties
-
-isolate prepare_t_properties = {
-
-    invariant prepare_t.cstd(prepare_t.genesis)
-    invariant prepare_t.block(prepare_t.genesis, B) <-> B = block_t.genesis
-
-    invariant prepare_t.block(P, B) -> prepare_t.cstd(P) & block_t.cstd(B)
-
-    invariant prepare_t.cstd(P) -> exists B:block_t. prepare_t.block(P, B)
-
-    invariant prepare_t.block(P, B1) & prepare_t.block(P, B2) -> B1 = B2
-    invariant prepare_t.block(P1, B) & prepare_t.block(P2, B) -> P1 = P2
-
-} with block_t, prepare_t, types_prepare_t_requires
 
 isolate quorum_fplusone_t = {
     type this
@@ -441,61 +296,6 @@ isolate qc_t_conv = {
     definition qc_gte_block(QC,B) = forall Bqc:block_t. qc_t.block(QC,Bqc) -> block_t_conv.round_lte(B,Bqc)
 }
 
-isolate timeout_t = {
-    type this
-
-    relation was_constructed(T:timeout_t)
-
-    relation round(T:timeout_t, R:round_t)
-    relation qc(T:timeout_t, QC:qc_t)
-    relation node(T:timeout_t, N:process_index_t)
-
-    after init {
-        was_constructed(T) := false;
-
-        round(T, R) := false;
-        qc(T, QC) := false;
-        node(T,N) := false;
-    }
-
-    export action get_round(t:timeout_t) returns (r:round_t) = {
-
-        if some t_r:round_t. round(t, t_r) {
-            r := t_r;
-        }
-    }
-
-    export action timeout(n:process_index_t, r:round_t, q:qc_t) returns (t:timeout_t) = {
-        assume ~was_constructed(t);
-
-        if some t_old:timeout_t. round(t_old, r) & qc(t_old, q) & node(t_old,n) {
-            t := t_old;
-        } else {
-            round(T, R) := round(T, R) | (T = t & R = r);
-            qc(T, QC) := qc(T, QC) | (T = t & QC = q);
-            node(T,N) := node(T,N) | (T = t) & (N = n)
-        }
-
-        was_constructed(T) := was_constructed(T) | T = t;
-    }
-} with types_timeout_t_ensures, types_timeout_t_requires, block_t,timeout_t_properties
-
-isolate timeout_t_properties = {
-
-    invariant timeout_t.round(T, R) -> timeout_t.was_constructed(T)
-    invariant timeout_t.qc(T, QC) -> timeout_t.was_constructed(T)
-    invariant timeout_t.node(T,N) -> timeout_t.was_constructed(T)
-
-    invariant timeout_t.was_constructed(T) -> exists R:round_t. timeout_t.round(T, R)
-    invariant timeout_t.was_constructed(T) -> exists QC:qc_t. timeout_t.qc(T, QC)
-    invariant timeout_t.was_constructed(T) -> exists N:process_index_t. timeout_t.node(T,N)
-
-    invariant timeout_t.round(T, R1) & timeout_t.round(T, R2) -> R1 = R2
-    invariant timeout_t.qc(T, QC1) & timeout_t.qc(T, QC2) -> QC1 = QC2
-    invariant timeout_t.node(T,N1) & timeout_t.node(T,N2) -> N1 = N2
-
-} with timeout_t
-
 object to_kind = {
     type this = {timer_expire, timeout_sync, tc_received}
 }
@@ -512,6 +312,7 @@ isolate tc_t = {
 
     relation round(TC:tc_t, R:round_t)
     relation quorum(TC:tc_t, Q:quorum_t)
+    relation maxQC(TC:tc_t, QC:qc_t)
 }
 
 isolate tc_t_conv = {
@@ -524,55 +325,6 @@ isolate tc_t_conv = {
     relation tc_block_same_round(TC:tc_t, B:block_t)
     definition tc_block_same_round(TC,B) = forall Rt,Rb:round_t. tc_t.round(TC,Rt) & block_t.round(B,Rb) -> Rt = Rb
 } with tc_t, block_t#, block_t_conv, round_t, round_predecessor
-
-isolate proposal_f_t = {
-    type this
-
-    relation was_constructed(P:proposal_f_t)
-
-    relation block(P:proposal_f_t, B:block_t)
-    relation tc(P:proposal_f_t, TC:tc_t)
-
-    after init {
-        was_constructed(P) := false;
-
-        block(P, B) := false;
-        tc(P, TC) := false;
-    }
-
-    export action get_block(p:proposal_f_t) returns (b:block_t) = {
-
-        if some p_b:block_t. block(p, p_b) {
-            b := p_b;
-        }
-    }
-
-    export action proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) = {
-        assume ~was_constructed(p);
-
-        if some p_old:proposal_f_t. block(p_old, b) & tc(p_old, t) {
-            p := p_old;
-        } else {
-            block(p, b) := true;
-            tc(p, t) := true;
-        }
-
-        was_constructed(p) := true;
-    }
-} with block_t, types_proposal_f_t_ensures, types_proposal_f_t_requires, proposal_f_t_properties
-
-isolate proposal_f_t_properties = {
-
-    invariant proposal_f_t.block(P, B) -> proposal_f_t.was_constructed(P) & block_t.cstd(B)
-    invariant proposal_f_t.tc(P, TC) -> proposal_f_t.was_constructed(P)
-
-    invariant proposal_f_t.was_constructed(P) -> exists B:block_t. proposal_f_t.block(P, B)
-    invariant proposal_f_t.was_constructed(P) -> exists TC:tc_t. proposal_f_t.tc(P, TC)
-
-    invariant proposal_f_t.block(P, B1) & proposal_f_t.block(P, B2) -> B1 = B2
-    invariant proposal_f_t.tc(P, TC1) & proposal_f_t.tc(P, TC2) -> TC1 = TC2
-
-} with block_t, proposal_f_t, types_proposal_f_t_ensures, types_proposal_f_t_requires
 
 isolate types_block_t_requires = {
     # before block_t.get_round(b:block_t) returns (r:round_t) {
@@ -593,56 +345,6 @@ isolate types_block_t_requires = {
         require block_t.round(pB,R) -> R < r_c;#_#
     }
 } with block_t
-
-isolate types_proposal_n_t_requires = {
-
-    before proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
-        require proposal_n_t.cstd(p);#_#
-    }
-
-    before proposal_n_t.proposal_n(b:block_t) returns (p:proposal_n_t) {
-        require block_t.cstd(b);#_#
-    }
-} with proposal_n_t, block_t
-
-isolate types_proposal_o_t_requires = {
-
-    before proposal_o_t.get_block(p:proposal_o_t) returns (b:block_t) {
-        require proposal_o_t.cstd(p);#_#
-    }
-
-    before proposal_o_t.proposal_o(b:block_t) returns (p:proposal_o_t) {
-        require block_t.cstd(b);#_#
-    }
-} with proposal_o_t, block_t
-
-isolate types_prepare_t_requires = {
-    before prepare_t.get_block(p:prepare_t) returns (b:block_t) {
-        require prepare_t.cstd(p);#_#
-    }
-
-    before prepare_t.prepare(b:block_t) returns (p:prepare_t) {
-        require block_t.cstd(b);#_#
-    }
-} with prepare_t, block_t
-
-isolate types_timeout_t_requires = {
-
-    before timeout_t.get_round(t:timeout_t) returns (r:round_t) {
-        require timeout_t.was_constructed(t);#_#
-    }
-
-} with timeout_t
-
-isolate types_proposal_f_t_requires = {
-    before proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
-        require proposal_f_t.was_constructed(p);#_#
-    }
-
-    before proposal_f_t.proposal_f(b:block_t, t:tc_t) returns (p:proposal_f_t) {
-        require block_t.cstd(b);#_#
-    }
-} with proposal_f_t, block_t
 
 isolate types_block_t_ensures = {
     property block_t_properties.height_exists(B) | ~ block_t_properties.height_exists(B)
@@ -670,50 +372,3 @@ isolate types_block_t_ensures = {
         ensure block_t.cstd(b);
     }
 } with block_t, height_t, block_t_properties.cstd_block_height_exists, types_block_t_requires, ancestor_transitive_closure_block
-
-isolate types_proposal_n_t_ensures = {
-
-    after proposal_n_t.get_block(p:proposal_n_t) returns (b:block_t) {
-
-        ensure proposal_n_t.block(p, b);
-
-    }
-} with proposal_n_t
-
-isolate types_proposal_o_t_ensures = {
-
-    after proposal_o_t.get_block(p:proposal_o_t) returns (b:block_t) {
-
-        ensure proposal_o_t.block(p, b);
-
-    }
-} with proposal_o_t
-
-isolate types_prepare_t_ensures = {
-
-    after prepare_t.get_block(p:prepare_t) returns (b:block_t) {
-
-        ensure prepare_t.block(p, b);
-
-    }
-
-} with prepare_t, prepare_t_properties
-
-isolate types_timeout_t_ensures = {
-
-    after timeout_t.get_round(t:timeout_t) returns (r:round_t) {
-
-        ensure timeout_t.round(t, r);
-
-    }
-
-} with timeout_t, timeout_t_properties
-
-isolate types_proposal_f_t_ensures = {
-
-    after proposal_f_t.get_block(p:proposal_f_t) returns (b:block_t) {
-
-        ensure proposal_f_t.block(p, b);
-
-    }
-} with proposal_f_t, types_proposal_f_t_requires, proposal_f_t_properties, block_t

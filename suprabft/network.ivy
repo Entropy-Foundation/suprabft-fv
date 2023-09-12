@@ -5,18 +5,15 @@ include udp
 include types
 
 object msg_kind = {
-    type this = {proposal_n, proposal_f, prepare, qc, timeout, tc, tcfpo}
+    type this = {proposal_n, proposal_f, proposal_o, prepare_n, prepare_f, prepare_o, qc, timeout, tc, tcfpo}
 }
 
 object msg = {
     type this = struct {
         kind : msg_kind,
-        prop_n : proposal_n_t,
-        prop_f : proposal_f_t,
-        prop_o : proposal_o_t,
-        prep : prepare_t,
+        block: block_t,
+        round: round_t,
         qc : qc_t,
-        t : timeout_t,
         tc : tc_t,
         tc_po: tc_fplusone_t,
         src : process_index_t
@@ -41,7 +38,9 @@ isolate shim = {
     instance proposal_n_handler : handler(msg_kind.proposal_n)
     instance proposal_f_handler : handler(msg_kind.proposal_f)
     instance proposal_o_handler : handler(msg_kind.proposal_o)
-    instance prepare_handler : handler(msg_kind.prepare)
+    instance prepare_n_handler : handler(msg_kind.prepare_n)
+    instance prepare_f_handler : handler(msg_kind.prepare_f)
+    instance prepare_o_handler : handler(msg_kind.prepare_o)
     instance qc_handler : handler(msg_kind.qc)
     instance timeout_handler : handler(msg_kind.timeout)
     instance tc_handler : handler(msg_kind.tc)
@@ -73,8 +72,12 @@ isolate shim = {
                 call proposal_f_handler.handle(dst, m)
             } else if m.kind = msg_kind.proposal_o {
                 call proposal_o_handler.handle(dst, m)
-            } else if m.kind = msg_kind.prepare {
-                call prepare_handler.handle(dst, m)
+            } else if m.kind = msg_kind.prepare_n {
+                call prepare_n_handler.handle(dst, m)
+            } else if m.kind = msg_kind.prepare_f {
+                call prepare_f_handler.handle(dst, m)
+            } else if m.kind = msg_kind.prepare_o {
+                call prepare_o_handler.handle(dst, m)
             } else if m.kind = msg_kind.qc {
                 call qc_handler.handle(dst, m)
             } else if m.kind = msg_kind.timeout {
