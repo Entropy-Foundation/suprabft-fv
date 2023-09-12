@@ -1,0 +1,35 @@
+#lang ivy1.8
+
+include types
+include network
+include local_view
+
+isolate verify_quorum = {
+    relation processor_sent_prepare_o(N:process_index_t, B:block_t)
+    relation processor_sent_prepare_n(N:process_index_t, B:block_t)
+    relation processor_sent_prepare_f(N:process_index_t, B:block_t)
+
+    after init {
+        processor_sent_prepare_o(N,B) := false;
+    }
+
+    instantiate processors
+
+    after processor.optimistic_proposal_processing(id:process_index_t, b_pr:block_t) {
+        if processor(id).send_prepapre_o_condition(b_pr) {
+            processor_sent_prepare_o(id,b_pr) := true;
+        }
+    }
+
+    after processor.normal_proposal_processing(id:process_index_t, b_pr:block_t, qc:qc_t) {
+        if processor(id).send_prepare_n_condition(b_pr,qc) {
+            processor_sent_prepare_n(id,b_pr) := true;
+        }
+    }
+
+    after processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
+        if processor(id).send_prepare_f_condition(b_pr,tc) {
+            processor_sent_prepare_f(id,b_pr) := true;
+        }
+    }
+} with block_t
