@@ -289,10 +289,13 @@ object processor(id:process_index_t) = {
         }
     }
 
+    relation timer_expire_to_condition
+    definition timer_expire_to_condition = ~ expired_rounds(r_c) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < r_c)
+
     action timer_expire = {
         require ~ round_t.succ(0,r_c);
 
-        if (~ expired_rounds(r_c) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < r_c)) {
+        if timer_expire_to_condition {
             var m : msg;
             m.kind := msg_kind.timeout;
             m.round := r_c;
@@ -303,14 +306,17 @@ object processor(id:process_index_t) = {
         }
     }
 
+    function timeout_sync_to_condition(TC:tc_fplusone_t): bool
+    definition timeout_sync_to_condition(TC) = forall R:round_t. tc_fplusone_t.round(TC,R) -> (~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R))
+
     action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
         require tc_fplusone_t.round(tc,R) -> round_t.succ(0,R);
 
         #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we constrain the environment to call qc_processing on the qcs before calling timeout_sync
         # require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> observed_qc(B);
-        if some tc_r:round_t. tc_fplusone_t.round(tc, tc_r) {
-            if (~ expired_rounds(tc_r) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < tc_r)) {
+        if timeout_sync_to_condition(tc) {
+            if some tc_r:round_t. tc_fplusone_t.round(tc,tc_r) {
                 var m : msg;
                 m.kind := msg_kind.timeout;
                 m.round := tc_r;
@@ -321,6 +327,9 @@ object processor(id:process_index_t) = {
             }
         }
     }
+
+    function tc_processing_to_condition(TC:tc_t): bool
+    definition tc_processing_to_condition(TC) = forall R:round_t. tc_t.round(tc,R) -> (~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R))
 
     action tc_processing(tc:tc_t) = {
         var tc_round : round_t;
@@ -353,7 +362,7 @@ object processor(id:process_index_t) = {
         shim.send(id,leader(tc_round_s),m);
 
         ########### timeout ############3
-        if (~ expired_rounds(tc_round) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < tc_round)) {
+        if tc_processing_to_condition(tc) {
             var m : msg;
             m.kind := msg_kind.timeout;
             m.round := tc_round;
@@ -387,6 +396,14 @@ object processor(id:process_index_t) = {
             call shim.broadcast(id, m);
             a_f := r_c;
         }
+    }
+
+    action byzantine_send = {
+        require ~ is_good(id);
+        var m: msg;
+        var dst: process_index_t;
+        assume ~ is_good(m.src);
+        call shim.send(id, dst, m);
     }
 
     # action byzantine_send_proposal_f = {
