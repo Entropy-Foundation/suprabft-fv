@@ -38,7 +38,7 @@ isolate verify_quorum = {
     }
 
     relation qc_sanity_check(QC:qc_t)
-    definition qc_sanity_check(QC) = (exists B:block_t. exists Q:quorum_t. qc_t.block(QC,B) & qc_t.quorum(QC,Q)) & (forall B1,B2:block_t. qc_t.block(QC,B1) & qc_t.block(QC,B2) -> B1 = B2) & (forall Q1,Q2:quorum_t. qc_t.quorum(QC,Q1) & qc_t.quorum(QC,Q2) -> Q1 = Q2)
+    definition qc_sanity_check(QC) = (exists B:block_t. exists Q:quorum_t. qc_t.block(QC,B) & block_t.cstd(B) & qc_t.quorum(QC,Q)) & (forall B1,B2:block_t. qc_t.block(QC,B1) & qc_t.block(QC,B2) -> B1 = B2) & (forall Q1,Q2:quorum_t. qc_t.quorum(QC,Q1) & qc_t.quorum(QC,Q2) -> Q1 = Q2)
 
     relation qc_has_quorum_o(QC:qc_t)
     relation qc_has_quorum_n(QC:qc_t)
@@ -84,5 +84,19 @@ isolate verify_quorum = {
     }
 
     relation tc_sanity_check(TC:tc_t)
-    definition tc_sanity_check(TC) = (exists R:round_t. exists Q:quorum_t. exists QC:qc_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & tc_t.maxQC(TC,QC)) & (forall R1,R2:round_t. tc_t.round(TC,R1) & tc_t.round(TC,R2) -> R1 = R2) & (forall Q1,Q2:quorum_t. tc_t.quorum(TC,Q1) & tc_t.quorum(TC,Q2) -> Q1 = Q2)& (forall QC1,QC2:qc_t. tc_t.quomaxQCrum(TC,QC1 &) tc_t.maxQC(TC,QC2) -> QC1 = QC2)
+    definition tc_sanity_check(TC) = (exists R:round_t. exists Q:quorum_t. exists QC:qc_t. exists N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & tc_t.maxQC(TC,QC) & quorum_t.member(Q,N) & processor_sent_timeout(N,R,QC)) & (forall R1,R2:round_t. tc_t.round(TC,R1) & tc_t.round(TC,R2) -> R1 = R2) & (forall Q1,Q2:quorum_t. tc_t.quorum(TC,Q1) & tc_t.quorum(TC,Q2) -> Q1 = Q2) & (forall QC1,QC2:qc_t. tc_t.maxQC(TC,QC1) & tc_t.maxQC(TC,QC2) -> QC1 = QC2)
+
+    relation tc_has_quorum(TC:tc_t)
+    definition tc_has_quorum(TC) = forall R:round_t. forall Q:quorum_t. forall N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. processor_sent_timeout(N,R,QC) & qc_sanity_check(QC) & qc_has_quorum(QC))
+
+    relation tc_maxQC(TC:tc_t)
+    definition tc_maxQC(TC) = forall R,Rq,Rm:round_t. forall Q:quorum_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & processor_sent_timeout(N,R,QCq) & tc_t.maxQC(TC,QCm) & qc_t.block(QCq,Bq) & qc_t.block(QCm,Bm) & block_t.round(Bq,Rq) & block_t.round(Bm,Rm) -> Rq <= Rm
+
+    before processor.tc_processing(id:process_index_t, tc:tc_t) {
+        require tc_sanity_check(tc) & tc_has_quorum(tc) & tc_maxQC(tc);
+    }
+
+    before processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
+        require tc_sanity_check(tc) & tc_has_quorum(tc) & tc_maxQC(tc);
+    }
 } with block_t

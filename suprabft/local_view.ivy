@@ -227,6 +227,10 @@ object processor(id:process_index_t) = {
 
         require block_t.round(b_pr,r_c);
 
+        require block_t.cstd(b_pr);
+
+        require ~ t_r;
+
         ###### proposeOptimistic ############
         var rs := round_t.next(r_c);
         if leader(rs) = id {
@@ -260,6 +264,7 @@ object processor(id:process_index_t) = {
 
         require received_proposal_n(b_pr, leader(r_c));
         require received_qc(qc);
+        require ~ t_r;
         
         call qc_processing(qc);
 
@@ -294,6 +299,7 @@ object processor(id:process_index_t) = {
 
     action timer_expire = {
         require ~ round_t.succ(0,r_c);
+        t_r := true;
 
         if timer_expire_to_condition {
             var m : msg;
@@ -329,7 +335,7 @@ object processor(id:process_index_t) = {
     }
 
     function tc_processing_to_condition(TC:tc_t): bool
-    definition tc_processing_to_condition(TC) = forall R:round_t. tc_t.round(tc,R) -> (~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R))
+    definition tc_processing_to_condition(TC) = forall R:round_t. tc_t.round(TC,R) -> (~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R))
 
     action tc_processing(tc:tc_t) = {
         var tc_round : round_t;
@@ -386,6 +392,9 @@ object processor(id:process_index_t) = {
 
         require received_proposal_f(b_pr, leader(r_c));
         require block_t.round(b_pr,r_c);
+        require ~ t_r;
+
+        call tc_processing(tc);
 
         if send_prepare_f_condition(b_pr,tc) {
             var m : msg;
