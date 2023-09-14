@@ -29,7 +29,7 @@ isolate tc_r_no_po_rs_quorum = {
 
     invariant verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 
-    # invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.block(QC,B) -> (exists N:process_index_t. exists QC_to:qc_t. is_good(N) & verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & verify_quorum.processor_sent_prepare_o(N,B))
+    invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.block(QC,B) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 
     # attribute macro_finder=false
 } with block_t, verify_quorum, round_t, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.genesis_round_0, qc_t_properties, block_t_properties.block_t_inv_round_unique, basic_validties.qc_l_valid, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, quorum_intersection_axiom
