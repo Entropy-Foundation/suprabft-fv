@@ -84,6 +84,21 @@ isolate verify_quorum = {
         }
     }
 
+    after processor.byzantine_send(id:process_index_t, m:msg) {
+        if m.kind = msg_kind.prepare_o {
+            processor_sent_prepare_o(m.src, m.block) := true;
+        }
+        if m.kind = msg_kind.prepare_n {
+            processor_sent_prepare_n(m.src, m.block) := true;
+        }
+        if m.kind = msg_kind.prepare_f {
+            processor_sent_prepare_f(m.src, m.block) := true;
+        }
+        if m.kind = msg_kind.timeout {
+            processor_sent_timeout(m.src, m.round, m.qc) := true;
+        }
+    }
+
     relation tc_sanity_check(TC:tc_t)
     definition tc_sanity_check(TC) = (exists R:round_t. exists Q:quorum_t. exists QC:qc_t. exists N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & tc_t.maxQC(TC,QC) & quorum_t.member(Q,N) & processor_sent_timeout(N,R,QC)) & (forall R1,R2:round_t. tc_t.round(TC,R1) & tc_t.round(TC,R2) -> R1 = R2) & (forall Q1,Q2:quorum_t. tc_t.quorum(TC,Q1) & tc_t.quorum(TC,Q2) -> Q1 = Q2) & (forall QC1,QC2:qc_t. tc_t.maxQC(TC,QC1) & tc_t.maxQC(TC,QC2) -> QC1 = QC2)
 

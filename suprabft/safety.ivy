@@ -25,7 +25,7 @@ isolate tc_r_no_po_rs_quorum = {
 
     invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & tc_t.quorum(TC,Q_t) & quorum_t.member(Q_t,N) & is_good(N) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.block(QC,B) & qc_t.quorum(QC,Q_q) & quorum_t.member(Q_q,N) -> ((exists QC_to:qc_t. verify_quorum.processor_sent_timeout(N,R_tc,QC_to)) & verify_quorum.processor_sent_prepare_o(N,B))
 
-    invariant verify_quorum.processor_sent_timeout(N,R_tc,QC_to) -> R_tc <= verify_quorum.processor(N).t_l
+    invariant verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & is_good(N) -> R_tc <= verify_quorum.processor(N).t_l
 
     invariant verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 

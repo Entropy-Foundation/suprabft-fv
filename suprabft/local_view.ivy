@@ -422,11 +422,10 @@ object processor(id:process_index_t) = {
         }
     }
 
-    action byzantine_send = {
+    action byzantine_send(m:msg) = {
         require ~ is_good(id);
-        var m: msg;
+        require ~ is_good(m.src);
         var dst: process_index_t;
-        assume ~ is_good(m.src);
         call shim.send(id, dst, m);
     }
 
