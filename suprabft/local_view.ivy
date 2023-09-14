@@ -264,6 +264,7 @@ object processor(id:process_index_t) = {
 
         require received_proposal_n(b_pr, leader(r_c));
         require received_qc(qc);
+        require block_t.cstd(b_pr);
         require ~ t_r;
         
         call qc_processing(qc);
@@ -392,11 +393,13 @@ object processor(id:process_index_t) = {
 
         require received_proposal_f(b_pr, leader(r_c));
         require block_t.round(b_pr,r_c);
+        require block_t.cstd(b_pr);
         require ~ t_r;
 
-        call tc_processing(tc);
-
         if send_prepare_f_condition(b_pr,tc) {
+
+            call tc_processing(tc);
+            
             var m : msg;
             m.kind := msg_kind.prepare_f;
             m.block := b_pr;
