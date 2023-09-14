@@ -15,6 +15,7 @@ isolate verify_quorum = {
         processor_sent_prepare_o(N,B) := false;
         processor_sent_prepare_n(N,B) := is_good(N) & B = block_t.genesis;
         processor_sent_prepare_f(N,B) := false;
+        processor_sent_timeout(N,R,QC) := false;
     }
 
     instantiate processors

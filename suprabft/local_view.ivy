@@ -310,6 +310,10 @@ object processor(id:process_index_t) = {
             m.src := id;
 
             call shim.broadcast(id, m);
+            expired_rounds(r_c) := true;
+            if (t_l < r_c) {
+                t_l := r_c;
+            }
         }
     }
 
@@ -331,6 +335,10 @@ object processor(id:process_index_t) = {
                 m.src := id;
 
                 call shim.broadcast(id, m);
+                expired_rounds(tc_r) := true;
+                if (t_l < tc_r) {
+                    t_l := tc_r;
+                }
             }
         }
     }
@@ -368,7 +376,7 @@ object processor(id:process_index_t) = {
         m.tc := tc;
         shim.send(id,leader(tc_round_s),m);
 
-        ########### timeout ############3
+        ########### timeout ############
         if tc_processing_to_condition(tc) {
             var m : msg;
             m.kind := msg_kind.timeout;
@@ -377,6 +385,10 @@ object processor(id:process_index_t) = {
             m.src := id;
 
             call shim.broadcast(id, m);
+            expired_rounds(tc_round) := true;
+            if (t_l < tc_round) {
+                t_l := tc_round;
+            }
         }
 
         ######### advanceToRound #############
@@ -513,6 +525,7 @@ object processor(id:process_index_t) = {
     # export byzantine_send_qc
     # export byzantine_send_tc
     # export byzantine_send_timeout
+    export byzantine_send
     export fallback_proposal_processing
     export normal_proposal_processing
     export optimistic_proposal_processing
