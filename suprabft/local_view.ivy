@@ -41,6 +41,24 @@ object processor(id:process_index_t) = {
     # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean, which will be true whenever the timer expires beyond the set limit
     individual t_r: bool
 
+    # this is to implement the semantics of "upon fist posessing B" in line 36 of algorithm 2.
+    relation proposed_optimistic_for_round(R:round_t)
+
+    # this is to implement the semantics of "upon first possessing a O(B)" in line 40 of algorithm 2.
+    relation possessed_optimistic_for_round(R:round_t)
+
+    # this is to implement the semantics of "upon first possessing a N(B,QC)" in line 51 of algorithm 2.
+    relation possessed_normal_for_round(R:round_t)
+
+    # this is to implement the semantics of "upon first observing a set of f+1 T(r,_)" in line 77 of algorithm 3.
+    relation timeout_sync_for_round(R:round_t)
+
+    # this is to implement the semantics of "upon first observing tc <- TC(r,qc',c)" in line 81 of algorithm 3.
+    relation processed_tc_for_round(R:round_t)
+
+    # this is to implement the semantics of "upon first possessing a F(B,TC)" in line 90 of algorithm 3.
+    relation possessed_fallback_for_round(R:round_t)
+
     relation received_proposal_n(B:block_t, Src:process_index_t)
     relation received_proposal_f(B:block_t, Src:process_index_t)
     relation received_proposal_o(B:block_t, Src:process_index_t)
@@ -141,36 +159,10 @@ object processor(id:process_index_t) = {
         #received_qc(QC) := received_qc(QC) | qc_in_tc_fp1(m.tc,QC);
     }
 
-    # action proposal_f_get_tc(p:proposal_f_t) returns (tc:tc_t) = {
-    #     if some p_tc:tc_t. proposal_f_t.tc(p, p_tc) {
-    #         tc := p_tc;
-    #     }
-    # }
-
-    # action timeout_get_qc(t:timeout_t) returns (qc:qc_t) = {
-    #     if some t_qc:qc_t. timeout_t.qc(t, t_qc) {
-    #         qc := t_qc;
-    #     }
-    # }
-
-    # action qc_get_block(qc:qc_t) returns (b:block_t) = {
-    #     if some qc_b:block_t. qc_t.block(qc, qc_b) {
-    #         b := qc_b;
-    #     }
-    # }
-
-    # action broadcast_tc(t:tc_t) = {
-    #     var m : msg;
-    #     m.kind := msg_kind.tc;
-    #     m.tc := t;
-    #     m.src := id;
-
-    #     call shim.broadcast(id, m);
-    # }
-
 
     action qc_processing(qc:qc_t) = {
         require received_qc(qc);
+        require forall B:block_t. qc_t.block(qc,B) -> ~ processed_qc(B); # this is to reflect the semantics of "upon first observing qc" in line 26 of algorithm 2. This action should not be invoked more than once for the same block
 
         var b_qc : block_t;
         if some b:block_t. qc_t.block(qc,b) {
@@ -231,9 +223,13 @@ object processor(id:process_index_t) = {
 
         require ~ t_r;
 
+        require ~ possessed_optimistic_for_round(r_c);
+
+        possessed_optimistic_for_round(r_c) := true;
+
         ###### proposeOptimistic ############
         var rs := round_t.next(r_c);
-        if leader(rs) = id {
+        if leader(rs) = id & ~ proposed_optimistic_for_round(rs) {
             var b := block_t.block(rs,b_pr);
             var m : msg;
             m.kind := msg_kind.proposal_o;
@@ -241,6 +237,7 @@ object processor(id:process_index_t) = {
             m.src := id;
 
             call shim.broadcast(id, m);
+            proposed_optimistic_for_round(rs) := true;
         }
 
         if send_prepapre_o_condition(b_pr)
@@ -265,15 +262,18 @@ object processor(id:process_index_t) = {
         require received_proposal_n(b_pr, leader(r_c));
         require received_qc(qc);
         require block_t.cstd(b_pr);
+        require block_t.round(b_pr,r_c);
         require ~ t_r;
+        require ~ possessed_normal_for_round(r_c);
         
+        possessed_normal_for_round(r_c) := true;
         call qc_processing(qc);
 
         require block_t.round(b_pr,r_c);
 
         ###### proposeOptimistic ############
         var rs := round_t.next(r_c);
-        if leader(rs) = id {
+        if leader(rs) = id & ~ proposed_optimistic_for_round(rs) {
             var b := block_t.block(rs,b_pr);
             var m : msg;
             m.kind := msg_kind.proposal_o;
@@ -281,6 +281,7 @@ object processor(id:process_index_t) = {
             m.src := id;
 
             call shim.broadcast(id, m);
+            proposed_optimistic_for_round(rs) := true;
         }
 
         if send_prepare_n_condition(b_pr,qc) {
@@ -322,7 +323,10 @@ object processor(id:process_index_t) = {
 
     action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
-        require tc_fplusone_t.round(tc,R) -> round_t.succ(0,R);
+
+        require forall R:round_t. tc_fplusone_t.round(tc,R) -> ~ timeout_sync_for_round(R);
+
+        timeout_sync_for_round(R) := timeout_sync_for_round(R) | tc_fplusone_t.round(tc,R);
 
         #ensure all QCs contained in tc are processed. In implementation, this is done by calling the subroutine for processing qc. Here, we constrain the environment to call qc_processing on the qcs before calling timeout_sync
         # require forall T:timeout_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.timeout(tc,T) & timeout_t.qc(T,QC) & qc_t.block(QC,B) -> observed_qc(B);
@@ -347,10 +351,12 @@ object processor(id:process_index_t) = {
     definition tc_processing_to_condition(TC) = forall R:round_t. tc_t.round(TC,R) -> (~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R))
 
     action tc_processing(tc:tc_t) = {
+        require forall R:round_t. tc_t.round(tc,R) -> ~ processed_tc_for_round(R);
         var tc_round : round_t;
         if some r:round_t. tc_t.round(tc, r) {
             tc_round := r;
         }
+        processed_tc_for_round(tc_round) := true;
         var tc_round_s := round_t.next(tc_round);
         if (r_c < tc_round_s) {
             ##### proposeFallback #########
@@ -407,6 +413,22 @@ object processor(id:process_index_t) = {
         require block_t.round(b_pr,r_c);
         require block_t.cstd(b_pr);
         require ~ t_r;
+        require ~ possessed_fallback_for_round(r_c);
+
+        possessed_fallback_for_round(r_c) := true;
+
+        ###### proposeOptimistic ############
+        var rs := round_t.next(r_c);
+        if leader(rs) = id & ~ proposed_optimistic_for_round(rs){
+            var b := block_t.block(rs,b_pr);
+            var m : msg;
+            m.kind := msg_kind.proposal_o;
+            m.block := b;
+            m.src := id;
+
+            call shim.broadcast(id, m);
+            proposed_optimistic_for_round(rs) := true;
+        }
 
         if send_prepare_f_condition(b_pr,tc) {
 
