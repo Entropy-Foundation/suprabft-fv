@@ -2,7 +2,7 @@
 
 include types
 include network
-include local_view
+include moonshot
 
 isolate verify_quorum = {
     relation processor_sent_prepare_o(N:process_index_t, B:block_t)
@@ -12,7 +12,7 @@ isolate verify_quorum = {
     relation processor_sent_timeout(N:process_index_t, R:round_t, QC:qc_t)
 
     after init {
-        processor_sent_prepare_o(N,B) := false;
+        processor_sent_prepare_o(N,B) := B = block_t.unused;
         processor_sent_prepare_n(N,B) := is_good(N) & B = block_t.genesis;
         processor_sent_prepare_f(N,B) := false;
         processor_sent_timeout(N,R,QC) := false;
@@ -21,9 +21,7 @@ isolate verify_quorum = {
     instantiate processors
 
     before processor.optimistic_proposal_processing(id:process_index_t, b_pr:block_t) {
-        if processor(id).send_prepapre_o_condition(b_pr) {
             processor_sent_prepare_o(id,b_pr) := true;
-        }
     }
 
     relation qc_sanity_check(QC:qc_t)
@@ -47,14 +45,12 @@ isolate verify_quorum = {
     }
 
     before processor.normal_proposal_processing(id:process_index_t, b_pr:block_t, qc:qc_t) {
-        require qc_sanity_check(qc) & qc_has_quorum(qc);
-        if processor(id).send_prepare_n_condition(b_pr,qc) {
+            require qc_sanity_check(qc) & qc_has_quorum(qc);
             processor_sent_prepare_n(id,b_pr) := true;
-        }
     }
 
     before processor.timer_expire(id:process_index_t) {
-        if processor(id).timer_expire_to_condition {
+        if processor(id).timeout_condition(processor(id).r_c) {
             processor_sent_timeout(id,processor(id).r_c,processor(id).qc_l) := true;
         }
     }
@@ -75,17 +71,23 @@ isolate verify_quorum = {
     }
 
     relation tc_sanity_check(TC:tc_t)
-    definition tc_sanity_check(TC) = (exists R:round_t. exists Q:quorum_t. exists QC:qc_t. exists N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & tc_t.maxQC(TC,QC) & quorum_t.member(Q,N) & processor_sent_timeout(N,R,QC)) & (forall R1,R2:round_t. tc_t.round(TC,R1) & tc_t.round(TC,R2) -> R1 = R2) & (forall Q1,Q2:quorum_t. tc_t.quorum(TC,Q1) & tc_t.quorum(TC,Q2) -> Q1 = Q2) & (forall QC1,QC2:qc_t. tc_t.maxQC(TC,QC1) & tc_t.maxQC(TC,QC2) -> QC1 = QC2)
+    definition tc_sanity_check(TC) = (exists R:round_t. exists Q:quorum_t. exists QC:qc_t. exists N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & tc_t.maxQC(TC,QC) & tc_t.to_messages(TC,N,QC))
+    & (forall R1,R2:round_t. tc_t.round(TC,R1) & tc_t.round(TC,R2) -> R1 = R2)
+    & (forall Q1,Q2:quorum_t. tc_t.quorum(TC,Q1) & tc_t.quorum(TC,Q2) -> Q1 = Q2)
+    & (forall QC1,QC2:qc_t. tc_t.maxQC(TC,QC1) & tc_t.maxQC(TC,QC2) -> QC1 = QC2)
+    & (forall N:process_index_t. forall QC1,QC2:qc_t. tc_t.to_messages(TC,N,QC1) & tc_t.to_messages(TC,N,QC2) -> QC1 = QC2 & qc_sanity_check(QC1) & qc_has_quorum(QC1))
+    & (forall N:process_index_t. forall R:round_t. forall QC:qc_t. tc_t.to_messages(TC,N,QC) & is_good(N) & tc_t.round(TC,R) -> processor_sent_timeout(N,R,QC))
 
     relation tc_has_quorum(TC:tc_t)
-    definition tc_has_quorum(TC) = forall R:round_t. forall Q:quorum_t. forall N:process_index_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. processor_sent_timeout(N,R,QC) & qc_sanity_check(QC) & qc_has_quorum(QC))
+    definition tc_has_quorum(TC) = forall Q:quorum_t. forall N:process_index_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. tc_t.to_messages(TC,N,QC))
 
     relation tc_maxQC(TC:tc_t)
-    definition tc_maxQC(TC) = forall R,Rq,Rm:round_t. forall Q:quorum_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.round(TC,R) & tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & processor_sent_timeout(N,R,QCq) & tc_t.maxQC(TC,QCm) & qc_t.block(QCq,Bq) & qc_t.block(QCm,Bm) & block_t.round(Bq,Rq) & block_t.round(Bm,Rm) -> Rq <= Rm
+    definition tc_maxQC(TC) = forall Rq,Rm:round_t. forall Q:quorum_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & tc_t.to_messages
+    (TC,N,QCq) & tc_t.maxQC(TC,QCm) & qc_t.block(QCq,Bq) & qc_t.block(QCm,Bm) & block_t.round(Bq,Rq) & block_t.round(Bm,Rm) -> Rq <= Rm
 
     before processor.tc_processing(id:process_index_t, tc:tc_t) {
         require tc_sanity_check(tc) & tc_has_quorum(tc) & tc_maxQC(tc);
-        if processor(id).tc_processing_to_condition(tc) {
+        if forall R:round_t. tc_t.round(tc,R) -> processor(id).timeout_condition(R) {
             if some tc_r:round_t. tc_t.round(tc,tc_r) {
                 processor_sent_timeout(id,tc_r,processor(id).qc_l) := true;
             }
@@ -94,20 +96,22 @@ isolate verify_quorum = {
 
     before processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
         require tc_sanity_check(tc) & tc_has_quorum(tc) & tc_maxQC(tc);
-        if processor(id).send_prepare_f_condition(b_pr,tc) {
             processor_sent_prepare_f(id,b_pr) := true;
-        }
     }
 
     relation tc_fpo_sanity_check(TC:tc_fplusone_t)
-    definition tc_fpo_sanity_check(TC) = (exists R:round_t. exists Q:quorum_fplusone_t. exists QC:qc_t. exists N:process_index_t. tc_fplusone_t.round(TC,R) & tc_fplusone_t.quorum(TC,Q) & quorum_fplusone_t.member(Q,N) & processor_sent_timeout(N,R,QC)) & (forall R1,R2:round_t. tc_fplusone_t.round(TC,R1) & tc_fplusone_t.round(TC,R2) -> R1 = R2) & (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC,Q1) & tc_fplusone_t.quorum(TC,Q2) -> Q1 = Q2)
+    definition tc_fpo_sanity_check(TC) = (exists R:round_t. exists Q:quorum_fplusone_t. tc_fplusone_t.round(TC,R) & tc_fplusone_t.quorum(TC,Q))
+    & (forall R1,R2:round_t. tc_fplusone_t.round(TC,R1) & tc_fplusone_t.round(TC,R2) -> R1 = R2)
+    & (forall Q1,Q2:quorum_fplusone_t. tc_fplusone_t.quorum(TC,Q1) & tc_fplusone_t.quorum(TC,Q2) -> Q1 = Q2)
+    & (forall N:process_index_t. forall QC1,QC2:qc_t. tc_fplusone_t.to_messages(TC,N,QC1) & tc_fplusone_t.to_messages(TC,N,QC2) -> QC1 = QC2 & qc_sanity_check(QC1) & qc_has_quorum(QC1))
+    & (forall N:process_index_t. forall R:round_t. forall QC:qc_t. tc_fplusone_t.to_messages(TC,N,QC) & is_good(N) & tc_fplusone_t.round(TC,R) -> processor_sent_timeout(N,R,QC))
 
     relation tc_fpo_has_quorum(TC:tc_fplusone_t)
-    definition tc_fpo_has_quorum(TC) = forall R:round_t. forall Q:quorum_fplusone_t. forall N:process_index_t. tc_fplusone_t.round(TC,R) & tc_fplusone_t.quorum(TC,Q) & quorum_fplusone_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. processor_sent_timeout(N,R,QC) & qc_sanity_check(QC) & qc_has_quorum(QC))
+    definition tc_fpo_has_quorum(TC) = forall Q:quorum_fplusone_t. forall N:process_index_t. tc_fplusone_t.quorum(TC,Q) & quorum_fplusone_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. tc_fplusone_t.to_messages(TC,N,QC))
 
     before processor.timeout_sync(id:process_index_t, tc:tc_fplusone_t) {
         require tc_fpo_sanity_check(tc) & tc_fpo_has_quorum(tc);
-        if processor(id).timeout_sync_to_condition(tc) {
+        if forall R:round_t. tc_fplusone_t.round(tc,R) -> processor(id).timeout_condition(R) {
             if some tc_r:round_t. tc_fplusone_t.round(tc,tc_r) {
                 processor_sent_timeout(id,tc_r,processor(id).qc_l) := true;
             }

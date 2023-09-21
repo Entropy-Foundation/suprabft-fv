@@ -71,8 +71,8 @@ isolate block_t = {
     }
 
     action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
-        require ~cstd(b);
-        require b ~= block_t.unused;
+        assume ~cstd(b);
+        assume b ~= block_t.unused;
 
         round(b, R) := R = r_c;
         height(b, H) := H = height_t.next(get_height(pB));
@@ -90,7 +90,7 @@ isolate block_t = {
 isolate block_t_properties = {
 
     invariant block_t.cstd(block_t.genesis)
-    invariant ~block_t.cstd(block_t.unused)
+    invariant [unused_not_cstd] ~block_t.cstd(block_t.unused)
     invariant [genesis_round_0] block_t.round(B, 0) <-> B = block_t.genesis
     invariant block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
     invariant block_t.height(B, 0) <-> B = block_t.genesis
@@ -178,67 +178,67 @@ isolate block_t_conv = {
     relation successive_blocks(Bp:block_t, Bc:block_t)
     definition successive_blocks(Bp,Bc) = forall Rp,Rc:round_t. block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
 
-    relation round_lte(Bl:block_t, Bg:block_t)
-    definition round_lte(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl <= Rg)
+    # relation round_lte(Bl:block_t, Bg:block_t)
+    # definition round_lte(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl <= Rg)
 
-    relation round_lt(Bl:block_t, Bg:block_t)
-    definition round_lt(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl < Rg)
+    # relation round_lt(Bl:block_t, Bg:block_t)
+    # definition round_lt(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl < Rg)
 
-    relation round_same(B1:block_t,B2:block_t)
-    definition round_same(B1,B2) = block_t.cstd(B1) & block_t.cstd(B2) & (forall R1,R2:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2)
+    # relation round_same(B1:block_t,B2:block_t)
+    # definition round_same(B1,B2) = block_t.cstd(B1) & block_t.cstd(B2) & (forall R1,R2:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2)
 
-    relation block_lt_predecessor(B:block_t, R:round_t)
-    definition block_lt_predecessor(B,R) = 0 < R & forall Rb,Rp:round_t. block_t.round(B,Rb) & round_t.succ(Rp,R) -> Rb < Rp
+    # relation block_lt_predecessor(B:block_t, R:round_t)
+    # definition block_lt_predecessor(B,R) = 0 < R & forall Rb,Rp:round_t. block_t.round(B,Rb) & round_t.succ(Rp,R) -> Rb < Rp
 
-    relation block_lt_round(B:block_t, R:round_t)
-    definition block_lt_round(B,R) = 0 < R & forall Rb:round_t. block_t.round(B,Rb) -> Rb < R
+    # relation block_lt_round(B:block_t, R:round_t)
+    # definition block_lt_round(B,R) = 0 < R & forall Rb:round_t. block_t.round(B,Rb) -> Rb < R
 
-    relation block_lte_round(B:block_t, R:round_t)
-    definition block_lte_round(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> Rb <= R
+    # relation block_lte_round(B:block_t, R:round_t)
+    # definition block_lte_round(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> Rb <= R
 
-    relation block_pred_pred(B:block_t, R:round_t)
-    definition [def_block_pred_pred] block_pred_pred(B,R) = 0 < R & ~ round_t.succ(0,R) & forall Rb:round_t. block_t.round(B,Rb) -> round_t_conv.round_pred_pred(Rb,R)
+    # relation block_pred_pred(B:block_t, R:round_t)
+    # definition [def_block_pred_pred] block_pred_pred(B,R) = 0 < R & ~ round_t.succ(0,R) & forall Rb:round_t. block_t.round(B,Rb) -> round_t_conv.round_pred_pred(Rb,R)
 
-    relation block_pred(B:block_t, R:round_t)
-    definition [def_block_pred] block_pred(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> round_t.succ(Rb,R)
+    # relation block_pred(B:block_t, R:round_t)
+    # definition [def_block_pred] block_pred(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> round_t.succ(Rb,R)
 
-    invariant round_lte(B1,B2) & round_lte(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B2,R3) -> R1 <= R2 & R2 <= R3 & R1 <= R3)
-    invariant round_lte(B1,B2) & round_lte(B2,B3) -> round_lte(B1,B3)
-    invariant block_t.cstd(B) -> round_lte(B,B)
-    invariant block_t.cstd(B1) & block_t.cstd(B2) -> round_lte(B1,B2) | round_lte(B2,B1)
-    invariant round_lte(B1,B2) & round_lte(B2,B1) & block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2
+    # invariant round_lte(B1,B2) & round_lte(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B2,R3) -> R1 <= R2 & R2 <= R3 & R1 <= R3)
+    # invariant round_lte(B1,B2) & round_lte(B2,B3) -> round_lte(B1,B3)
+    # invariant block_t.cstd(B) -> round_lte(B,B)
+    # invariant block_t.cstd(B1) & block_t.cstd(B2) -> round_lte(B1,B2) | round_lte(B2,B1)
+    # invariant round_lte(B1,B2) & round_lte(B2,B1) & block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2
 
     #attribute macro_finder=false
 } with block_t, round_t, round_predecessor, block_t_properties
 
-isolate block_t_conv_p1 = {
+# isolate block_t_conv_p1 = {
 
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+#     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
     
 
-    invariant block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B1,B2)
-    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B3,R3) -> R1 < R2 & R2 < R3 & R1 < R3)
-    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> block_t_conv.round_lt(B1,B3)
-    invariant block_t.cstd(B1) & block_t.cstd(B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_lt(B2,B1) | block_t_conv.round_same(B1,B2)
-    #invariant block_t_conv.round_lt(B1,B2) -> ~ block_t_conv.round_lt(B2,B1)
+#     invariant block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B1,B2)
+#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B3,R3) -> R1 < R2 & R2 < R3 & R1 < R3)
+#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> block_t_conv.round_lt(B1,B3)
+#     invariant block_t.cstd(B1) & block_t.cstd(B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_lt(B2,B1) | block_t_conv.round_same(B1,B2)
+#     #invariant block_t_conv.round_lt(B1,B2) -> ~ block_t_conv.round_lt(B2,B1)
 
-    invariant block_t_conv.round_lte(B1,B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_same(B1,B2)
+#     invariant block_t_conv.round_lte(B1,B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_same(B1,B2)
 
-    invariant block_t_conv.block_lt_predecessor(B,R1) & R1 <= R2 -> block_t_conv.block_lt_predecessor(B,R2)
+#     invariant block_t_conv.block_lt_predecessor(B,R1) & R1 <= R2 -> block_t_conv.block_lt_predecessor(B,R2)
 
-    invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lte(B2,B3) -> block_t_conv.round_lt(B1,B3)
+#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lte(B2,B3) -> block_t_conv.round_lt(B1,B3)
 
-    property round_t.succ(R1,R2) -> R1 < R2
+#     property round_t.succ(R1,R2) -> R1 < R2
 
-    invariant block_t.cstd(B1) & block_t.cstd(B2) & ~block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B2,B1)
+#     invariant block_t.cstd(B1) & block_t.cstd(B2) & ~block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B2,B1)
 
-    # invariant round_t_conv.round_pred_pred(Rb,R) & round_t.succ(Rp,R) -> Rb < Rp
+#     # invariant round_t_conv.round_pred_pred(Rb,R) & round_t.succ(Rp,R) -> Rb < Rp
 
-    invariant block_t_conv.block_pred_pred(B,R) -> block_t_conv.block_lt_predecessor(B,R)
+#     invariant block_t_conv.block_pred_pred(B,R) -> block_t_conv.block_lt_predecessor(B,R)
 
-    attribute macro_finder=false
+#     attribute macro_finder=false
 
-} with block_t, round_t, round_predecessor, block_t_conv, round_t_conv, block_t_properties
+# } with block_t, round_t, round_predecessor, block_t_conv, round_t_conv, block_t_properties
 
 
 
@@ -293,10 +293,10 @@ isolate qc_t_properties = {
     
 } with qc_t
 
-isolate qc_t_conv = {
-    relation qc_gte_block(QC:qc_t, B:block_t)
-    definition qc_gte_block(QC,B) = forall Bqc:block_t. qc_t.block(QC,Bqc) -> block_t_conv.round_lte(B,Bqc)
-}
+# isolate qc_t_conv = {
+#     relation qc_gte_block(QC:qc_t, B:block_t)
+#     definition qc_gte_block(QC,B) = forall Bqc:block_t. qc_t.block(QC,Bqc) -> block_t_conv.round_lte(B,Bqc)
+# }
 
 object to_kind = {
     type this = {timer_expire, timeout_sync, tc_received}
@@ -307,6 +307,7 @@ isolate tc_fplusone_t = {
 
     relation round(TC:tc_fplusone_t, R:round_t)
     relation quorum(TC:tc_fplusone_t, Q:quorum_fplusone_t)
+    relation to_messages(TC:tc_fplusone_t, N:process_index_t, QC:qc_t)
 }
 
 isolate tc_t = {
@@ -315,6 +316,7 @@ isolate tc_t = {
     relation round(TC:tc_t, R:round_t)
     relation quorum(TC:tc_t, Q:quorum_t)
     relation maxQC(TC:tc_t, QC:qc_t)
+    relation to_messages(TC:tc_t, N:process_index_t, QC:qc_t)
 }
 
 isolate tc_t_conv = {
