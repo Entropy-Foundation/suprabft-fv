@@ -89,7 +89,7 @@ isolate block_t = {
 
 isolate block_t_properties = {
 
-    invariant block_t.cstd(block_t.genesis)
+    invariant [genesis_cstd] block_t.cstd(block_t.genesis)
     invariant [unused_not_cstd] ~block_t.cstd(block_t.unused)
     invariant [genesis_round_0] block_t.round(B, 0) <-> B = block_t.genesis
     invariant block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
@@ -97,7 +97,7 @@ isolate block_t_properties = {
 
     invariant block_t.parent(B, B) <-> B = block_t.genesis
 
-    invariant block_t.round(B, R) -> block_t.cstd(B)
+    invariant [round_only_for_cstd] block_t.round(B, R) -> block_t.cstd(B)
     invariant block_t.parent(B, P) -> block_t.cstd(B) & block_t.cstd(P)
     invariant block_t.height(B, H) -> block_t.cstd(B)
 

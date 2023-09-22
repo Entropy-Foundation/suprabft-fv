@@ -49,8 +49,34 @@ isolate tc_r_no_po_rs_quorum = {
 
 } with block_t, verify_quorum, round_t, tc_r_no_po_rs_quorum_m1.honest_sends_prepare_o_timeout, tc_r_no_po_rs_quorum_m1.prepare_o_not_succ_timeout, tc_qc_o_intersection
 
+isolate qc_o_qc_n_m1 = {
+    invariant verify_quorum.processor_sent_prepare_o(N,verify_quorum.processor(N).b_o)
+
+    invariant verify_quorum.processor(N).b_o ~= block_t.unused -> block_t.round(verify_quorum.processor(N).b_o,verify_quorum.processor(N).a_o)
+
+    invariant verify_quorum.processor(N).a_o <= verify_quorum.processor(N).r_c & verify_quorum.processor(N).a_n <= verify_quorum.processor(N).r_c
+
+    invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_optimistic_for_round(R)
+
+    invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
+
+    invariant verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) -> (B = block_t.unused | block_t.cstd(B))
+
+    invariant verify_quorum.processor_sent_prepare_n(N,B) & is_good(N) -> block_t.cstd(B)
+
+    invariant forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_o
+
+    invariant forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_n
+
+    invariant [honest_vote] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
+
+    # attribute macro_finder=false
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.round_only_for_cstd, block_t_properties.block_t_inv_round_unique
+
 isolate qc_o_qc_n = {
-    invariant forall B:block_t. forall R,Ro:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) & block_t.round(verify_quorum.processor(N).b_o,Ro) -> verify_quorum.processor_sent_prepare_o(N,verify_quorum.processor(N).b_o)
 
     invariant verify_quorum.qc_sanity_check(QCo) & verify_quorum.qc_sanity_check(QCn) & verify_quorum.qc_has_quorum_o(QCo) & verify_quorum.qc_has_quorum_n(QCn) & qc_t.block(QCo,Bo) & qc_t.block(QCn,Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> Bo = Bn
-} with block_t, verify_quorum, quorum_intersection_axiom, block_t_properties.unused_not_cstd
+
+    # attribute macro_finder=false
+
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, qc_o_qc_n_m1.honest_vote
