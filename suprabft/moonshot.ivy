@@ -102,6 +102,8 @@ object processor(id:process_index_t) = {
 
         t_r := false;
 
+        possessed_normal_for_round(R) := R = 0;
+
         sent_np_r1 := false;
 
         # these relations keep track of messages received through the network

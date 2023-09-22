@@ -54,11 +54,11 @@ isolate qc_o_qc_n_m1 = {
 
     invariant verify_quorum.processor(N).b_o ~= block_t.unused -> block_t.round(verify_quorum.processor(N).b_o,verify_quorum.processor(N).a_o)
 
-    invariant verify_quorum.processor(N).a_o <= verify_quorum.processor(N).r_c & verify_quorum.processor(N).a_n <= verify_quorum.processor(N).r_c
+    invariant [ao_an_le_rc] verify_quorum.processor(N).a_o <= verify_quorum.processor(N).r_c & verify_quorum.processor(N).a_n <= verify_quorum.processor(N).r_c
 
     invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_optimistic_for_round(R)
 
-    invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
+    invariant [optimistic_round_safety] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     invariant verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) -> (B = block_t.unused | block_t.cstd(B))
 
@@ -66,7 +66,7 @@ isolate qc_o_qc_n_m1 = {
 
     invariant forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_o
 
-    invariant forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_n
+    invariant [an_highest] forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_n
 
     invariant [honest_vote] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
@@ -80,3 +80,11 @@ isolate qc_o_qc_n = {
     # attribute macro_finder=false
 
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, qc_o_qc_n_m1.honest_vote
+
+isolate round_safety = {
+    invariant verify_quorum.processor(N).a_f <= verify_quorum.processor(N).r_c
+
+    invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_normal_for_round(R)
+
+    invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
+} with block_t, round_t, verify_quorum, qc_o_qc_n_m1.ao_an_le_rc, qc_o_qc_n_m1.optimistic_round_safety
