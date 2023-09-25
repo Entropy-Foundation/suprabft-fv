@@ -435,7 +435,7 @@ object processor(id:process_index_t) = {
     }
 
     function send_prepare_f_condition(B_pr:block_t, TC:tc_t): bool
-    definition send_prepare_f_condition(B_pr, TC) = block_t.round(B_pr,r_c) & a_n < r_c & t_l < r_c & (forall QCp:qc_t. forall B_qcp:block_t. forall R_qcp, R_tc:round_t. tc_t.maxQC(TC,QCp) & qc_t.block(QCp,B_qcp) & block_t.round(B_qcp,R_qcp) & tc_t.round(TC,R_tc) -> round_t.succ(R_tc,r_c) & block_t.parent(B_pr,B_qcp))
+    definition send_prepare_f_condition(B_pr, TC) = block_t.round(B_pr,r_c) & a_n < r_c & t_l < r_c & (forall QCp:qc_t. forall B_qcp:block_t. forall R_qcp, R_tc:round_t. tc_t.maxQC(TC,QCp) & qc_t.block(QCp,B_qcp) & block_t.round(B_qcp,R_qcp) -> block_t.parent(B_pr,B_qcp)) & (forall R_tc:round_t. tc_t.round(TC,R_tc) -> round_t.succ(R_tc,r_c))
 
     action fallback_proposal_processing(b_pr:block_t, tc:tc_t) = {
 
@@ -481,7 +481,7 @@ object processor(id:process_index_t) = {
     }
 
     export byzantine_send
-    # export fallback_proposal_processing
+    export fallback_proposal_processing
     export normal_proposal_processing
     export optimistic_proposal_processing
     export propose_normal_r1
