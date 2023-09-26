@@ -8,7 +8,6 @@ isolate verify_quorum = {
     relation processor_sent_prepare_o(N:process_index_t, B:block_t)
     relation processor_sent_prepare_n(N:process_index_t, B:block_t)
     relation processor_sent_prepare_f(N:process_index_t, B:block_t)
-    relation processor_sent_prepare_f_tc(N:process_index_t, B:block_t, TC:tc_t)
 
     relation processor_sent_timeout(N:process_index_t, R:round_t, QC:qc_t)
 
@@ -16,7 +15,6 @@ isolate verify_quorum = {
         processor_sent_prepare_o(N,B) := B = block_t.unused;
         processor_sent_prepare_n(N,B) := is_good(N) & B = block_t.genesis;
         processor_sent_prepare_f(N,B) := false;
-        processor_sent_prepare_f_tc(N,B,TC) := false;
         processor_sent_timeout(N,R,QC) := false;
     }
 
@@ -66,7 +64,6 @@ isolate verify_quorum = {
         }
         if m.kind = msg_kind.prepare_f {
             processor_sent_prepare_f(m.src, m.block) := true;
-            processor_sent_prepare_f_tc(m.src, m.block, m.tc) := true;
         }
         if m.kind = msg_kind.timeout {
             processor_sent_timeout(m.src, m.round, m.qc) := true;
@@ -100,7 +97,6 @@ isolate verify_quorum = {
     before processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
         require tc_sanity_check(tc) & tc_has_quorum(tc) & tc_maxQC(tc);
             processor_sent_prepare_f(id,b_pr) := true;
-            processor_sent_prepare_f_tc(id,b_pr,tc) := true;
     }
 
     relation tc_fpo_sanity_check(TC:tc_fplusone_t)
