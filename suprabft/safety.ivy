@@ -119,7 +119,7 @@ isolate round_safety_m2 = {
 
     invariant processor_sent_prepare_f_tc(N,B,TC) & is_good(N) -> block_t.cstd(B) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC)
 
-    invariant processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) & tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R_b)
+    invariant [prepare_f_tc_for_prev_round] processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) & tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R_b)
 
     invariant verify_quorum.processor_sent_prepare_f(N,B) & is_good(N) -> exists TC:tc_t. processor_sent_prepare_f_tc(N,B,TC)# & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC)
     
@@ -134,20 +134,48 @@ isolate round_safety_m3 = {
     relation tc_in_prev_round(TC:tc_t, R:round_t)
     definition tc_in_prev_round(TC,R) = verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) &(forall R_tc:round_t. tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R))
 
-    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & qc_t.quorum(QCf,Q) & quorum_t.member(Q,N) & is_good(N) -> exists TC:tc_t. round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & tc_in_prev_round(TC,Rf)
+    # invariant [i1] verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & qc_t.quorum(QCf,Q) & quorum_t.member(Q,N) & is_good(N) -> exists TC:tc_t. round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & tc_in_prev_round(TC,Rf)
 
-    invariant tc_in_prev_round(TC,R) & verify_quorum.qc_sanity_check(QC) & qc_t.block(QC,B) & block_t.round(B,R) -> ~ verify_quorum.qc_has_quorum_o(QC)
-
-    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & verify_quorum.qc_sanity_check(QCo) & qc_t.block(QCo,Bo) & block_t.round(Bo,Rf) -> ~ verify_quorum.qc_has_quorum_o(QCo)
+    invariant [tc_r_no_qc_o_rs] tc_in_prev_round(TC,R) & verify_quorum.qc_sanity_check(QC) & qc_t.block(QC,B) & block_t.round(B,R) -> ~ verify_quorum.qc_has_quorum_o(QC)
 
     attribute macro_finder = false
 
-} with block_t, round_t, verify_quorum, round_safety_m2, tc_r_no_po_rs_quorum, quorum_intersection_axiom
+} with block_t, round_t, verify_quorum, round_safety_m2, tc_r_no_po_rs_quorum#, quorum_intersection_axiom
 
 isolate round_safety_m4 = {
 
-    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & verify_quorum.qc_sanity_check(QCo) & qc_t.block(QCo,Bo) & block_t.round(Bo,Rf) -> ~ verify_quorum.qc_has_quorum_o(QCo)
+    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC)
+
+    # invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) -> exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf)
+
+    # invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & verify_quorum.qc_sanity_check(QCo) & qc_t.block(QCo,Bo) & block_t.round(Bo,Rf) -> ~ verify_quorum.qc_has_quorum_o(QCo)
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, verify_quorum, round_safety_m3, round_safety_m2, every_quorum_good
+
+isolate round_safety_m5 = {
+
+    invariant round_safety_m2.processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) -> round_safety_m3.tc_in_prev_round(TC,R_b)
+
+    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)
 
     attribute macro_finder = false
 
-} with block_t, round_t, verify_quorum, round_safety_m3, quorum_intersection_axiom
+} with block_t, round_t, verify_quorum, round_safety_m3, round_safety_m2, round_safety_m4, every_quorum_good
+
+isolate round_safety_m6 = {
+
+    property (exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)) -> (exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf))
+
+    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) -> exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf)
+
+    invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & verify_quorum.qc_sanity_check(QCo) & qc_t.block(QCo,Bo) & block_t.round(Bo,Rf) -> ~ verify_quorum.qc_has_quorum_o(QCo)
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, verify_quorum, round_safety_m5, round_safety_m2, every_quorum_good, round_safety_m3.tc_r_no_qc_o_rs
+
+isolate round_safety = {
+    invariant verify_quorum.qc_sanity_check(QC1) & verify_quorum.qc_has_quorum(QC1) & verify_quorum.qc_sanity_check(QC2) & verify_quorum.qc_has_quorum(QC2) & qc_t.block(QC1,B1)  & qc_t.block(QC2,B2) & block_t.round(B1,R) & block_t.round(B2,R) -> B1 = B2
+} with block_t, round_t, verify_quorum, round_safety_m1, round_safety_m2, round_safety_m6, every_quorum_good, quorum_intersection_axiom
