@@ -154,8 +154,6 @@ isolate round_safety_m4 = {
 
 isolate round_safety_m5 = {
 
-    invariant round_safety_m2.processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) -> round_safety_m3.tc_in_prev_round(TC,R_b)
-
     invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)
 
     attribute macro_finder = false
@@ -163,8 +161,6 @@ isolate round_safety_m5 = {
 } with block_t, round_t, verify_quorum, round_safety_m3, round_safety_m2, round_safety_m4, every_quorum_good
 
 isolate round_safety_m6 = {
-
-    property (exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)) -> (exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf))
 
     invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) -> exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf)
 

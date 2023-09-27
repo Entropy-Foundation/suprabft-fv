@@ -332,7 +332,7 @@ object processor(id:process_index_t) = {
     }
 
     relation timeout_condition(R:round_t)
-    definition timeout_condition(R) = ~ expired_rounds(R) & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < R)
+    definition timeout_condition(R) = ~ expired_rounds(R) & r_c <= R
 
     action timer_expire = {
         t_r := true;
