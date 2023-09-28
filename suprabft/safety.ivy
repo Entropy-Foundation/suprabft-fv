@@ -16,6 +16,8 @@ isolate only_cstd_blocks = {
     invariant [prepare_f_cstd] verify_quorum.processor_sent_prepare_f(N,B) & is_good(N) -> block_t.cstd(B)
 
     invariant [certified_block_cstd] verify_quorum.qc_sanity_check(QC) & qc_t.block(QC,B) -> block_t.cstd(B)
+
+    invariant [processed_qc_cstd] is_good(N) & verify_quorum.processor(N).processed_qc(B) -> block_t.cstd(B)
 } with block_t, verify_quorum, qc_t, qc_t_properties
 
 isolate basic_validities = {
@@ -212,6 +214,8 @@ isolate round_safety = {
 } with block_t, round_t, verify_quorum, qc_o_qc_n, qc_f_qc_n, qc_f_qc_o, qc_ff_or_nn, qc_oo
 
 isolate to_after_prepare_n = {
+    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
     invariant is_good(N) & verify_quorum.processor_sent_timeout(N,Rt,QC) -> verify_quorum.qc_sanity_check(QC)
 
     invariant is_good(N) & verify_quorum.processor_sent_timeout(N,Rt,QC) -> Rt <= verify_quorum.processor(N).t_l
@@ -220,7 +224,9 @@ isolate to_after_prepare_n = {
 
     invariant is_good(N) -> verify_quorum.qc_sanity_check(verify_quorum.processor(N).qc_l) 
 
+    invariant is_good(N) & verify_quorum.processor(N).processed_qc(Bp) & block_t.round(Bp,Rp) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) & block_t.round(Bl,Rl) -> Rp <= Rl
+
     invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(Rp,R) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) & block_t.round(Bl,Rl) -> Rp <= Rl
 
     invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & B ~= block_t.genesis & block_t.round(B,R) & verify_quorum.processor_sent_timeout(N,Rt,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & round_t.succ(Rp,R) -> Rp <= Rq
-} with block_t, round_t, verify_quorum, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.certified_block_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.genesis_round_0, qc_t_properties, qc_t
+} with block_t, round_t, verify_quorum, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.certified_block_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.genesis_round_0, qc_t_properties, qc_t, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, only_cstd_blocks.processed_qc_cstd
