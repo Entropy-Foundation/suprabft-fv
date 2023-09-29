@@ -228,5 +228,9 @@ isolate to_after_prepare_n = {
 
     invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & B ~= block_t.genesis & block_t.round(B,R) & round_t.succ(Rp,R) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) & block_t.round(Bl,Rl) -> Rp <= Rl
 
-    invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & B ~= block_t.genesis & block_t.round(B,R) & verify_quorum.processor_sent_timeout(N,Rt,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & round_t.succ(Rp,R) -> Rp <= Rq
+    invariant [to_after_normal_vote] is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & B ~= block_t.genesis & block_t.round(B,R) & verify_quorum.processor_sent_timeout(N,Rt,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & round_t.succ(Rp,R) -> Rp <= Rq
 } with block_t, round_t, verify_quorum, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.certified_block_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.genesis_round_0, qc_t_properties, qc_t, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, only_cstd_blocks.processed_qc_cstd
+
+isolate to_after_ldc = {
+    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & verify_quorum.processor_sent_timeout(N,Rt,QC) & Rc <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rp <= Rq
+} with block_t, round_t, verify_quorum, to_after_prepare_n.to_after_normal_vote, only_cstd_blocks.processed_qc_cstd, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.block_t_inv_round_unique
