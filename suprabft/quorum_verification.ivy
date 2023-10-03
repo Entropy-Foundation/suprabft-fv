@@ -82,7 +82,7 @@ isolate verify_quorum = {
     definition tc_has_quorum(TC) = forall Q:quorum_t. forall N:process_index_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. tc_t.to_messages(TC,N,QC))
 
     relation tc_maxQC(TC:tc_t)
-    definition tc_maxQC(TC) = forall Rq,Rm:round_t. forall Q:quorum_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & tc_t.to_messages
+    definition tc_maxQC(TC) = forall Rq,Rm:round_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.to_messages
     (TC,N,QCq) & tc_t.maxQC(TC,QCm) & qc_t.block(QCq,Bq) & qc_t.block(QCm,Bm) & block_t.round(Bq,Rq) & block_t.round(Bm,Rm) -> Rq <= Rm
 
     before processor.tc_processing(id:process_index_t, tc:tc_t) {
