@@ -79,7 +79,7 @@ isolate verify_quorum = {
     & (forall N:process_index_t. forall R:round_t. forall QC:qc_t. tc_t.to_messages(TC,N,QC) & is_good(N) & tc_t.round(TC,R) -> processor_sent_timeout(N,R,QC))
 
     relation tc_has_quorum(TC:tc_t)
-    definition tc_has_quorum(TC) = forall Q:quorum_t. forall N:process_index_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) & is_good(N) -> (exists QC:qc_t. tc_t.to_messages(TC,N,QC))
+    definition tc_has_quorum(TC) = forall Q:quorum_t. forall N:process_index_t. tc_t.quorum(TC,Q) & quorum_t.member(Q,N) -> (exists QC:qc_t. tc_t.to_messages(TC,N,QC))
 
     relation tc_maxQC(TC:tc_t)
     definition tc_maxQC(TC) = forall Rq,Rm:round_t. forall N:process_index_t. forall QCq,QCm:qc_t. forall Bq,Bm:block_t. tc_t.to_messages

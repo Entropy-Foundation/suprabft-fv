@@ -180,7 +180,7 @@ isolate qc_f_qc_n = {
 
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_f_cstd
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd
 
 isolate qc_f_qc_o = {
 
@@ -245,7 +245,9 @@ isolate to_after_ldc_m1 = {
 
     invariant is_good(N) & verify_quorum.processor_sent_timeout(N,R,QC) -> verify_quorum.processor(N).expired_rounds(R)
 
-    invariant [prepare_tc_maxQC] prepare_and_to(B,TC) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
+    invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_maxQC(TC) & tc_t.to_messages(TC,N,QC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) & qc_t.block(BC,B) & block_t.round(B,R) -> R <= Rm
+
+    invariant [prepare_tc_maxQC] prepare_and_to(B,TC) & B~= block_t.genesis & block_t.round(B,R) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & tc_t.round(TC,R_tc) & R <= R_tc & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
     # attribute macro_finder = false
 } with block_t, round_t, qc_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks.processed_qc_cstd, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.genesis_round_0#, block_t_conv.successive_blocks, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, to_after_prepare.locked_qc_latest_processed, basic_validities.qc_l_valid, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, to_after_prepare.inv_to_after_prepare, every_quorum_good
