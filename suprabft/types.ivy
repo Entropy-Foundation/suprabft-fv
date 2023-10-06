@@ -92,7 +92,7 @@ isolate block_t_properties = {
     invariant [genesis_cstd] block_t.cstd(block_t.genesis)
     invariant [unused_not_cstd] ~block_t.cstd(block_t.unused)
     invariant [genesis_round_0] block_t.round(B, 0) <-> B = block_t.genesis
-    invariant block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
+    invariant [genesis_parent] block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
     invariant block_t.height(B, 0) <-> B = block_t.genesis
 
     invariant [parent_self_genesis] block_t.parent(B, B) <-> B = block_t.genesis
@@ -106,7 +106,7 @@ isolate block_t_properties = {
     invariant [block_t_inv_round_exists] block_t.cstd(B) -> round_exists(B)
     relation parent_exists(B:block_t)
     definition parent_exists(B) = exists P:block_t. block_t.parent(B, P)
-    invariant block_t.cstd(B) -> parent_exists(B)
+    invariant [inv_parent_exists] block_t.cstd(B) -> parent_exists(B)
     relation height_exists(B:block_t)
     definition height_exists(B) = exists H:height_t. block_t.height(B, H)
     invariant [cstd_block_height_exists] block_t.cstd(B) -> height_exists(B)
