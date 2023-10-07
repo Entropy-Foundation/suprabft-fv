@@ -246,6 +246,8 @@ isolate tc_after_prepare = {
 
 isolate tc_after_prepare_m1 = {
 
+    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & tc_t.to_messages(TC,N,QC) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
     # invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & tc_t.round(TC,Rt) & R <= Rt & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
@@ -255,7 +257,7 @@ isolate tc_after_prepare_m1 = {
 
     # invariant prepare_and_to(B,TC) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
-} with block_t, round_t, verify_quorum, tc_after_prepare, block_t_properties.block_t_inv_round_exists, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_round_0, block_t_properties.genesis_parent
+} with block_t, round_t, verify_quorum, tc_after_prepare, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_unique, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd
 
 isolate to_after_ldc_m1 = {
     property block_t_conv.successive_blocks(Bp,Bc) | ~ block_t_conv.successive_blocks(Bp,Bc)
