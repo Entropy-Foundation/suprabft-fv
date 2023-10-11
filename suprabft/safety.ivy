@@ -452,6 +452,16 @@ isolate parent_block_earlier_m5 = {
 
 } with block_t, round_t, verify_quorum, parent_block_earlier_m4, parent_block_earlier_m1, quorum_intersection_axiom
 
+isolate parent_block_earlier_m6 = {
+    instance qc_rank : ubd_seq
+
+    # processor N has sent a prepare message for block B based on the quorum certificate QC for B's parent. QC's rank is R, the number of previous prepare messages sent for B by any processor
+    relation block_prepare_qc(N:process_index_t, B:block_t, QC:qc_t, R:qc_rank)
+
+    relation max_qc_rank(B:block_t, R:qc_rank)
+    definition max_qc_rank(B,R) = (exists N:process_index_t, QC:qc_t. block_prepare_qc(N,B,QC,R)) & (forall N:process_index_t. forall QC:qc_t. forall R1:qc_rank block_prepare_qc(N,B,QC,R1) -> R1 <= R)
+} with block_t, round_t, verify_quorum
+
 isolate to_after_ldc_m1 = {
     property block_t_conv.successive_blocks(Bp,Bc) | ~ block_t_conv.successive_blocks(Bp,Bc)
 
