@@ -383,22 +383,74 @@ isolate quorum_after_ldc = {
     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp,Rp1) -> Rp <= Rp1
 } with block_t, round_t, verify_quorum, quorum_no_after_ldc, quorum_f_after_ldc, block_t_properties, block_t_conv.successive_blocks
 
-isolate parent_block_earlier = {
+isolate locked_qc_processed = {
+
+    invariant [lock_qc_processed] is_good(N) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) -> verify_quorum.processor(N).processed_qc(Bl)
+
+}  with block_t, round_t, qc_t, qc_t_properties, verify_quorum
+
+isolate parent_block_earlier_m1 = {
+
+    property verify_quorum.processor(N).send_prepare_f_condition(B,TC) | ~ verify_quorum.processor(N).send_prepare_f_condition(B,TC)
+
+    property verify_quorum.processor(N).send_prepare_n_condition(B,QC) | ~ verify_quorum.processor(N).send_prepare_n_condition(B,QC)
+
+    property verify_quorum.processor(N).send_prepare_o_condition(B) | ~ verify_quorum.processor(N).send_prepare_o_condition(B)
+
+    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
     relation block_has_quorum_o(B:block_t)
     relation block_has_quorum_n(B:block_t)
     relation block_has_quorum_f(B:block_t)
 
-    definition block_has_quorum_o(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> processor_sent_prepare_o(N,B)
+    definition block_has_quorum_o(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_o(N,B)
 
-    definition block_has_quorum_n(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> processor_sent_prepare_n(N,B)
+    definition block_has_quorum_n(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_n(N,B)
 
-    definition block_has_quorum_f(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> processor_sent_prepare_f(N,B)
+    definition block_has_quorum_f(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,B)
 
     relation block_has_quorum(B:block_t)
     definition block_has_quorum(B) =  block_has_quorum_o(B) | block_has_quorum_n(B) | block_has_quorum_f(B)
 
-}  with block_t, round_t, verify_quorum, block_t_properties, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block
+    property verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) -> block_has_quorum(B)
+
+}  with block_t, round_t, verify_quorum, block_t_properties, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, to_after_ldc_m1.processed_qc_quorum, only_cstd_blocks, basic_validities.qc_l_valid, locked_qc_processed
+
+isolate parent_block_earlier_m2 = {
+
+    invariant is_good(N) & verify_quorum.processor(N).processed_qc(B) -> parent_block_earlier_m1.block_has_quorum(B)
+
+    invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.parent(B,Bp) -> verify_quorum.processor(N).processed_qc(Bp)
+
+    attribute macro_finder = false
+
+}  with block_t, round_t, verify_quorum, block_t_properties, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, to_after_ldc_m1.processed_qc_quorum, only_cstd_blocks, basic_validities.qc_l_valid, locked_qc_processed, parent_block_earlier_m1
+
+isolate parent_block_earlier_m3 = {
+
+    invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.parent(B,Bp) -> parent_block_earlier_m1.block_has_quorum(Bp)
+
+    # attribute macro_finder = false
+
+}  with block_t, round_t, verify_quorum, parent_block_earlier_m2, parent_block_earlier_m1
+
+isolate parent_block_earlier_m4 = {
+
+    invariant [quorum_propogation] parent_block_earlier_m1.block_has_quorum(B) & block_t.parent(B,Bp) -> parent_block_earlier_m1.block_has_quorum(Bp)
+} with block_t, round_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m3
+
+isolate parent_block_earlier_m5 = {
+
+    relation honest_processor_voted(B1:block_t, B2:block_t)
+    definition honest_processor_voted(B1,B2) = exists N:process_index_t. is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B1) | verify_quorum.processor_sent_prepare_n(N,B1) | verify_quorum.processor_sent_prepare_o(N,B1)) & (verify_quorum.processor_sent_prepare_f(N,B2) | verify_quorum.processor_sent_prepare_n(N,B2) | verify_quorum.processor_sent_prepare_o(N,B2))
+    
+    property parent_block_earlier_m1.block_has_quorum(B1) & parent_block_earlier_m1.block_has_quorum(B2) -> honest_processor_voted(B1,B2)
+
+    invariant parent_block_earlier_m1.block_has_quorum(B) & block_t.parent(B,Bp) -> parent_block_earlier_m1.block_has_quorum(Bp) & honest_processor_voted(B,Bp)
+
+    attribute macro_finder = false
+
+} with block_t, round_t, verify_quorum, parent_block_earlier_m4, parent_block_earlier_m1, quorum_intersection_axiom
 
 isolate to_after_ldc_m1 = {
     property block_t_conv.successive_blocks(Bp,Bc) | ~ block_t_conv.successive_blocks(Bp,Bc)

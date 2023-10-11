@@ -233,13 +233,13 @@ object processor(id:process_index_t) = {
         }
     }
 
-    function send_prepapre_o_condition(B_pr:block_t): bool
-    definition send_prepapre_o_condition(B_pr) = block_t.round(B_pr,r_c) & a_f < r_c & a_n < r_c & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> block_t.parent(B_pr,B_l) & round_t.succ(R_l, r_c)) & (forall R_s:round_t. round_t.succ(R_s,r_c) -> t_l < R_s)
+    function send_prepare_o_condition(B_pr:block_t): bool
+    definition send_prepare_o_condition(B_pr) = block_t.round(B_pr,r_c) & a_f < r_c & a_n < r_c & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> block_t.parent(B_pr,B_l) & round_t.succ(R_l, r_c)) & (forall R_s:round_t. round_t.succ(R_s,r_c) -> t_l < R_s)
 
     action optimistic_proposal_processing(b_pr:block_t) = {
         require received_proposal_o(b_pr,leader(r_c));
 
-        require send_prepapre_o_condition(b_pr);
+        require send_prepare_o_condition(b_pr);
 
         require block_t.cstd(b_pr);
 
