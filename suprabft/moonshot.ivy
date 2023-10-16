@@ -480,7 +480,7 @@ object processor(id:process_index_t) = {
         call shim.send(id, dst, m);
     }
 
-    export byzantine_send
+    # export byzantine_send
     export fallback_proposal_processing
     export normal_proposal_processing
     export optimistic_proposal_processing
