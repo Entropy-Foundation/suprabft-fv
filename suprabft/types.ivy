@@ -8,6 +8,12 @@ instance height_t : ubd_seq
 instance process_index_t : iterable
 relation is_good(N:process_index_t)
 
+individual honest_node: process_index_t
+
+isolate honest_node_good = {
+    axiom is_good(honest_node)
+}
+
 function leader(R:round_t) : process_index_t
 
 isolate round_t_conv = {
@@ -346,7 +352,7 @@ isolate types_block_t_requires = {
     before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
         require r_c > 0;#_#
         require block_t.cstd(pB);#_#
-        require block_t.round(pB,R) -> R < r_c;#_#
+        # require block_t.round(pB,R) -> R < r_c;#_#
     }
 } with block_t
 
