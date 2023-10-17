@@ -834,7 +834,7 @@ isolate certified_block_ancestor_m1 = {
     }
 
     after verify_quorum.processor.byzantine_send(id:process_index_t, m:msg) {
-        if (m.kind = msg_kind.proposal_n | m.kind = msg_kind.proposal_o | m.kind = msg_kind.proposal_f) & parent_block_earlier_m1.block_has_quorum(m.block) & block_t.cstd(m.block) {
+        if (m.kind = msg_kind.prepare_f | m.kind = msg_kind.prepare_n) & parent_block_earlier_m1.block_has_quorum(m.block) & block_t.cstd(m.block) {
             if some bp:block_t. (block_t.parent(m.block,bp) & block_t.cstd(bp)) {
                 cert_block_ancestor(m.block,B) := cert_block_ancestor(bp,B) | B = bp;
             }
@@ -843,12 +843,73 @@ isolate certified_block_ancestor_m1 = {
 
     # attribute macro_finder = false
 
-} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_cstd, block_t_properties.parent_unique, block_t_properties.parent_self_genesis, block_quorum_cstd, block_t_properties.unused_not_cstd
+} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_cstd, block_t_properties.parent_unique, block_t_properties.parent_self_genesis, block_quorum_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd
 
 isolate certified_block_ancestor_m2 = {
 
-    invariant certified_block_ancestor_m1.cert_block_ancestor(Bd,Ba) -> block_t.cstd(Bd) & block_t.cstd(Ba) & parent_block_earlier_m1.block_has_quorum(Bd) & parent_block_earlier_m1.block_has_quorum(Ba)
+    invariant certified_block_ancestor_m1.cert_block_ancestor(Bd,Ba) -> block_t.cstd(Bd) & block_t.cstd(Ba) & parent_block_earlier_m1.block_has_quorum(Bd) & parent_block_earlier_m1.block_has_quorum(Ba) & Bd ~= block_t.unused & Ba ~= block_t.unused
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m1, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.parent_unique, block_t_properties.unused_not_cstd#, block_t_properties.parent_self_genesis, block_quorum_cstd, block_t_properties.round_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.paret_unique, block_t_properties.genesis_cstd
+
+isolate certified_block_ancestor_m3 = {
+
+    invariant [block_genesis_ancestor] certified_block_ancestor_m1.cert_block_ancestor(block_t.genesis, A) <-> A = block_t.genesis
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(B, B) <-> B = block_t.genesis
+
+    # invariant block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h))
+
+    # invariant block_t.parent(B,Bp) & block_t.parent(Bp,Ba) & block_t.round(B,R) & block_t.round(Ba,Ra) & B ~= block_t.genesis -> Ra < R
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m1, certified_block_ancestor_m2, parent_block_earlier, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.parent_unique, block_t_properties.parent_self_genesis, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
+
+isolate certified_block_ancestor_m4 = {
+
+    property parent_block_earlier_m1.block_has_quorum(B) | ~ parent_block_earlier_m1.block_has_quorum(B)
+
+    invariant block_t.parent(B, P) & parent_block_earlier_m1.block_has_quorum(B) & B ~= block_t.unused -> certified_block_ancestor_m1.cert_block_ancestor(B, P)
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(A1, A2) & certified_block_ancestor_m1.cert_block_ancestor(A2, A3) -> certified_block_ancestor_m1.cert_block_ancestor(A1, A3)
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m1, certified_block_ancestor_m2, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.parent_unique, block_quorum_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists#, block_t_properties.round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_self_genesis, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd, every_quorum_good
+
+isolate certified_block_ancestor_m5 = {
+
+    # property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
+    property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) & block_t.parent(B,Bp) -> (A1 = Bp | A2 = Bp | (certified_block_ancestor_m1.cert_block_ancestor(Bp, A1) & certified_block_ancestor_m1.cert_block_ancestor(Bp, A2)))
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) -> A1 = A2 | certified_block_ancestor_m1.cert_block_ancestor(A1, A2) | certified_block_ancestor_m1.cert_block_ancestor(A2, A1)
+
+    relation inbetween(D:block_t, A:block_t)
+    definition inbetween(D, A) = exists M:block_t. certified_block_ancestor_m1.cert_block_ancestor(D, M) & certified_block_ancestor_m1.cert_block_ancestor(M, A)
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
+
+    invariant block_t.parent(B,P) & P ~= block_t.genesis  & parent_block_earlier_m1.block_has_quorum(B) & parent_block_earlier_m1.block_has_quorum(P) & certified_block_ancestor_m1.cert_block_ancestor(B, P)-> ~inbetween(B,P)
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, qc_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m2, certified_block_ancestor_m3, certified_block_ancestor_m4, block_quorum_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, every_quorum_good#, block_t_properties.parent_self_genesis, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd
+
+isolate certified_block_ancestor_m6 = {
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.parent(D,P) -> P = A | certified_block_ancestor_m1.cert_block_ancestor(P,A)
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.parent(D,P) & D ~= block_t.genesis & block_t.round(D,Rd) & block_t.round(P,Rp) -> Rp < Rd
+
+    invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.parent(D,A) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
+
+    invariant [block_ancestor_lesser_round] certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis & block_t.parent(D,P) & block_t.round(P,Rp) -> Rp < Rd & Ra <= Rp
 
     attribute macro_finder = false
 
-} with block_t, round_t, qc_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m1, block_t_properties.genesis_cstd, block_t_properties.parent_unique, block_t_properties.parent_self_genesis, block_quorum_cstd, block_t_properties.unused_not_cstd, block_t_properties
+} with block_t, round_t, qc_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m2, certified_block_ancestor_m3, certified_block_ancestor_m4, certified_block_ancestor_m5, block_quorum_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, every_quorum_good, parent_block_earlier_m1, parent_block_earlier#, block_t_properties.parent_self_genesis, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd
