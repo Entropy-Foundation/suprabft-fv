@@ -889,7 +889,7 @@ isolate certified_block_ancestor_m4 = {
 
     invariant [parent_is_ancestor] block_t.parent(B, P) & parent_block_earlier_m1.block_has_quorum(B) & B ~= block_t.unused -> certified_block_ancestor_m1.cert_block_ancestor(B, P)
 
-    invariant certified_block_ancestor_m1.cert_block_ancestor(A1, A2) & certified_block_ancestor_m1.cert_block_ancestor(A2, A3) -> certified_block_ancestor_m1.cert_block_ancestor(A1, A3)
+    invariant [ancestor_transitive] certified_block_ancestor_m1.cert_block_ancestor(A1, A2) & certified_block_ancestor_m1.cert_block_ancestor(A2, A3) -> certified_block_ancestor_m1.cert_block_ancestor(A1, A3)
 
     # attribute macro_finder = false
 
@@ -936,76 +936,6 @@ isolate certified_block_ancestor_m6 = {
 
 } with block_t, round_t, qc_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m2, certified_block_ancestor_m3, certified_block_ancestor_m4, certified_block_ancestor_m5, block_quorum_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, every_quorum_good, parent_block_earlier_m1, parent_block_earlier#, block_t_properties.parent_self_genesis, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd
 
-isolate quorum_f_after_ldc_late = {
-    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & Bc ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum_f(B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
-
-    # attribute macro_finder = false
-} with block_t, round_t, verify_quorum, quorum_f_after_ldc_m6.prepare_f_after_ldc, round_safety_m2, every_quorum_good, parent_block_earlier_m1, block_quorum_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
-
-isolate tc_after_prepare_n4 = {
-
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-
-    invariant parent_block_earlier_m1.block_has_quorum(B) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) -> tc_after_prepare_m3.prepare_and_to(B,TC)
-
-    # attribute macro_finder=false
-
-} with block_t, round_t, verify_quorum, tc_after_prepare_m3, quorum_intersection_axiom, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, parent_block_earlier_m1
-
-isolate tc_after_prepare_n5 = {
-
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-
-    invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC, B) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,Rt) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
-
-    # attribute macro_finder=false
-
-} with block_t, round_t, verify_quorum, tc_after_prepare_m3, tc_after_prepare_n4, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_round_0, block_t_properties.genesis_parent
-
-isolate prepare_no_later_round_later_parent_late = {
-
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-
-    invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & B ~= block_t.unused & block_t.round(B,R) & Rl < R & block_t.parent(B,Bp) & block_t.round(Bp,Rp) -> Rl <= Rp
-
-    invariant [quorum_no_parent] verify_quorum.qc_sanity_check(QC) & (verify_quorum.qc_has_quorum_n(QC) | verify_quorum.qc_has_quorum_o(QC)) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rl < R & block_t.parent(B,Bp) & block_t.round(Bp,Rp) -> Rl <= Rp
-} with block_t, round_t, verify_quorum, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_parent, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, basic_validities.qc_l_valid, every_quorum_good
-
-
-isolate quorum_no_after_ldc_late = {
-    property block_t_conv.successive_blocks(B1,B2) | ~ block_t_conv.successive_blocks(B1,B2)
-
-    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & verify_quorum.qc_sanity_check(QC) & (verify_quorum.qc_has_quorum_n(QC) | verify_quorum.qc_has_quorum_o(QC)) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
-} with block_t, round_t, verify_quorum, prepare_no_later_round_later_parent.quorum_no_parent, block_t_conv.successive_blocks
-
-isolate quorum_after_ldc_n1 = {
-
-    property verify_quorum.processor(N).ldc(B) | ~ verify_quorum.processor(N).ldc(B)
-    
-    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
-
-    # attribute macro_finder = false
-} with block_t, round_t, verify_quorum, quorum_no_after_ldc_late, quorum_f_after_ldc, block_t_properties, block_t_conv.successive_blocks, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists
-
-isolate quorum_after_ldc_n2 = {
-    property block_t_conv.successive_blocks(B1,B2) | ~ block_t_conv.successive_blocks(B1,B2)
-
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-
-    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
-    
-    invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
-
-    # attribute macro_finder = false
-
-} with block_t, round_t, verify_quorum, quorum_after_ldc_n1, block_t_conv.successive_blocks, only_cstd_blocks.certified_block_cstd, basic_validities, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.inv_parent_exists, block_t_properties.parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.block_t_inv_round_unique#, block_t_properties.unused_not_cstd, block_t_properties.genesis_parent, block_t_properties.genesis_round_0
-
-isolate quorum_after_ldc_late = {
-    
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
-
-} with block_t, round_t, verify_quorum, quorum_after_ldc_n2, block_t_conv.successive_blocks, only_cstd_blocks.certified_block_cstd, basic_validities, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.inv_parent_exists, block_t_properties.parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd#, block_t_properties.genesis_parent, block_t_properties.genesis_round_0
-
 isolate quorum_after_ldc_descendant_m1 = {
     
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rc) -> parent_block_earlier_m1.block_has_quorum(Bc) & parent_block_earlier_m1.block_has_quorum(B) & B = Bc
@@ -1022,62 +952,108 @@ isolate quorum_after_ldc_descendant_m2 = {
 
 } with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m1, certified_block_ancestor_m1, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.unused_not_cstd, only_cstd_blocks.processed_qc_cstd, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, parent_block_earlier.parent_earlier, certified_block_ancestor_m4.parent_is_ancestor
 
-isolate processed_qc_has_certificate = {
-    invariant is_good(N) & verify_quorum.processor(N).processed_qc(B) -> exists QC:qc_t. qc_t.block(QC,B) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC)
-} with block_t, round_t, verify_quorum
+isolate qc_propogation_m1 = {
+    relation processed_qc_certificate(N:process_index_t, B:block_t, QC:qc_t)
+
+    after init {
+        processed_qc_certificate(N,B,QC) := B = block_t.genesis & QC = qc_t.genesis
+    }
+    
+    after verify_quorum.processor.qc_processing(id:process_index_t, qc:qc_t) {
+        processed_qc_certificate(id,B,qc) := qc_t.block(qc,B);
+    }
+
+    invariant is_good(N) & processed_qc_certificate(N,B,QC) -> qc_t.block(QC,B) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC)
+
+    invariant is_good(N) & verify_quorum.processor(N).processed_qc(B) -> exists QC:qc_t. processed_qc_certificate(N,B,QC)
+
+    invariant [processed_block_has_qc] is_good(N) & verify_quorum.processor(N).processed_qc(B) -> exists QC:qc_t. qc_t.block(QC,B) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC)
+
+    invariant [voted_implies_parent_processed] is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.parent(B,P) -> verify_quorum.processor(N).processed_qc(P)
+
+} with block_t, round_t, qc_t, verify_quorum, block_t_properties, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, only_cstd_blocks, basic_validities.qc_l_valid, locked_qc_processed, parent_block_earlier_m1
+
+isolate qc_propogation = {
+
+    invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.parent(B,Bp) -> exists QCp:qc_t. qc_t.block(QCp,Bp) & verify_quorum.qc_sanity_check(QCp) & verify_quorum.qc_has_quorum(QCp)
+
+} with block_t, round_t, qc_t, verify_quorum, qc_propogation_m1.processed_block_has_qc, qc_propogation_m1.voted_implies_parent_processed, block_t_properties.parent_unique, block_t_properties, every_quorum_good
 
 isolate quorum_after_ldc_descendant_m3 = {
-    relation quorum_after_ldc_is_descentant(N1:process_index_t, Bp:block_t, N2:process_index_t, R:round_t)
-    definition quorum_after_ldc_is_descentant(N1,Bp,N2,R) = forall QC:qc_t. forall B:block_t. forall Rp,Rc:round_t. is_good(N1) & verify_quorum.processor(N1).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & is_good(N2) & verify_quorum.processor(N2).processed_qc(B) & block_t.round(B,R) & Rc <= R -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
+    relation qc_after_ldc(N:process_index_t,QC:qc_t,B:block_t,Bp:block_t, Rp:round_t,Rc:round_t,Rq:round_t,R:round_t)
+    definition qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,R) = is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & Rc <= Rq & Rq <= R 
 
-    invariant [quorum_after_ldc_base] quorum_after_ldc_is_descentant(N1,B,N2,0)
+    relation quorum_after_ldc_is_descendant(Bp:block_t,R:round_t)
+    definition quorum_after_ldc_is_descendant(Bp,R) = forall N:process_index_t. forall QC:qc_t. forall B:block_t. forall Rp,Rc,Rq:round_t. qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,R) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
 
-    invariant block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) -> quorum_after_ldc_is_descentant(N1,Bp,N2,Rc)
+    invariant [quorum_after_ldc_base] quorum_after_ldc_is_descendant(B,0)
 
-    # attribute macro_finder = false
-} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, parent_block_earlier, quorum_after_ldc_descendant_m2, quorum_after_ldc, certified_block_ancestor_m4, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_round_0
+    invariant block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) -> (forall QC:qc_t. forall B:block_t. forall Rq:round_t. is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rq) & Rc <= Rq & Rq <= Rc -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp))
 
-isolate quorum_after_ldc_descendant_m4 = {
+    invariant qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,Rc) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
 
-    property round_t.succ(Rp,Rc) & R <= Rp -> ~ Rc <= R
+    property R <= Rp -> ~qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,R)
 
-    invariant block_t.round(Bp,Rp) & R <= Rp -> quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N1,Bp,N2,R)
+    property R <= Rp -> (qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,R) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp))
 
-    attribute macro_finder = false
+    property qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,Rc) -> Rq = Rc
 
-} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, parent_block_earlier, quorum_after_ldc_descendant_m2, quorum_after_ldc_descendant_m3
+    invariant block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) -> quorum_after_ldc_is_descendant(Bp,Rc)
 
-isolate quorum_after_ldc_descendant_m5 = {
-
-    property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
-
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp1 = Rp -> parent_block_earlier_m1.block_has_quorum(Bp1) & parent_block_earlier_m1.block_has_quorum(Bp) & Bp1 = Bp
-
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp1 = Rp -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
+    # invariant forall N:process_index_t. forall QC:qc_t. forall B:block_t. forall Rp,Rc:round_t. qc_after_ldc(N,QC,B,Bp,Rp,Rc,Rq,Rc) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
 
     attribute macro_finder = false
+} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, parent_block_earlier, quorum_after_ldc_descendant_m2, quorum_after_ldc, certified_block_ancestor_m4, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_round_0, block_t_properties.genesis_cstd, block_t_properties#.unused_not_cstd
 
-} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, parent_block_earlier_m1, parent_block_earlier_m2.processed_qc_quorum, round_safety_late, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, certified_block_ancestor_m4.parent_is_ancestor, parent_block_earlier.parent_earlier
+# isolate quorum_after_ldc_descendant_m4 = {
 
-isolate quorum_after_ldc_descendant_m6 = {
+#     property round_t.succ(Rp,Rc) & R <= Rp & Rc <= Rq -> ~ Rq <= R
 
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,N2,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R #& certified_block_ancestor_m1.cert_block_ancestor(B,Bp1) #&certified_block_ancestor_m1.cert_block_ancestor(Bp1,Bp)
+#     invariant block_t.round(Bp,Rp) & R <= Rp -> quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,R)
 
-    # attribute macro_finder = false
+#     attribute macro_finder = false
 
-} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, parent_block_earlier_m1, parent_block_earlier_m2.processed_qc_quorum, round_safety_late, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, parent_block_earlier.parent_earlier, parent_block_earlier_m12.qc_has_quorum
+# } with block_t, round_t, verify_quorum, certified_block_ancestor_m1, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, parent_block_earlier, quorum_after_ldc_descendant_m2, quorum_after_ldc_descendant_m3
 
-isolate quorum_after_ldc_descendant_m7 = {
+# isolate quorum_after_ldc_descendant_m5 = {
 
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,N2,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R & certified_block_ancestor_m1.cert_block_ancestor(B,Bp1)
+#     property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
+
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp1 = Rp -> parent_block_earlier_m1.block_has_quorum(Bp1) & parent_block_earlier_m1.block_has_quorum(Bp) & Bp1 = Bp
+
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp1 = Rp -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
+
+#     attribute macro_finder = false
+
+# } with block_t, round_t, verify_quorum, certified_block_ancestor_m1, parent_block_earlier_m1, parent_block_earlier_m2.processed_qc_quorum, round_safety_late, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, certified_block_ancestor_m4.parent_is_ancestor, parent_block_earlier.parent_earlier
+
+# isolate quorum_after_ldc_descendant_m6 = {
+
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R #& certified_block_ancestor_m1.cert_block_ancestor(B,Bp1) #&certified_block_ancestor_m1.cert_block_ancestor(Bp1,Bp)
+
+#     # attribute macro_finder = false
+
+# } with block_t, round_t, verify_quorum, certified_block_ancestor_m1, parent_block_earlier_m1, parent_block_earlier_m2.processed_qc_quorum, round_safety_late, parent_block_earlier_m4.quorum_propogation, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, parent_block_earlier.parent_earlier, parent_block_earlier_m12.qc_has_quorum
+
+# isolate quorum_after_ldc_descendant_m7 = {
+
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R & certified_block_ancestor_m1.cert_block_ancestor(B,Bp1)
 
 
-} with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m6, certified_block_ancestor_m1, parent_block_earlier_m1, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, certified_block_ancestor_m4.parent_is_ancestor
+# } with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m6, certified_block_ancestor_m1, parent_block_earlier_m1, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, certified_block_ancestor_m4.parent_is_ancestor
 
-isolate quorum_after_ldc_descendant_m8 = {
+# isolate quorum_after_ldc_descendant_m8 = {
 
-    invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,N2,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R & certified_block_ancestor_m1.cert_block_ancestor(B,Bp1) & certified_block_ancestor_m1.cert_block_ancestor(Bp1,Bp)
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,Rp1)) -> B ~= block_t.genesis & parent_block_earlier_m1.block_has_quorum(B) & Rp1 < R & certified_block_ancestor_m1.cert_block_ancestor(B,Bp1) & certified_block_ancestor_m1.cert_block_ancestor(Bp1,Bp)
 
-    attribute macro_finder = false
+#     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) & Rp < Rp1 & (quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,Rp1)) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
 
-} with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m7, certified_block_ancestor_m1, parent_block_earlier_m1, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, quorum_after_ldc_descendant_m3
+#     attribute macro_finder = false
+
+# } with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m7, certified_block_ancestor_m1, certified_block_ancestor_m4, parent_block_earlier_m1, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_quorum_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, quorum_after_ldc_descendant_m3, qc_propogation
+
+# isolate quorum_after_ldc_descendant_m9 = {
+
+#     invariant forall R1,R2:round_t. round_t.succ(R1,R2) & quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,R1) -> quorum_after_ldc_descendant_m3.quorum_after_ldc_is_descentant(N,Bp,R2)
+
+# } with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m8, certified_block_ancestor_m1, quorum_after_ldc_descendant_m5, quorum_after_ldc, quorum_after_ldc, parent_block_earlier.parent_earlier, quorum_after_ldc_descendant_m3
