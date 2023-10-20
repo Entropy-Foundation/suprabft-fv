@@ -906,7 +906,7 @@ isolate certified_block_ancestor_m5 = {
     relation inbetween(D:block_t, A:block_t)
     definition inbetween(D, A) = exists M:block_t. certified_block_ancestor_m1.cert_block_ancestor(D, M) & certified_block_ancestor_m1.cert_block_ancestor(M, A)
 
-    invariant certified_block_ancestor_m1.cert_block_ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
+    invariant [transitive_to_base_relation] certified_block_ancestor_m1.cert_block_ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
 
     invariant block_t.parent(B,P) & P ~= block_t.genesis  & parent_block_earlier_m1.block_has_quorum(B) & parent_block_earlier_m1.block_has_quorum(P) & certified_block_ancestor_m1.cert_block_ancestor(B, P)-> ~inbetween(B,P)
 
@@ -1124,4 +1124,4 @@ isolate commit_to_chain = {
 
     # attribute macro_finder = false
 
-} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m4.ancestor_transitive, certified_block_ancestor_m5.ancestor_no_branches, certified_block_ancestor_m2, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m4.parent_is_ancestor, every_quorum_good, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.parent_only_for_cstd
+} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m4.ancestor_transitive, certified_block_ancestor_m4.parent_is_ancestor, certified_block_ancestor_m5.ancestor_no_branches, certified_block_ancestor_m2, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m4.parent_is_ancestor, every_quorum_good, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.parent_only_for_cstd, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m5.transitive_to_base_relation
