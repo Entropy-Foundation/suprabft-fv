@@ -76,11 +76,11 @@ object processor(id:process_index_t) = {
     relation ldc(B:block_t)
     definition ldc(B) = exists Bc:block_t. ldc_pair(B,Bc)
 
-    relation eligible_to_commit(Bp:block_t)
-    definition eligible_to_commit(Bp) = ldc(Bp) & block_t.ancestor(Bp,b_h) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> (processed_qc(Ba) | Ba = b_h | block_t.ancestor(b_h,Ba)))
+    # relation eligible_to_commit(Bp:block_t)
+    # definition eligible_to_commit(Bp) = ldc(Bp) & block_t.ancestor(Bp,b_h) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> (processed_qc(Ba) | Ba = b_h | block_t.ancestor(b_h,Ba)))
 
-    relation commit_candidate(Bp:block_t)
-    definition commit_candidate(Bp) = eligible_to_commit(Bp) & (forall B:block_t. forall Rp,R:round_t. eligible_to_commit(B) & block_t.round(B,R) & block_t.round(Bp,Rp) -> R <= Rp)
+    # relation commit_candidate(Bp:block_t)
+    # definition commit_candidate(Bp) = eligible_to_commit(Bp) & (forall B:block_t. forall Rp,R:round_t. eligible_to_commit(B) & block_t.round(B,R) & block_t.round(Bp,Rp) -> R <= Rp)
 
     after init {
         a_f := 0;
@@ -214,10 +214,10 @@ object processor(id:process_index_t) = {
         }
 
         ######### tryCommit ##########
-        if some bp:block_t. commit_candidate(bp) {
-            b_v(B) := b_v(B) | B = bp | (block_t.ancestor(bp,B) & block_t.ancestor(B,b_h));
-            b_h := bp;
-        }
+        # if some bp:block_t. commit_candidate(bp) {
+        #     b_v(B) := b_v(B) | B = bp | (block_t.ancestor(bp,B) & block_t.ancestor(B,b_h));
+        #     b_h := bp;
+        # }
 
         ######### multicastQC #########
         var m : msg;

@@ -899,7 +899,7 @@ isolate certified_block_ancestor_m5 = {
 
     property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
 
-    invariant certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) & block_t.parent(B,Bp) -> (A1 = Bp | A2 = Bp | (certified_block_ancestor_m1.cert_block_ancestor(Bp, A1) & certified_block_ancestor_m1.cert_block_ancestor(Bp, A2)))
+    invariant [ancestor_no_branches] certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) & block_t.parent(B,Bp) -> (A1 = Bp | A2 = Bp | (certified_block_ancestor_m1.cert_block_ancestor(Bp, A1) & certified_block_ancestor_m1.cert_block_ancestor(Bp, A2)))
 
     invariant certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) -> A1 = A2 | certified_block_ancestor_m1.cert_block_ancestor(A1, A2) | certified_block_ancestor_m1.cert_block_ancestor(A2, A1)
 
@@ -1099,3 +1099,29 @@ isolate quorum_after_ldc_descendant = {
     attribute macro_finder = false
 
 } with block_t, round_t, qc_t, verify_quorum, quorum_after_ldc_descendant_m8, quorum_after_ldc_descendant_m3, certified_block_ancestor_m1, quorum_after_ldc_descendant_m3.quorum_after_ldc_base, quorum_after_ldc_descendant_m8.quorum_after_ldc_induction_step
+
+isolate commit_to_chain = {
+
+    property parent_block_earlier_m1.block_has_quorum(B) | ~ parent_block_earlier_m1.block_has_quorum(B)
+
+    relation eligible_to_commit(N:process_index_t, Bp:block_t)
+    definition eligible_to_commit(N,Bp) = verify_quorum.processor(N).ldc(Bp) & certified_block_ancestor_m1.cert_block_ancestor(Bp,verify_quorum.processor(N).b_h) & (forall Ba:block_t. certified_block_ancestor_m1.cert_block_ancestor(Bp,Ba) -> (verify_quorum.processor(N).processed_qc(Ba) | Ba = verify_quorum.processor(N).b_h | certified_block_ancestor_m1.cert_block_ancestor(verify_quorum.processor(N).b_h,Ba)))
+
+    relation commit_candidate(N:process_index_t, Bp:block_t)
+    definition commit_candidate(N,Bp) = eligible_to_commit(N,Bp) & (forall B:block_t. forall Rp,R:round_t. eligible_to_commit(N,B) & block_t.round(B,R) & block_t.round(Bp,Rp) -> R <= Rp)
+
+    after verify_quorum.processor.qc_processing(id:process_index_t, qc:qc_t) {
+        ######### tryCommit ##########
+        if some bp:block_t. commit_candidate(id,bp) {
+            verify_quorum.processor(id).b_v(B) := verify_quorum.processor(id).b_v(B) | B = bp | (certified_block_ancestor_m1.cert_block_ancestor(bp,B) & certified_block_ancestor_m1.cert_block_ancestor(B,verify_quorum.processor(id).b_h));
+            verify_quorum.processor(N).b_h := bp;
+        }
+    }
+
+    invariant verify_quorum.processor(N).b_v(B) & block_t.parent(B,Bp) -> verify_quorum.processor(N).b_v(Bp)
+    
+    invariant verify_quorum.processor(N).b_v(B) & certified_block_ancestor_m1.cert_block_ancestor(B,Bp) -> verify_quorum.processor(N).b_v(Bp)
+
+    # attribute macro_finder = false
+
+} with block_t, round_t, verify_quorum, certified_block_ancestor_m1, certified_block_ancestor_m4.ancestor_transitive, certified_block_ancestor_m5.ancestor_no_branches, certified_block_ancestor_m2, parent_block_earlier_m1, parent_block_earlier_m4.quorum_propogation, certified_block_ancestor_m4.parent_is_ancestor, every_quorum_good, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, block_t_properties.parent_only_for_cstd
