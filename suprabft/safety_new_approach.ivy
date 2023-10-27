@@ -1,0 +1,184 @@
+#lang ivy1.8
+
+include types
+include network
+include global_view
+include local_view
+
+isolate global_view_used_here = {
+    instantiate global_view
+
+    # dummy invariant needed to make sure that the parent_exists definition is used within this isolate
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+
+    invariant is_good(N) & process_voted(N, B1) & process_voted(N, B2) & block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+    invariant is_good(N) & process_locked(N, B1) & process_locked(N, B2) & block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+    invariant is_good(N) & process_committed(N, B1) & process_committed(N, B2) & block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+    invariant is_good(N) & process_locked(N, B) -> exists QC:qc_t. qc_valid(QC) & qc_t.block(QC, B)
+    # invariant is_good(N) & process_locked(N, B) & B ~= block_t.genesis & block_t.parent(B, PB) -> process_committed(N, PB)
+    invariant is_good(N) & process_committed(N, B) -> exists QC:qc_t. qc_valid(QC) & qc_t.block(QC, B)
+    invariant is_good(N) & process_committed(N, B) & block_t.parent(B, P) -> process_committed(N, P)
+} with round_t, height_t, block_t, prepare_t, qc_t, timeout_t, proposal_f_t
+
+isolate genesis_starts_the_chain = {
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+
+    invariant is_good(N) & global_view_used_here.process_committed(N, B) & block_t.height(B, 0) -> B = block_t.genesis
+} with block_t, prepare_t, timeout_t, proposal_f_t, global_view_used_here
+
+isolate same_round_same_block_across_nodes = {
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+
+    invariant is_good(N1) & is_good(N2) & global_view_used_here.process_committed(N1, B1) & global_view_used_here.process_committed(N2, B2) &
+            block_t.round(B1, R) & block_t.round(B2, R) -> B1 = B2
+} with block_t, prepare_t, quorum_intersection_axiom, timeout_t, proposal_f_t, global_view_used_here
+
+# isolate voted_block_parent_locked = {
+#     invariant forall B,PB:block_t. is_good(N) & global_view_used_here.process_voted(N,B) & block_t.parent(B,PB) -> global_view_used_here.process_locked(N,PB)
+# } with block_t,prepare_t,timeout_t,proposal_f_t,global_view_used_here
+
+# isolate later_vote_later_parent = {
+#     invariant (is_good(N) & global_view_used_here.process_voted(N,B1) & global_view_used_here.process_voted(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.parent(B1,PB1) & block_t.parent(B2,PB2) & block_t.round(PB1,PR1) & block_t.round(PB2,PR2) & R1 < R2) -> PR1 <= PR2
+# } with voted_block_parent_locked,global_view_used_here,block_t,prepare_t,timeout_t,proposal_f_t,round_t
+
+isolate local_view_used_here = {
+    instantiate supraBFT(global_view_used_here)
+
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+    invariant ancestor_transitive_closure_block.inbetween(B1, B2) | ~ancestor_transitive_closure_block.inbetween(B1, B2)
+
+    attribute macro_finder=false
+} with round_t, height_t, block_t, ancestor_transitive_closure_block, parent_same_implications, parent_same_implications_height, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, global_view_used_here
+
+isolate quorum_votes_def = {
+    relation quorum_of_votes(B:block_t)
+
+    definition quorum_of_votes(B:block_t) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> global_view_used_here.process_voted(N,B)
+} with global_view_used_here,quorum_t,block_t,prepare_t,timeout_t,proposal_f_t
+
+isolate last_committed_quorum_m1 = {
+    invariant ancestor_transitive_closure_block.inbetween(D,A) | ~ancestor_transitive_closure_block.inbetween(D,A)
+
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant local_view_used_here.local_view(N).uncommitted(B) -> quorum_votes_def.quorum_of_votes(B)
+
+    invariant forall N:process_index_t. block_t.cstd(local_view_used_here.local_view(N).last_committed) -> quorum_votes_def.quorum_of_votes(local_view_used_here.local_view(N).last_committed)
+
+    invariant block_t.cstd(local_view_used_here.local_view(N).commit_mode_block) -> exists B:block_t. forall Rc,Rp:round_t. local_view_used_here.local_view(N).uncommitted(B) & block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block) & (block_t.round(B,Rc) & block_t.round(local_view_used_here.local_view(N).commit_mode_block,Rp) -> round_t.succ(Rp,Rc))
+
+    attribute macro_finder = false
+
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,ancestor_transitive_closure_block,quorum_votes_def
+
+isolate last_committed_quorum = {
+    invariant ancestor_transitive_closure_block.inbetween(D,A) | ~ancestor_transitive_closure_block.inbetween(D,A)
+
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant forall N:process_index_t. (block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~ local_view_used_here.local_view(N).commit_mode) -> (exists B:block_t. forall Rc,Rp:round_t. block_t.parent(B,local_view_used_here.local_view(N).last_committed) & quorum_votes_def.quorum_of_votes(B) & (block_t.round(B,Rc) & block_t.round(local_view_used_here.local_view(N).last_committed,Rp) -> round_t.succ(Rp,Rc)))
+
+    attribute macro_finder = false
+
+    #invariant local_view_used_here.local_view(N).commit_mode -> (exists B:block_t. block_t.parent(B,local_view_used_here.local_view(N).commit_mode_block) & local_view_used_here.local_view(N).uncommitted(B))
+
+    #invariant local_view_used_here.local_view(N).commit_mode -> (local_view_used_here.local_view(N).commit_mode_block = block_t.genesis | (forall B:block_t. block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block, B) & block_t.ancestor(B, local_view_used_here.local_view(N).last_committed) -> local_view_used_here.local_view(N).uncommitted(B)))
+
+    #invariant forall N:process_index_t. (block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & block_t.ancestor(B,local_view_used_here.local_view(N).last_committed) & (B = local_view_used_here.local_view(N).commit_mode_block | block_t.ancestor(local_view_used_here.local_view(N).commit_mode_block,B)) & local_view_used_here.local_view(N).commit_mode) -> (exists Bc:block_t. block_t.parent(Bc,B) & local_view_used_here.local_view(N).uncommitted(Bc) & block_t.ancestor(Bc,local_view_used_here.local_view(N).last_committed))
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,ancestor_transitive_closure_block,quorum_votes_def,last_committed_quorum_m1
+
+isolate two_qov_intersection_m1 = {
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant quorum_votes_def.quorum_of_votes(B1) & quorum_votes_def.quorum_of_votes(B2) -> exists N:process_index_t. is_good(N) & global_view_used_here.process_voted(N,B1) & global_view_used_here.process_voted(N,B2)
+
+    attribute macro_finder=false
+} with global_view_used_here,quorum_intersection_axiom,quorum_votes_def,block_t,prepare_t,timeout_t,proposal_f_t
+
+isolate two_qov_intersection = {
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant quorum_votes_def.quorum_of_votes(B1) & quorum_votes_def.quorum_of_votes(B2) & block_t.round(B1,R) & block_t.round(B2,R) -> B1 = B2
+} with global_view_used_here,quorum_intersection_axiom,quorum_votes_def,block_t,prepare_t,timeout_t,proposal_f_t,two_qov_intersection_m1
+
+isolate successor_of_last_committed_block_is_child = {
+    invariant is_good(N1) & is_good(N2) & block_t.cstd(local_view_used_here.local_view(N1).last_committed) & block_t.cstd(local_view_used_here.local_view(N2).last_committed) & ~ local_view_used_here.local_view(N1).commit_mode & ~ local_view_used_here.local_view(N2).commit_mode & block_t.round(local_view_used_here.local_view(N1).last_committed,R1) & block_t.round(local_view_used_here.local_view(N2).last_committed,R2) & round_t.succ(R1,R2) -> block_t.parent(local_view_used_here.local_view(N2).last_committed,local_view_used_here.local_view(N1).last_committed)
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t
+
+isolate quorum_after_commit_is_descendant_m1 = {
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant is_good(N) & global_view_used_here.highest_locked(N,BL) & block_t.round(BL,RL) & local_view_used_here.local_view(N).processed_qc(BQ) & block_t.round(BQ,RQ) -> RQ <= RL
+
+    invariant is_good(N) & global_view_used_here.highest_locked(N,BH) & qc_t.block(local_view_used_here.local_view(N).locked,BL) -> BL = BH
+
+    invariant is_good(N) & global_view_used_here.highest_locked(N,BH) & qc_t.block(local_view_used_here.local_view(N).locked,BL) & block_t.round(BH,RH) & block_t.round(BL,RL) -> RL <= RH
+
+    invariant is_good(N) & global_view_used_here.process_voted(N, B) & block_t.parent(B, BP) & block_t.round(BP, RP) & global_view_used_here.highest_locked(N, BL) & block_t.round(BL, RL) -> RL >= RP
+
+    attribute macro_finder=false
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,same_round_same_block_across_nodes,two_qov_intersection,round_t,successor_of_last_committed_block_is_child,qc_t
+
+isolate quorum_after_commit_is_descendant = {
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~ local_view_used_here.local_view(N).commit_mode -> (exists Q:quorum_t. quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.highest_locked(N1, BL) & block_t.round(local_view_used_here.local_view(N).last_committed, R) & block_t.round(BL, RL) -> RL >= R)
+
+    attribute macro_finder=false
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,quorum_after_commit_is_descendant_m1
+
+isolate later_quorum_parent_comes_after_committed = {
+    invariant block_t.parent_exists(B) | ~block_t.parent_exists(B)
+    invariant quorum_votes_def.quorum_of_votes(B) | ~ quorum_votes_def.quorum_of_votes(B)
+    invariant global_view_used_here.highest_locked(N, B) | ~global_view_used_here.highest_locked(N, B)
+
+    relation quorum_of_locks(Q:quorum_t, B:block_t)
+    definition quorum_of_locks(Q, B) = forall N:process_index_t. quorum_t.member(Q, N) & is_good(N) -> global_view_used_here.process_locked(N, B)
+
+    relation last_committed_quorum_capture(B:block_t, Q:quorum_t)
+    definition last_committed_quorum_capture(B, Q) = forall R,RL:round_t. forall BL:block_t. forall N:process_index_t. quorum_t.member(Q, N) & is_good(N) & global_view_used_here.highest_locked(N, BL) & block_t.round(B, R) & block_t.round(BL, RL) -> RL >= R
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, RC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) -> (quorum_of_locks(Q, BP) | ~quorum_of_locks(Q, BP))
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, RC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & quorum_of_locks(Q, BP) -> RP >= RC
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, RC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) -> (exists TC:tc_t. local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, QC) & qc_t.block(QC, BQ) & block_t.round(BQ, RQ) -> RP >= RQ)
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, RC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) & local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, TQC) & qc_t.block(TQC, BQ) & block_t.round(BQ, RQ) & RP >= RQ & qc_t.quorum(TQC, TQ) & last_committed_quorum_capture(local_view_used_here.local_view(N).last_committed, LQ) -> exists N2:process_index_t. is_good(N2) & quorum_t.member(TQ, N2) & quorum_t.member(LQ, N2)
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, RC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) & local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, TQC) & qc_t.block(TQC, BQ) & block_t.round(BQ, RQ) & RP >= RQ & qc_t.quorum(TQC, TQ) & last_committed_quorum_capture(local_view_used_here.local_view(N).last_committed, LQ) & is_good(N2) & quorum_t.member(TQ, N2) & quorum_t.member(LQ, N2) -> RP >= RC
+
+    # invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, BC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) & local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, QC) &  # qc_t.block(QC, BP) & qc_t.quorum(QC, Q1) -> exists N3:process_index_t. is_good(N3) & quorum_t.member(Q1, N3) & global_view_used_here.process_committed(N3, local_view_used_here.local_view(N).last_committed)
+
+    # invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, BC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) & local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, QC) & qc_t.block(QC, BP) & qc_t.quorum(QC, Q1) & is_good(N3) & quorum_t.member(Q1, N3) & global_view_used_here.process_committed(N3, local_view_used_here.local_view(N).last_committed) -> RP >= RC
+
+    # invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, BC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) & ~quorum_of_locks(Q, BP) & local_view_used_here.local_view(N1).received_tc(TC) & tc_t.timeout(TC, T) & timeout_t.qc(T, QC) & qc_t.block(QC, BP) & qc_t.quorum(QC, Q1) -> RP >= RC
+
+    # invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~local_view_used_here.local_view(N).commit_mode & block_t.round(local_view_used_here.local_view(N).last_committed, BC) & quorum_t.member(Q, N1) & is_good(N1) & global_view_used_here.process_voted(N1, B) & block_t.round(B, R) & (R > RC) & block_t.parent(B, BP) & block_t.round(BP, RP) -> RP >= RC
+
+    # attribute macro_finder = false
+} with local_view_used_here,global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum,last_committed_quorum_m1,quorum_after_commit_is_descendant_m1,quorum_after_commit_is_descendant
+
+isolate quorum_last_committed_def = {
+    relation later_block(BE:block_t, BL:block_t)
+    definition later_block(BE,BL) = forall RE,RL:round_t. block_t.round(BL,RL) & block_t.round(BE,RE) -> RE <= RL
+
+    relation quorum_last_committed(B:block_t)
+
+    definition quorum_last_committed(B:block_t) = exists Q:quorum_t. forall N1:process_index_t. forall BL:block_t. quorum_t.member(Q, N1) & is_good(N1) & (global_view_used_here.highest_locked(N1, BL) -> later_block(B,BL))
+} with global_view_used_here,quorum_t,block_t,prepare_t,timeout_t,proposal_f_t
+
+isolate voting_after_last_commit = {
+        
+    invariant block_t.cstd(BL) & block_t.cstd(BV) & quorum_last_committed_def.quorum_last_committed(BL) & quorum_votes_def.quorum_of_votes(BV) -> exists N:process_index_t. forall BH:block_t. is_good(N) & global_view_used_here.process_voted(N,BV) & (global_view_used_here.highest_locked(N,BH) -> quorum_last_committed_def.later_block(BL,BH))
+
+    attribute macro_finder=false
+} with global_view_used_here,quorum_t,block_t,prepare_t,timeout_t,proposal_f_t,quorum_last_committed_def,quorum_intersection_axiom,round_t,quorum_votes_def,every_quorum_good
+
+isolate quorum_after_ldc = {
+    invariant quorum_last_committed_def.later_block(B1,B2) | ~ quorum_last_committed_def.later_block(B1,B2)
+
+    invariant is_good(N) & block_t.cstd(local_view_used_here.local_view(N).last_committed) & local_view_used_here.local_view(N).last_committed ~= block_t.genesis & ~ local_view_used_here.local_view(N).commit_mode -> quorum_last_committed_def.quorum_last_committed(local_view_used_here.local_view(N).last_committed)
+} with quorum_after_commit_is_descendant, local_view_used_here,quorum_last_committed_def, global_view_used_here,timeout_t,block_t,proposal_n_t,prepare_t,proposal_f_t,last_committed_quorum#,last_committed_quorum_m1,quorum_after_commit_is_descendant_m1

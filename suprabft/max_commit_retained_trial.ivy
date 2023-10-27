@@ -1,0 +1,193 @@
+
+isolate lv_max_observed_qc_max_committedQ = {
+    invariant local_view_instance.local_view(Id).max_observed_qc(B) <-> local_view_instance.local_view(Id).max_commitQ(B)
+
+    relation monitor_commitQ(B : block_t)
+    relation monitor_observed_qc(B:block_t)
+
+    relation monitor_commitQUgenesis(B:block_t)
+    relation max_monitor_commitQ(B:block_t)
+    relation max_monitor_observed_qc(B:block_t)
+
+    definition monitor_commitQUgenesis(B) = B = block_t.genesis | monitor_commitQ(B)
+    definition max_monitor_commitQ(B) = monitor_commitQUgenesis(B) & (forall Bc:block_t. monitor_commitQUgenesis(Bc) -> block_t_conv.round_lte(Bc,B))
+    definition max_monitor_observed_qc(B) = monitor_observed_qc(B) & (forall Bc:block_t. monitor_observed_qc(Bc) -> block_t_conv.round_lte(Bc,B))
+
+    before local_view_instance.local_view.qc_processing(id:process_index_t, qc:qc_t) {
+        monitor_commitQ(B) := local_view_instance.local_view(id).commitQ(B);
+        monitor_observed_qc(B) := local_view_instance.local_view(id).observed_qc(B);
+
+        ensure max_monitor_commitQ(B) = local_view_instance.local_view(id).max_commitQ(B) & max_monitor_observed_qc(B) = local_view_instance.local_view(id).max_observed_qc(B) & (max_monitor_observed_qc(B) <-> max_monitor_commitQ(B));
+
+        ensure (local_view_instance.local_view(id).commitQ(B) -> block_t.cstd(B)) & (local_view_instance.local_view(id).observed_qc(B) -> block_t.cstd(B));
+    }
+
+    before local_view_instance.local_view.tryCommit(id:process_index_t, b_qc:block_t) {
+
+        require block_t.cstd(b_qc);
+
+        require (local_view_instance.local_view(id).commitQ(B) -> monitor_commitQ(B) | B = b_qc) & (local_view_instance.local_view(id).observed_qc(B) -> monitor_observed_qc(B) | B = b_qc);
+
+        require forall Bm:block_t. max_monitor_commitQ(Bm) & block_t_conv.round_lte(Bm,b_qc) -> local_view_instance.local_view(id).max_commitQ(b_qc);
+
+        require forall Bm:block_t. max_monitor_observed_qc(Bm) & block_t_conv.round_lte(Bm,b_qc) -> local_view_instance.local_view(id).max_observed_qc(b_qc);
+
+        require forall Bm:block_t. max_monitor_commitQ(Bm) & ~ block_t_conv.round_lte(Bm,b_qc) -> ~ local_view_instance.local_view(id).max_commitQ(b_qc);
+
+        require forall Bm:block_t. max_monitor_observed_qc(Bm) & ~ block_t_conv.round_lte(Bm,b_qc) -> ~ local_view_instance.local_view(id).max_observed_qc(b_qc);
+
+        require local_view_instance.local_view(id).max_commitQ(B) <-> local_view_instance.local_view(id).max_observed_qc(B);
+    }
+
+    attribute macro_finder=false
+} with local_view_instance, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, lv_validity_invariants.lv_inv_qc_processed_genesis, lv_basic_invariants.inv_qc_for_block, lv_commit_invariants.inv_commitQ_is_processed, lv_validity_invariants.lv_valid_received_qc
+
+
+
+isolate lv_verify_max_observed_qc_max_committedQ = local_view_instance with lv_max_observed_qc_max_committedQ, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, lv_validity_invariants.lv_inv_qc_processed_genesis, lv_last_committed_ldc, lv_max_commitQ_gt_commit_candidate, lv_basic_invariants.inv_qc_for_block,lv_commit_invariants.inv_commitQ_is_processed, lv_validity_invariants.lv_valid_received_qc
+
+isolate lv_max_commitQ_not_removed_by_trycommit = {
+
+    property local_view_instance.local_view(Id).commit_candidate(Bc) -> local_view_instance.local_view(Id).ldc(Bc)
+
+    invariant local_view_instance.local_view(Id).max_commitQ(Bm) & local_view_instance.local_view(Id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm
+
+    invariant local_view_instance.local_view(Id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc)
+
+    invariant local_view_instance.local_view(Id).max_commitQ(Bm) & local_view_instance.local_view(Id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc) 
+
+    before local_view_instance.local_view.qc_processing(id:process_index_t,qc:qc_t) {
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm;
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> local_view_instance.local_view(id).ldc(Bc);
+
+        ensure local_view_instance.local_view(id).ldc(Bc) -> global_view_instance.ldc(id,Bc);
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> global_view_instance.ldc(id,Bc);
+
+        ensure global_view_instance.ldc(id,Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc);
+    }
+
+    after local_view_instance.local_view.proposeNormal(id:process_index_t,pB:block_t) {
+        assume local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm;
+
+        assume local_view_instance.local_view(id).commit_candidate(Bc) -> local_view_instance.local_view(id).ldc(Bc);
+
+        assume local_view_instance.local_view(id).ldc(Bc) -> global_view_instance.ldc(id,Bc);
+
+        assume local_view_instance.local_view(id).commit_candidate(Bc) -> global_view_instance.ldc(id,Bc);
+
+        assume global_view_instance.ldc(id,Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc);
+    }
+
+    after local_view_instance.local_view.tryLock(id:process_index_t,qc:qc_t) {
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm;
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> local_view_instance.local_view(id).ldc(Bc);
+
+        ensure local_view_instance.local_view(id).ldc(Bc) -> global_view_instance.ldc(id,Bc);
+
+        ensure global_view_instance.ldc(id,Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc);
+    }
+
+    before local_view_instance.local_view.tryCommit(id:process_index_t, b_qc:block_t) {
+
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm;
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> local_view_instance.local_view(id).ldc(Bc);
+
+        ensure local_view_instance.local_view(id).ldc(Bc) -> global_view_instance.ldc(id,Bc);
+
+        ensure global_view_instance.ldc(id,Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc);
+
+        ensure local_view_instance.local_view(id).max_commitQ(Bm) & local_view_instance.local_view(id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc);
+    }
+
+    attribute macro_finder=false
+} with local_view_instance, global_view_instance, gv_normal_vote_requires_gl_candidate, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t,gv_qov_after_gl_descendant,lv_validity_invariants.lv_inv_qc_processed_genesis, lv_commit_invariants.lv_inv_ldc_local_global, gv_ldc_implies_gl.gv_inv_ldc_implies_gl,lv_basic_invariants.inv_qc_for_block, lv_commit_invariants.inv_commitQ_is_processed, lv_max_commitQ_gt_commit_candidate,qonv_implies_parent_gl, gv_qc_implies_qov, lv_max_commitQ_retained_after_commit
+
+isolate lv_verify_max_commitQ_not_removed_by_trycommit = local_view_instance with lv_max_commitQ_not_removed_by_trycommit, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, gv_normal_vote_requires_gl_candidate, gv_qov_after_gl_descendant,lv_validity_invariants.lv_inv_qc_processed_genesis, lv_commit_invariants.lv_inv_ldc_local_global, gv_ldc_implies_gl.gv_inv_ldc_implies_gl,lv_basic_invariants.inv_qc_for_block, lv_commit_invariants.inv_commitQ_is_processed, lv_max_commitQ_gt_commit_candidate,qonv_implies_parent_gl, lv_max_commitQ_retained_after_commit
+
+isolate lv_max_commitQ_gt_commit_candidate = {
+    
+    property block_t.round_exists(B) | ~ block_t.round_exists(B)
+
+    invariant local_view_instance.local_view(Id).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> Rp < Rc & local_view_instance.local_view(Id).commitQ(Bc) & ~ local_view_instance.local_view(Id).max_commitQ(Bp)
+
+    invariant ~(local_view_instance.local_view(Id).max_commitQ(B) & local_view_instance.local_view(Id).ldc(B))
+
+    invariant local_view_instance.local_view(Id).last_committed ~= block_t.genesis -> ~ local_view_instance.local_view(Id).commitQ_empty
+
+    invariant local_view_instance.local_view(Id).last_committed ~= block_t.genesis & local_view_instance.local_view(Id).max_commitQ(Bm) & local_view_instance.local_view(Id).commit_candidate(Bc) & block_t.round(Bm,Rm) & block_t.round(Bc,Rc) -> Rc < Rm
+} with local_view_instance, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, lv_validity_invariants.lv_inv_qc_processed_genesis, lv_last_committed_ldc
+
+isolate lv_max_commitQ_retained_after_commit = {
+    invariant local_view_instance.local_view(Id).commit_candidate(Bc) -> qonv_implies_parent_gl.global_lock(Bc)
+
+    invariant local_view_instance.local_view(Id).max_commitQ(Bm) & local_view_instance.local_view(Id).commit_candidate(Bc) -> block_t.ancestor(Bm,Bc)
+
+    attribute macro_finder=false
+} with local_view_instance, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, gv_ldc_implies_gl, gv_qov_after_gl_descendant, lv_commit_invariants.lv_inv_ldc_local_global, gv_normal_vote_requires_gl_candidate, lv_max_commitQ_gt_commit_candidate, gv_qc_implies_qov, lv_basic_invariants.inv_qc_for_block, lv_commit_invariants.inv_commitQ_is_processed
+
+# isolate lv_processd_qc_retained_in_commitQ = {
+
+#     invariant local_view_instance.local_view(Id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(Id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(Id).commitQ(B)
+
+#     invariant global_view_instance.qc_valid(QC) & qc_t.block(QC,B) & block_t.round(B,R) & local_view_instance.local_view(Id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc)
+
+#     before local_view_instance.local_view.tryCommit(id:process_index_t) {
+#         require local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(id).commitQ(B);
+
+#         require global_view_instance.qc_valid(QC) & qc_t.block(QC,B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+
+#         require local_view_instance.local_view(id).commitQ(B) -> global_view_instance.qc_valid(local_view_instance.local_view(id).qc_for_block(B)) & qc_t.block(local_view_instance.local_view(id).qc_for_block(B), B);
+
+#         require local_view_instance.local_view(id).commitQ(B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+#     }
+
+#     after local_view_instance.local_view.tryCommit(id:process_index_t) {
+#         ensure local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(id).commitQ(B);
+#     }
+
+#     # before local_view_instance.local_view.proposeNormal(id:process_index_t, b_qc:block_t) {
+#     #     require local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(id).commitQ(B);
+
+#     #     require local_view_instance.local_view(id).commitQ(B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+#     # }
+
+#     # after local_view_instance.local_view.proposeNormal(id:process_index_t, b_qc:block_t) {
+#     #     ensure local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(id).commitQ(B);
+
+#     #     ensure local_view_instance.local_view(id).commitQ(B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+#     # }
+
+#     # before local_view_instance.local_view.tryLock(id:process_index_t, qc:qc_t) {
+#     #     require local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(Id).commitQ(B);
+
+#     #     require local_view_instance.local_view(id).commitQ(B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+#     # }
+
+#     # after local_view_instance.local_view.tryLock(id:process_index_t, qc:qc_t) {
+#     #     ensure local_view_instance.local_view(id).observed_qc(B) & block_t.round(B,R) & block_t.round(local_view_instance.local_view(id).last_committed,Rl) & Rl < R -> local_view_instance.local_view(Id).commitQ(B);
+
+#     #     ensure local_view_instance.local_view(id).commitQ(B) & block_t.round(B,R) & local_view_instance.local_view(id).commit_candidate(Bc) & block_t.round(Bc,Rc) & Rc < R -> block_t.ancestor(B,Bc);
+#     # }
+
+#     attribute macro_finder=false
+# } with local_view_instance, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, lv_max_commitQ_retained_after_commit, gv_qc_implies_qov,gv_qov_after_gl_descendant, lv_last_committed_ldc, gv_normal_vote_requires_gl_candidate, lv_basic_invariants.inv_qc_for_block
+
+# isolate lv_verify_processd_qc_retained_in_commitQ = local_view_instance with lv_processd_qc_retained_in_commitQ, global_view_instance, block_t, round_t, proposal_n_t, prepare_t, genesis_member, qc_t, timeout_t,proposal_f_t, ancestor_transitive_closure_block, lv_basic_invariants.inv_qc_for_block, lv_validity_invariants.lv_valid_received_qc, lv_commit_invariants.inv_commitQ_is_processed#, gv_ldc_implies_gl.gv_inv_ldc_implies_gl, lv_commit_invariants.lv_inv_ldc_local_global, gv_qov_after_gl_descendant,gv_qc_implies_qov

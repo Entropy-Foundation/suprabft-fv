@@ -1,0 +1,8 @@
+#lang ivy1.8
+
+# to be put in gdc_properties
+
+forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp)) -> (exists Q:quorum_t. exists R:round_t. round_t.succ(B.round,R) & forall N1:node_t. (quorum_t.member(N1,Q) -> gv.node_has_locked_recently(N1,Bp,R)))
+
+# this additionally requires a condition that B.round = Bp.round + 1
+forall B:block_t. forall Bp:block_t. (exists N:node_t. (is_good(N) & gv.node_has_locked(N,B)) & B.parent=block_t.hash(Bp) & round_t.succ(Bp.round,B.round)) -> (exists Q:quorum_t. exists R:round_t. round_t.succ(Bp.round,R) & forall N1:node_t. (quorum_t.member(N1,Q) -> gv.node_has_locked_detail(N1,Bp,R)))

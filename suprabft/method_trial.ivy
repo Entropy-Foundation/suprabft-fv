@@ -1,0 +1,37 @@
+#lang ivy1.8
+
+isolate trial = {
+    individual index:bool
+    individual flag:bool
+
+    after init {
+        index := true;
+        flag := true;
+    }
+
+    export action main_method = {
+        call method1;
+        call method2;
+        call method3;
+    }
+
+    action method1 = {
+        index := false;
+    }
+
+    action method2 = {
+        if index {
+            flag := false;
+        }
+    }
+
+    action method3  = {
+        index := true;
+    }
+
+    invariant index
+
+    after method2 {
+        ensure ~ flag;
+    }
+}
