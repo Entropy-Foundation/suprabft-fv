@@ -87,6 +87,8 @@ object processor(id:process_index_t) = {
         a_n := 0;
         a_o := 0;
 
+        b_h := block_t.genesis;
+
         b_v(B) := B = block_t.genesis;
 
         b_o := block_t.unused;
