@@ -118,4 +118,4 @@ isolate verify_quorum = {
         }
     }
 
-} with block_t
+} with block_t, types_block_t_requires
