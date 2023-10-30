@@ -50,7 +50,7 @@ ivy_check trace=true isolate=parent_block_earlier_m15 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m16 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m17 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m18 safety.ivy
-# ivy_check trace=true isolate=parent_block_earlier_m2 safety.ivy ###
+ivy_check trace=true isolate=parent_block_earlier_m2 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m3 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m4 safety.ivy
 ivy_check trace=true isolate=parent_block_earlier_m5 safety.ivy
@@ -94,10 +94,10 @@ ivy_check trace=true isolate=quorum_after_ldc_m2 safety.ivy
 ivy_check trace=true isolate=quorum_f safety.ivy
 ivy_check trace=true isolate=quorum_f_after_ldc safety.ivy
 ivy_check trace=true isolate=quorum_f_after_ldc_m1 safety.ivy
-ivy_check trace=true isolate=quorum_f_after_ldc_m2 safety.ivy
+ivy_check trace=true isolate=quorum_f_after_ldc_m2 safety.ivy  ###
 # ivy_check trace=true isolate=quorum_f_after_ldc_m3 safety.ivy ###
 ivy_check trace=true isolate=quorum_f_after_ldc_m4 safety.ivy
-ivy_check trace=true isolate=quorum_f_after_ldc_m5 safety.ivy
+ivy_check trace=true isolate=quorum_f_after_ldc_m5 safety.ivy ###
 ivy_check trace=true isolate=quorum_f_after_ldc_m6 safety.ivy
 ivy_check trace=true isolate=quorum_fplusone_t safety.ivy
 ivy_check trace=true isolate=quorum_intersection_axiom safety.ivy
