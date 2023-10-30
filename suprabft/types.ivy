@@ -351,8 +351,7 @@ isolate types_block_t_requires = {
 
     before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
         require r_c > 0;#_#
-        require block_t.cstd(pB);#_#
-        # require block_t.round(pB,R) -> R < r_c;#_#
+        require block_t.cstd(pB);
     }
 } with block_t
 

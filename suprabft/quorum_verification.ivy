@@ -5,6 +5,8 @@ include network
 include moonshot
 
 isolate verify_quorum = {
+    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
+
     relation processor_sent_prepare_o(N:process_index_t, B:block_t)
     relation processor_sent_prepare_n(N:process_index_t, B:block_t)
     relation processor_sent_prepare_f(N:process_index_t, B:block_t)
@@ -118,4 +120,4 @@ isolate verify_quorum = {
         }
     }
 
-} with block_t, types_block_t_requires
+} with block_t, round_t, types_block_t_requires, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd
