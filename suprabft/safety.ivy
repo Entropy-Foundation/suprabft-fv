@@ -456,6 +456,12 @@ isolate parent_block_earlier_m4 = {
     invariant [quorum_propogation] parent_block_earlier_m1.block_has_quorum(B) & block_t.parent(B,Bp) -> parent_block_earlier_m1.block_has_quorum(Bp)
 } with block_t, round_t, verify_quorum, parent_block_earlier_m1, parent_block_earlier_m3
 
+isolate parent_block_earlier_n5 = {
+
+    invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & B ~= block_t.genesis & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> Rp < R
+
+} with verify_quorum, block_t, round_t, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.parent_self_genesis
+
 isolate parent_block_earlier_m5 = {
 
     relation honest_processor_voted(B1:block_t, B2:block_t)
