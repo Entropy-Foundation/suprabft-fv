@@ -284,7 +284,6 @@ object processor(id:process_index_t) = {
         require received_proposal_n(b_pr, leader(r_c));
         require received_qc(qc);
         require block_t.cstd(b_pr);
-        require send_prepare_n_condition(b_pr,qc);
         require ~ t_r;
         require ~ possessed_normal_for_round(r_c);
         
@@ -294,9 +293,9 @@ object processor(id:process_index_t) = {
             call qc_processing(qc);
         }
 
-        ensure block_t.parent(b_pr,Bp) & block_t.round(Bp,Rp) -> Rp < r_c;
+        require send_prepare_n_condition(b_pr,qc);
 
-        require block_t.round(b_pr,r_c);
+        ensure block_t.parent(b_pr,Bp) & block_t.round(Bp,Rp) -> Rp < r_c;
 
         ###### proposeOptimistic ############
         var rs := round_t.next(r_c);

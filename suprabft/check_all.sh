@@ -87,40 +87,6 @@ ivy_check trace=true complete=fo isolate=parent_block_earlier safety.ivy
 date
 ivy_check trace=true complete=fo isolate=parent_block_earlier_m1 safety.ivy
 date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m10 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m11 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m12 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m13 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m14 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m15 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m16 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m17 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m18 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m2 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m3 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m4 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m5 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m6 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m7 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m8 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_block_earlier_m9 safety.ivy
-date
 ivy_check trace=true complete=fo isolate=parent_same_implications safety.ivy
 date
 ivy_check trace=true complete=fo isolate=parent_same_implications_height safety.ivy
@@ -143,17 +109,9 @@ ivy_check trace=true complete=fo isolate=q_o_q_n safety.ivy
 date
 ivy_check trace=true complete=fo isolate=q_oo safety.ivy
 date
-ivy_check trace=true complete=fo isolate=qc_f_qc_n safety.ivy
-date
-ivy_check trace=true complete=fo isolate=qc_f_qc_o safety.ivy
-date
-ivy_check trace=true complete=fo isolate=qc_ff_or_nn safety.ivy
-date
 ivy_check trace=true complete=fo isolate=qc_o_qc_n safety.ivy
 date
 ivy_check trace=true complete=fo isolate=qc_o_qc_n_m1 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=qc_oo safety.ivy
 date
 ivy_check trace=true complete=fo isolate=qc_propogation safety.ivy
 date
@@ -187,6 +145,10 @@ ivy_check trace=true complete=fo isolate=quorum_after_ldc_m1 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=quorum_after_ldc_m2 safety.ivy
 date
+ivy_check trace=true complete=fo isolate=quorum_definition safety.ivy
+date
+ivy_check trace=true complete=fo isolate=quorum_definition_expl safety.ivy
+date
 ivy_check trace=true complete=fo isolate=quorum_f safety.ivy
 date
 ivy_check trace=true complete=fo isolate=quorum_f_after_ldc safety.ivy
@@ -209,25 +171,23 @@ ivy_check trace=true complete=fo isolate=quorum_intersection_axiom safety.ivy
 date
 ivy_check trace=true complete=fo isolate=quorum_no_after_ldc safety.ivy
 date
+ivy_check trace=true complete=fo isolate=quorum_properties_1 safety.ivy
+date
+ivy_check trace=true complete=fo isolate=quorum_properties_2 safety.ivy
+date
+ivy_check trace=true complete=fo isolate=quorum_properties_3 safety.ivy
+date
 ivy_check trace=true complete=fo isolate=quorum_t safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_predecessor safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety safety.ivy
 date
-ivy_check trace=true complete=fo isolate=round_safety_late safety.ivy
-date
 ivy_check trace=true complete=fo isolate=round_safety_m1 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety_m2 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety_m3 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=round_safety_m4 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=round_safety_m5 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=round_safety_m6 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety_n3 safety.ivy
 date
