@@ -65,7 +65,7 @@ isolate quorum_properties_1 = {
 
     attribute macro_finder = false
 
-}  with block_t, round_t, verify_quorum, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, basic_validities.qc_l_valid, locked_qc_processed, quorum_definition, only_cstd_blocks.processed_qc_cstd, only_cstd_blocks.genesis_block_cstd, qc_propogation_m1.processed_block_has_qc, quorum_definition.qc_implies_quorum, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0#, block_t_properties.genesis_parent, block_t_properties.parent_self_genesis, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
+}  with block_t, round_t, verify_quorum, basic_validities.qc_l_valid, locked_qc_processed, quorum_definition, only_cstd_blocks.processed_qc_cstd, only_cstd_blocks.genesis_block_cstd, qc_propogation_m1.processed_block_has_qc, quorum_definition.qc_implies_quorum, only_cstd_blocks.prepare_f_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, block_t_properties.parent_unique, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists#, block_t_properties.genesis_cstd, block_t_properties.round_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.genesis_parent, block_t_properties.parent_self_genesis, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block
 
 isolate quorum_properties_2 = {
 
@@ -237,7 +237,7 @@ isolate q_f_q_n = {
 
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition, block_t_properties.genesis_cstd, quorum_definition, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique#, block_t_properties.parent_unique
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition, block_t_properties.genesis_cstd, quorum_definition#, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
 
 isolate q_o_q_n = {
 
@@ -383,7 +383,7 @@ isolate parent_block_earlier_m1 = {
 
     # attribute macro_finder = false
 
-} with verify_quorum, block_t, round_t, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties, tc_r_no_po_rs_quorum_n1.rc_gt_locked_block, basic_validities.qc_l_valid
+} with verify_quorum, block_t, round_t, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties, tc_r_no_po_rs_quorum_n1.rc_gt_locked_block, basic_validities.qc_l_valid, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, block_t_properties.unused_not_cstd
 
 isolate parent_block_earlier = {
 
@@ -451,7 +451,7 @@ isolate tc_after_prepare_m4 = {
 
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, tc_after_prepare_m3, quorum_intersection_axiom, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists
+} with block_t, round_t, verify_quorum, tc_after_prepare_m3, quorum_intersection_axiom#, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists
 
 isolate tc_after_prepare_m5 = {
 
@@ -461,7 +461,7 @@ isolate tc_after_prepare_m5 = {
 
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, tc_after_prepare_m3, tc_after_prepare_m4, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_round_0, block_t_properties.genesis_parent
+} with block_t, round_t, verify_quorum, tc_after_prepare_m3, tc_after_prepare_m4#, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_round_0, block_t_properties.genesis_parent
 
 isolate prepare_no_later_round_later_parent = {
 

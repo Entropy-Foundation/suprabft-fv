@@ -121,11 +121,13 @@ isolate verify_quorum = {
     }
 
     private {
-        invariant processor(N).processed_qc(B) & block_t.round(B,R) -> block_t.cstd(B) & R < processor(N).r_c
+        invariant processor(N).processed_qc(B) -> block_t.cstd(B)
+        
+        invariant processor(N).processed_qc(B) & block_t.round(B,R) -> R < processor(N).r_c
 
         invariant qc_t.block(processor(N).qc_l, B) -> processor(N).processed_qc(B)
     }
 
-    attribute macro_finder = false
+    # attribute macro_finder = false
 
 } with block_t, round_t, qc_t, types_block_t_requires, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_cstd, block_t_properties.parent_unique, block_t_properties.round_only_for_cstd, block_t_properties.block_t_inv_round_unique
