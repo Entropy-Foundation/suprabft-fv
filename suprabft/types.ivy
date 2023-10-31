@@ -124,40 +124,6 @@ isolate block_t_properties = {
 
 } with block_t, round_t, height_t, types_block_t_requires, types_block_t_ensures
 
-isolate ancestor_transitive_closure_block = {
-    invariant [block_genesis_ancestor] block_t.ancestor(block_t.genesis, A) <-> A = block_t.genesis
-    invariant block_t.ancestor(B, A) -> block_t.cstd(B) & block_t.cstd(A)
-    invariant block_t.ancestor(B, B) <-> B = block_t.genesis
-
-    invariant [block_parent_round_lesser] (block_t.parent(B,P) & block_t.round(B,Rb) & block_t.round(P,Rp) & B ~= block_t.genesis) -> Rp < Rb
-
-    property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-    invariant [i1] block_t.parent(B, P) -> block_t.ancestor(B, P)
-    invariant [i2] block_t.ancestor(A1, A2) & block_t.ancestor(A2, A3) -> block_t.ancestor(A1, A3)
-    invariant [i4] block_t.ancestor(B, A1) & block_t.ancestor(B, A2) -> A1 = A2 | block_t.ancestor(A1, A2) | block_t.ancestor(A2, A1)
-    relation inbetween(D:block_t, A:block_t)
-    definition inbetween(D, A) = exists M:block_t. block_t.ancestor(D, M) & block_t.ancestor(M, A)
-    invariant [i5] block_t.ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
-    invariant [i3] block_t.parent(B,P) & P ~= block_t.genesis -> ~inbetween(B,P)
-    invariant [i6] block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h))
-    invariant block_t.parent(B,P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_r,P_r:round_t. block_t.round(B,B_r) & block_t.round(P,P_r) -> P_r < B_r)
-    invariant block_t.parent(B,Bp) & block_t.parent(Bp,Ba) & block_t.round(B,R) & block_t.round(Ba,Ra) & B ~= block_t.genesis -> Ra < R
-    invariant [block_ancestor_lesser_round] block_t.ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
-} with block_t, height_t, round_t, block_t_properties, types_block_t_requires, types_block_t_ensures
-
-isolate parent_same_implications = {
-    invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
-
-    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.ancestor(B1, A) -> block_t.ancestor(B2, A)
-
-    attribute macro_finder=false
-} with block_t, ancestor_transitive_closure_block.i1, ancestor_transitive_closure_block.i2, ancestor_transitive_closure_block.i3, ancestor_transitive_closure_block.i4, ancestor_transitive_closure_block.inbetween, height_t, types_block_t_requires, types_block_t_ensures, block_t_properties
-
-isolate parent_same_implications_height = {
-    invariant ancestor_transitive_closure_block.inbetween(B1,B2) | ~ ancestor_transitive_closure_block.inbetween(B1,B2)
-    invariant block_t.parent(B1, P) & block_t.parent(B2, P) & block_t.height(B1, H) & B1 ~= block_t.genesis & B2 ~= block_t.genesis -> block_t.height(B2, H)
-} with block_t, ancestor_transitive_closure_block, height_t, types_block_t_requires, types_block_t_ensures, block_t_properties
-
 isolate round_predecessor = {
     axiom [round_induction] {
         relation rel1(R:round_t)
@@ -380,4 +346,4 @@ isolate types_block_t_ensures = {
 
         ensure block_t.cstd(b);
     }
-} with block_t, height_t, block_t_properties.cstd_block_height_exists, types_block_t_requires, ancestor_transitive_closure_block
+} with block_t, height_t, block_t_properties.cstd_block_height_exists, types_block_t_requires

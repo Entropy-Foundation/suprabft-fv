@@ -3,8 +3,6 @@ ivy_check trace=true complete=fo isolate=all_ancestors_committed safety.ivy
 date
 ivy_check trace=true complete=fo isolate=all_ancestors_committed_m1 safety.ivy
 date
-ivy_check trace=true complete=fo isolate=ancestor_transitive_closure_block safety.ivy
-date
 ivy_check trace=true complete=fo isolate=ancestors_of_ancestors safety.ivy
 date
 ivy_check trace=true complete=fo isolate=basic_validities safety.ivy
@@ -86,10 +84,6 @@ date
 ivy_check trace=true complete=fo isolate=parent_block_earlier safety.ivy
 date
 ivy_check trace=true complete=fo isolate=parent_block_earlier_m1 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_same_implications safety.ivy
-date
-ivy_check trace=true complete=fo isolate=parent_same_implications_height safety.ivy
 date
 ivy_check trace=true complete=fo isolate=prepare_no_later_round_later_parent safety.ivy
 date

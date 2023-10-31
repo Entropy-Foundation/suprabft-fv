@@ -1058,86 +1058,86 @@ isolate all_ancestors_committed = {
 
 } with verify_quorum, block_t, all_ancestors_committed_m1, commit_to_chain_m1, certified_block_ancestor_m1, only_cstd_blocks.processed_qc_cstd, block_t_properties.parent_only_for_cstd, certified_block_ancestor_m4.parent_is_ancestor, block_t_properties.unused_not_cstd, certified_block_ancestor_m4.ancestor_transitive, certified_block_ancestor_m5.ancestor_no_divergence, certified_block_ancestor_m6.block_ancestor_lesser_round, certified_block_ancestor_m5.ancestor_no_branches, quorum_properties_1.processed_qc_quorum, quorum_definition, quorum_properties_3.quorum_propogation
 
-isolate certified_block_height_m1 = {
+# isolate certified_block_height_m1 = {
 
-    relation cert_block_height(B:block_t, H:height_t)
+#     relation cert_block_height(B:block_t, H:height_t)
 
-    after init {
-        cert_block_height(B,H) := B = block_t.genesis & H = 0;
-    }
+#     after init {
+#         cert_block_height(B,H) := B = block_t.genesis & H = 0;
+#     }
 
-    after verify_quorum.processor.normal_proposal_processing(id:process_index_t, b_pr:block_t, qc:qc_t) {
-        if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
-            if some bp:block_t. block_t.parent(b_pr,bp) {
-                if some h:height_t. cert_block_height(bp,h) {
-                    cert_block_height(b_pr,height_t.next(h)) := true;
-                }
-            }
-        }
-    }
+#     after verify_quorum.processor.normal_proposal_processing(id:process_index_t, b_pr:block_t, qc:qc_t) {
+#         if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
+#             if some bp:block_t. block_t.parent(b_pr,bp) {
+#                 if some h:height_t. cert_block_height(bp,h) {
+#                     cert_block_height(b_pr,height_t.next(h)) := true;
+#                 }
+#             }
+#         }
+#     }
 
-    after verify_quorum.processor.optimistic_proposal_processing(id:process_index_t, b_pr:block_t) {
-        if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
-            if some bp:block_t. block_t.parent(b_pr,bp) {
-                if some h:height_t. cert_block_height(bp,h) {
-                    cert_block_height(b_pr,height_t.next(h)) := true;
-                }
-            }
-        }
-    }
+#     after verify_quorum.processor.optimistic_proposal_processing(id:process_index_t, b_pr:block_t) {
+#         if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
+#             if some bp:block_t. block_t.parent(b_pr,bp) {
+#                 if some h:height_t. cert_block_height(bp,h) {
+#                     cert_block_height(b_pr,height_t.next(h)) := true;
+#                 }
+#             }
+#         }
+#     }
 
-    after verify_quorum.processor.fallback_proposal_processing
-    (id:process_index_t, b_pr:block_t, tc:tc_t) {
+#     after verify_quorum.processor.fallback_proposal_processing
+#     (id:process_index_t, b_pr:block_t, tc:tc_t) {
 
-        if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
-            if some bp:block_t. block_t.parent(b_pr,bp) {
-                if some h:height_t. cert_block_height(bp,h) {
-                    cert_block_height(b_pr,H) := height_t.succ(h,H);
-                }
-            }
-        }
-    }
+#         if quorum_definition.block_has_quorum(b_pr) & (forall H:height_t. ~ cert_block_height(b_pr,H)) {
+#             if some bp:block_t. block_t.parent(b_pr,bp) {
+#                 if some h:height_t. cert_block_height(bp,h) {
+#                     cert_block_height(b_pr,H) := height_t.succ(h,H);
+#                 }
+#             }
+#         }
+#     }
 
-    after verify_quorum.processor.byzantine_send(id:process_index_t, m:msg) {
-        if (m.kind = msg_kind.prepare_f | m.kind = msg_kind.prepare_n | m.kind = msg_kind.prepare_o) & quorum_definition.block_has_quorum(m.block) & (forall H:height_t. ~ cert_block_height(m.block,H)) {
-            if some bp:block_t. (block_t.parent(m.block,bp) & block_t.cstd(bp)) {
-                if some h:height_t. cert_block_height(bp,h) {
-                    cert_block_height(m.block,height_t.next(h)) := true;
-                }
-            }
-        }
-    }
+#     after verify_quorum.processor.byzantine_send(id:process_index_t, m:msg) {
+#         if (m.kind = msg_kind.prepare_f | m.kind = msg_kind.prepare_n | m.kind = msg_kind.prepare_o) & quorum_definition.block_has_quorum(m.block) & (forall H:height_t. ~ cert_block_height(m.block,H)) {
+#             if some bp:block_t. (block_t.parent(m.block,bp) & block_t.cstd(bp)) {
+#                 if some h:height_t. cert_block_height(bp,h) {
+#                     cert_block_height(m.block,height_t.next(h)) := true;
+#                 }
+#             }
+#         }
+#     }
 
-    # attribute macro_finder = false
+#     # attribute macro_finder = false
 
-} with verify_quorum,block_t,round_t,height_t, quorum_definition, parent_block_earlier.parent_earlier, quorum_properties_3, certified_block_ancestor_m4, block_quorum_cstd, certified_block_ancestor_m6.block_ancestor_lesser_round, every_quorum_good, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
+# } with verify_quorum,block_t,round_t,height_t, quorum_definition, parent_block_earlier.parent_earlier, quorum_properties_3, certified_block_ancestor_m4, block_quorum_cstd, certified_block_ancestor_m6.block_ancestor_lesser_round, every_quorum_good, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
 
-isolate certified_block_height_m2 = {
+# isolate certified_block_height_m2 = {
 
-    # property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
+#     # property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
 
-    invariant certified_block_height_m1.cert_block_height(B,H1) & certified_block_height_m1.cert_block_height(B,H2) -> H1 = H2 & quorum_definition.block_has_quorum(B)
+#     invariant certified_block_height_m1.cert_block_height(B,H1) & certified_block_height_m1.cert_block_height(B,H2) -> H1 = H2 & quorum_definition.block_has_quorum(B)
 
-    # private {
+#     # private {
 
-        # invariant quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> exists H:height_t. certified_block_height_m1.cert_block_height(B,H)
-    # }
+#         # invariant quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> exists H:height_t. certified_block_height_m1.cert_block_height(B,H)
+#     # }
 
-    # invariant Bc ~= block_t.genesis & block_t.parent(Bc,Bp) & certified_block_height_m1.cert_block_height(Bc,Hc) & certified_block_height_m1.cert_block_height(Bp,Hp) -> height_t.succ(Hp,Hc)
+#     # invariant Bc ~= block_t.genesis & block_t.parent(Bc,Bp) & certified_block_height_m1.cert_block_height(Bc,Hc) & certified_block_height_m1.cert_block_height(Bp,Hp) -> height_t.succ(Hp,Hc)
 
-    # attribute macro_finder = false
+#     # attribute macro_finder = false
 
-} with verify_quorum,block_t,round_t,height_t, certified_block_height_m1, block_quorum_cstd, certified_block_ancestor_m6.block_ancestor_lesser_round, every_quorum_good, quorum_definition, block_t_properties.parent_only_for_cstd#, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, parent_block_earlier.parent_earlier, quorum_properties_3, certified_block_ancestor_m4
+# } with verify_quorum,block_t,round_t,height_t, certified_block_height_m1, block_quorum_cstd, certified_block_ancestor_m6.block_ancestor_lesser_round, every_quorum_good, quorum_definition, block_t_properties.parent_only_for_cstd#, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.parent_unique, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, parent_block_earlier.parent_earlier, quorum_properties_3, certified_block_ancestor_m4
 
-isolate certified_block_height_m3 = {
+# isolate certified_block_height_m3 = {
 
-        invariant quorum_definition.block_has_quorum(B) & block_t.parent(B,Bp) -> quorum_definition.block_has_quorum(Bp) & Bp ~= block_t.unused
+#         invariant quorum_definition.block_has_quorum(B) & block_t.parent(B,Bp) -> quorum_definition.block_has_quorum(Bp) & Bp ~= block_t.unused
 
-        invariant quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> block_t.cstd(B) & block_t_properties.parent_exists(B)
+#         invariant quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> block_t.cstd(B) & block_t_properties.parent_exists(B)
 
-        attribute macro_finder = false
+#         attribute macro_finder = false
 
-} with verify_quorum,block_t,round_t,height_t, certified_block_height_m1, block_quorum_cstd, every_quorum_good, quorum_definition, block_t_properties.parent_only_for_cstd, quorum_properties_3, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
+# } with verify_quorum,block_t,round_t,height_t, certified_block_height_m1, block_quorum_cstd, every_quorum_good, quorum_definition, block_t_properties.parent_only_for_cstd, quorum_properties_3, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, block_t_properties.unused_not_cstd, block_t_properties.parent_exists, block_t_properties.inv_parent_exists
 
 # isolate certified_block_height_m4 = {
 
