@@ -27,12 +27,6 @@ ivy_check trace=true complete=fo isolate=certified_block_ancestor_m5 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=certified_block_ancestor_m6 safety.ivy
 date
-ivy_check trace=true complete=fo isolate=certified_block_height_m1 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=certified_block_height_m2 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=certified_block_height_m3 safety.ivy
-date
 ivy_check trace=true complete=fo isolate=commit_to_chain safety.ivy
 date
 ivy_check trace=true complete=fo isolate=commit_to_chain_m1 safety.ivy
@@ -188,8 +182,6 @@ date
 ivy_check trace=true complete=fo isolate=round_safety_n4 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety_n5 safety.ivy
-date
-ivy_check trace=true complete=fo isolate=round_safety_n6 safety.ivy
 date
 ivy_check trace=true complete=fo isolate=round_safety_n7 safety.ivy
 date

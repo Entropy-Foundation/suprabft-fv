@@ -213,7 +213,7 @@ isolate round_safety_m2 = {
     invariant [prepare_f_tc_for_prev_round] processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) & tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R_b)
 
     invariant verify_quorum.processor_sent_prepare_f(N,B) & is_good(N) -> exists TC:tc_t. processor_sent_prepare_f_tc(N,B,TC)
-    
+
     invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & round_t.succ(R_tc,Rf) & qc_t.quorum(QCf,Q) & quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,Bf)
 
 } with block_t, round_t, verify_quorum, block_t_properties.block_t_inv_round_unique
@@ -231,21 +231,38 @@ isolate round_safety_m3 = {
 
 } with block_t, round_t, verify_quorum, round_safety_m2, tc_r_no_po_rs_quorum#, quorum_intersection_axiom
 
+isolate q_f_q_n_m1 = {
+
+    invariant quorum_definition.block_has_quorum_f(Bf) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_f(N,Bf) & verify_quorum.processor_sent_prepare_n(N,Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition.block_has_quorum_f, quorum_definition.block_has_quorum_n, block_t_properties.genesis_cstd
+
 isolate q_f_q_n = {
 
     invariant quorum_definition.block_has_quorum_f(Bf) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn -> Bf = Bn
 
-    # attribute macro_finder=false
+    attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition, block_t_properties.genesis_cstd, quorum_definition#, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+} with block_t, round_t, verify_quorum, q_f_q_n_m1, round_safety_m1.prepare_f_prepare_n, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition, block_t_properties.genesis_cstd#, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+
+isolate q_o_q_n_m1 = {
+
+    invariant quorum_definition.block_has_quorum_o(Bo) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,Bo) & verify_quorum.processor_sent_prepare_n(N,Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn
+
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, quorum_definition.block_has_quorum_o, quorum_definition.block_has_quorum_n
 
 isolate q_o_q_n = {
 
     invariant quorum_definition.block_has_quorum_o(Bo) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> Bo = Bn
 
-    # attribute macro_finder=false
+    attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, qc_o_qc_n_m1.honest_vote, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, quorum_definition
+} with block_t, round_t, verify_quorum, q_o_q_n_m1, qc_o_qc_n_m1.honest_vote, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, quorum_definition
+
+isolate q_ff_m1 = {  
+
+       invariant quorum_definition.block_has_quorum_f(B1) & quorum_definition.block_has_quorum_f(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_f(N,B1) & verify_quorum.processor_sent_prepare_f(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
+
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, block_t_properties.genesis_cstd, quorum_definition.block_has_quorum_f#, block_t_properties.round_only_for_cstd
 
 isolate q_ff = {
 
@@ -253,23 +270,39 @@ isolate q_ff = {
 
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_f_prepare_f, block_t_properties.genesis_cstd, quorum_definition, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis#, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+} with block_t, round_t, verify_quorum, q_ff_m1, round_safety_m1.prepare_f_prepare_f, block_t_properties.genesis_cstd, quorum_definition, block_t_properties.round_only_for_cstd#, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+
+isolate q_nn_m1 = {  
+
+    invariant quorum_definition.block_has_quorum_n(B1) & quorum_definition.block_has_quorum_n(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
+
+    # attribute macro_finder=false
+
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, block_t_properties.genesis_cstd, quorum_definition.block_has_quorum_n,block_t_properties.round_only_for_cstd, block_t_properties.block_t_inv_round_unique
 
 isolate q_nn = {
 
     invariant quorum_definition.block_has_quorum_n(B1) & quorum_definition.block_has_quorum_n(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
+    attribute macro_finder=false
+
+} with block_t, round_t, verify_quorum, q_nn_m1, round_safety_m1.prepare_n_prepare_n, block_t_properties.genesis_cstd, quorum_definition, block_t_properties.round_only_for_cstd#, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+
+isolate q_oo_m1 = {
+
+    invariant quorum_definition.block_has_quorum_o(B1) & quorum_definition.block_has_quorum_o(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
+
     # attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, round_safety_m1.prepare_n_prepare_n, block_t_properties.genesis_cstd, quorum_definition, block_t_properties.round_only_for_cstd#, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.genesis_parent, block_t_properties.parent_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique
+} with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks, quorum_definition.block_has_quorum_o
 
 isolate q_oo = {
 
     invariant quorum_definition.block_has_quorum_o(B1) & quorum_definition.block_has_quorum_o(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
-    # attribute macro_finder=false
+    attribute macro_finder=false
 
-} with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks, round_safety_m1.prepare_o_prepare_o, quorum_definition
+} with block_t, round_t, verify_quorum, q_oo_m1, only_cstd_blocks, round_safety_m1.prepare_o_prepare_o, quorum_definition.block_has_quorum_o
 
 isolate tc_q_o_intersection = {
 
@@ -328,31 +361,21 @@ isolate round_safety_n4 = {
 
 isolate round_safety_n5 = {
 
-    invariant quorum_definition.block_has_quorum_f(Bf) -> block_t.cstd(Bf)
+    # invariant quorum_definition.block_has_quorum_f(Bf) -> exists N:process_index_t. verify_quorum.processor_sent_prepare_f(N, Bf)
+
+    # invariant quorum_definition.block_has_quorum_f(Bf) -> block_t.cstd(Bf)
 
     invariant quorum_definition.block_has_quorum_f(Bf) & block_t.round(Bf,Rf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)
 
     attribute macro_finder = false
 
-} with block_t, round_t, verify_quorum, round_safety_m3, round_safety_n3, round_safety_m2, round_safety_n4, every_quorum_good, quorum_definition, only_cstd_blocks.prepare_f_cstd
+} with block_t, round_t, verify_quorum, round_safety_m3.tc_in_prev_round, round_safety_n3, round_safety_m2, round_safety_n4, every_quorum_good, quorum_definition, only_cstd_blocks.prepare_f_cstd
 
 isolate quorum_f = {
 
     invariant quorum_definition.block_has_quorum_f(Bf) -> exists Q:quorum_t. quorum_definition_expl.block_quorum_f(Bf,Q)
 
 } with block_t, round_t, verify_quorum, quorum_definition,quorum_definition_expl
-
-isolate round_safety_n6 = {
-
-    invariant [tc_for_prev_round] quorum_definition.block_has_quorum_f(Bf) & block_t.round(Bf,Rf) -> exists TC:tc_t. round_safety_m3.tc_in_prev_round(TC,Rf)
-
-    # invariant quorum_definition.block_has_quorum_f(Bf) & block_t.round(Bf,Rf) & block_t.round(Bo,Rf) -> ~ quorum_definition.block_has_quorum_o(Bo)
-
-    attribute macro_finder = false
-
-} with block_t, round_t, verify_quorum, round_safety_n5, round_safety_m2, every_quorum_good, round_safety_n3.tc_r_no_qc_o_rs, block_t_properties.round_only_for_cstd, round_safety_m3, quorum_definition#, quorum_definition_expl, quorum_f, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_round_0, block_t_properties.unused_not_cstd, block_t_properties.parent_self_genesis, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.inv_parent_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.genesis_cstd
-
-
 
 isolate round_safety_n7 = {
 
@@ -578,7 +601,7 @@ isolate quorum_after_ldc = {
     
     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
-} with block_t, round_t, verify_quorum, quorum_after_ldc_m2, block_t_conv.successive_blocks, only_cstd_blocks.certified_block_cstd, basic_validities, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.inv_parent_exists, block_t_properties.parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd#, block_t_properties.genesis_parent, block_t_properties.genesis_round_0
+} with block_t, round_t, verify_quorum, quorum_after_ldc_m2, block_t_conv.successive_blocks, only_cstd_blocks.certified_block_cstd, basic_validities, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.inv_parent_exists, block_t_properties.parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.unused_not_cstd#, block_t_properties.genesis_parent, block_t_properties.genesis_round_0
 
 isolate certified_block_ancestor_m1 = {
 
