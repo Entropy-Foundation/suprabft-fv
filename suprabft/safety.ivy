@@ -1,5 +1,7 @@
 #lang ivy1.8
 
+# The full safety property is stated and proved in the isolate full_safety, the last isolate in this file. Run the command ivy_check trace=true complete=fo safety.ivy to verify.
+
 include types
 include quorum_verification
 include moonshot
