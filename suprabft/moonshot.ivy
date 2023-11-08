@@ -1,10 +1,18 @@
 #lang ivy1.8
 
+# This is the IVy model for the moonshot blockchain-based state machine replication. It follows the specifications in the paper "Moonshot: Optimistic Proposal for Blockchain-based State Machine Replication", v1.0 - Tuesday 10th October 2023, henceforth referred to as "the paper"
+
+# the types of elements used in the model are all defined in the file types.ivy. It also contains basic properties of the types
 include types
 include network
 
+# collection of processors participating in the protocol
 module processors = {
+
+# each processor is parameterized by its index id
 object processor(id:process_index_t) = {
+    # The local variables maintained by processors, as defined in Table II of the paper
+
     # The highest round for which this process has accepted a Fallback Recovery Proposal by broadcasting a PF message.
     individual a_f: round_t
 
@@ -14,22 +22,22 @@ object processor(id:process_index_t) = {
     # The highest round for which this process has accepted an Optimistic Proposal by broadcasting a PO message.
     individual a_o: round_t
 
-    # The block most recently appended to Bv, the block chain of this validator
+    # The block most recently appended to Bv, the block chain of this validator. This is not listed in the paper, but needed here to reason about committed blocks
     individual b_h: block_t
 
-    # A representation of all blocks that are committed by this process
+    # A representation of all blocks that are committed by this process. The notation used in the paper is \mathbf(B_v)
     relation b_v(B:block_t)
 
-    # The block for which this process last broadcasted a PO message. In the specs, what is actually stored is the digest d_o of b_o, but we store b_o here to reduce complexity
+    # The block for which this process last broadcasted a PO message. In the paper, what is actually stored is the digest d_o of b_o, but we store b_o here to reduce complexity. This way, we avoid having to deal with the digest function and its properties
     individual b_o: block_t
 
-    # A set containing the identifiers of all rounds that this process considers to have expired due to having sent the corresponding Timeout message.
+    # A set containing the identifiers of all rounds that this process considers to have expired due to having sent the corresponding Timeout message. In the paper, the notation used is E.
     relation expired_rounds(R:round_t)
 
     # The currently locked QC
     individual qc_l: qc_t
 
-    # the set of qc's that have been processed
+    # The set of qc's that have been processed. This is an extra relation introduced here in the IVy model, to help with reasoning.
     relation processed_qc(B:block_t)
 
     # The current round
@@ -38,13 +46,13 @@ object processor(id:process_index_t) = {
     # The highest round for which this process has broadcasted a Timeout message
     individual t_l: round_t
 
-    # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean, which will be true whenever the timer expires beyond the set limit
+    # The timer used to trigger Timeout events. In the actual implementation, this will be an actual timer; here we use a boolean, which will be true whenever the timer goes beyond the set limit
     individual t_r: bool
 
     # This is to let the leader of round 1 send an optimistic proposal exactly once
     individual sent_np_r1: bool
 
-    # this is to implement the semantics of "upon first possessing a O(B)" in line 37 of algorithm 2.
+    # this is to implement the semantics of "upon first possessing a O(B)" in line 37 of algorithm 2 in the paper.
     relation possessed_optimistic_for_round(R:round_t)
 
     # this is to implement the semantics of "upon first possessing a N(B,QC)" in line 49 of algorithm 2.
@@ -59,73 +67,124 @@ object processor(id:process_index_t) = {
     # this is to implement the semantics of "upon first possessing a F(B,TC)" in line 89 of algorithm 3.
     relation possessed_fallback_for_round(R:round_t)
 
+    # The following relations are added in addition to those in the paper, to help with reasoning within the IVy model
+
+    # received a normal proposal for block B from processor Src
     relation received_proposal_n(B:block_t, Src:process_index_t)
+
+    # received a fallback proposal for block B from processor Src
     relation received_proposal_f(B:block_t, Src:process_index_t)
+
+    # received an optimistic proposal for block B from processor Src
     relation received_proposal_o(B:block_t, Src:process_index_t)
+
+    # received a prepare message for normal block B from processor Src
     relation received_prepare_n(B:block_t, Src:process_index_t)
+
+    # received a prepare message for fallback block B from processor Src
     relation received_prepare_f(B:block_t, Src:process_index_t)
+
+    # received a prepare message for optimistic block B from processor Src
     relation received_prepare_o(B:block_t, Src:process_index_t)
+
+    # received the quorum certificate QC
     relation received_qc(QC:qc_t)
+
+    # received a timeout message for round R with quorum certificate QC from the processor Src
     relation received_timeout(R:round_t, QC:qc_t, Src:process_index_t)
+
+    # received a timeout certificate TC
     relation received_tc(TC:tc_t)
+
+    # received a set of f + 1 timeout messages. We do not use arithmetic in this IVy model, so the number f + 1 is not explicitly used here. Instead, we capture the property important for such a set of timeout messages, viz. that is contains a timeout message from at least one honest process. This is captured in the axiom every_quorum_fplusone_good defined in types.ivy
     relation received_tc_fplusone(TC:tc_fplusone_t)
 
+    # This relation identifies the block Bp as local direct-commit, as given in Definition 6 of the paper. Bp has to have a QC, a child Bc for the following round and QC for Bc
     relation ldc_pair(Bp:block_t, Bc:block_t)
     definition ldc_pair(Bp, Bc) = Bc ~= block_t.genesis & block_t.parent(Bc,Bp) & block_t_conv.successive_blocks(Bp,Bc) & processed_qc(Bp) & processed_qc(Bc)
 
+    # This is the same relation as above, except that the child block Bc has been quantified away
     relation ldc(B:block_t)
     definition ldc(B) = exists Bc:block_t. ldc_pair(B,Bc)
 
-    # relation eligible_to_commit(Bp:block_t)
-    # definition eligible_to_commit(Bp) = ldc(Bp) & block_t.ancestor(Bp,b_h) & (forall Ba:block_t. block_t.ancestor(Bp,Ba) -> (processed_qc(Ba) | Ba = b_h | block_t.ancestor(b_h,Ba)))
-
-    # relation commit_candidate(Bp:block_t)
-    # definition commit_candidate(Bp) = eligible_to_commit(Bp) & (forall B:block_t. forall Rp,R:round_t. eligible_to_commit(B) & block_t.round(B,R) & block_t.round(Bp,Rp) -> R <= Rp)
-
+    # Here the local variables are initialized as defined in Table II of the paper
     after init {
         a_f := 0;
         a_n := 0;
         a_o := 0;
 
+        # Initially, the genesis block is the latest (and only) block committed by this processor
         b_h := block_t.genesis;
 
+        # Initially, genesis is the only block committed by this processor
         b_v(B) := B = block_t.genesis;
 
+        # Initially, this processor has not sent any prepare message for any optimistically proposed block. This is explicitly set to an "unused" block, as against the specs in the paper (which specifies it as the digest of the genesis block), to avoid breaking an invariant: later. E.g., in the invariant quorum_no_parent, it is used to state that any block B other than "unused" has a parent whose round is no less than B.r - 1. The invariant would still be true if the initial value of b_o is the genesis block instead of "unused", but this would require the fact that round 0 has no predecessor, which makes it harder for IVy to process. This is a shortcut to speed up IVy
         b_o := block_t.unused;
 
+        # Initially, the set of expired rounds is empty
         expired_rounds(R) := false;
+
+        # Initially, the currently locked QC is the genesis QC, the quorum certificate for the genesis block
         qc_l := qc_t.genesis;
+
+        # Initially, it is assumed that the processor has processed the QC for the genesis block
         processed_qc(B) := B = block_t.genesis;
 
+        # Initially, the current round is 1, the successor of 0
         r_c := *;
         assume round_t.succ(0, r_c);
 
+        # t_l is the latest round for which the process has multicasted a timeout message. Initially 0.
         t_l := 0;
 
+        # Initially, the timer has not expired
         t_r := false;
 
+        # Initially, the processor has posessed a normal block for round 0
         possessed_normal_for_round(R) := R = 0;
 
+        # Initially, the normal proposal for round 1 is not yet sent
         sent_np_r1 := false;
 
-        # these relations keep track of messages received through the network
+        # Initially, the processor has received a normal proposal for only the genesis block
         received_proposal_n(B, Src) := B = block_t.genesis & Src = leader(0);
+
+        # Initially, the processor has not received any fallback proposals
         received_proposal_f(B, Src) := false;
+
+        # Initially, the processor has not received any optimistic proposals
         received_proposal_o(B, Src) := false;
+
+        # Initially, the processor has received a prepare normal message for the only the genesis block
         received_prepare_n(B, Src) := B = block_t.genesis;
+
+        # Initially, the processor has not received any prepare fallback message
         received_prepare_f(B, Src) := false;
+
+        # Initially, the processor has not received any prepare optimistic message
         received_prepare_o(B, Src) := false;
+
+        # Initially, the processor has received QC for only the genesis block
         received_qc(QC) := QC = qc_t.genesis;
+
+        # Initially, the processor has not received any timeout message
         received_timeout(R, QC, Src) := false;
+
+        # Initially, the processor has not received any timeout certificate
         received_tc(TC) := false;
+
+        # Initially, the processor has not received any timeout sync certificate (that consists of f+1 timeout messages)
         received_tc_fplusone(TC) := false;
     }
 
+    # received a normal proposal message through the network. Record its reception in received_proposal_n. Also record the reception of the accompanying quorum certificate in received_qc
     implement shim.proposal_n_handler.handle(m:msg) {
             received_proposal_n(m.block, m.src) := true;
             received_qc(m.qc) := true;
     }
 
+    # received a fall back proposal message through the network. Record its recrption in received_proposal_f. Also record the reception of the accompanying timeout certificate in received_tc. Also record the reception of quorum certificates inside the timeout certificate in received_qc
     implement shim.proposal_f_handler.handle(m:msg) {
             received_proposal_f(m.block, m.src) := true;
             received_tc(m.tc) := true;
@@ -136,31 +195,38 @@ object processor(id:process_index_t) = {
             } 
     }
 
+    # received an optimistic proposal message through the network. Record its reception in received_proposal_o
     implement shim.proposal_o_handler.handle(m:msg) {
             received_proposal_o(m.block, m.src) := true;
     }
 
+    # received a prepare normal message through the network. Record its reception in received_prepare_n
     implement shim.prepare_n_handler.handle(m:msg) {
             received_prepare_n(m.block, m.src) := true;
     }
 
+    # received a prepare fallback message through the network. Record its reception in received_prepare_f
     implement shim.prepare_f_handler.handle(m:msg) {
             received_prepare_f(m.block, m.src) := true;
     }
 
+    # received a prepare optimistic message through the network. Record its reception in received_prepare_o
     implement shim.prepare_o_handler.handle(m:msg) {
             received_prepare_o(m.block, m.src) := true;
     }
 
-    implement shim.qc_handler.handle(m:msg) {
+    # received a quorum certificate through the network. Record its reception in received_qc
+    mplement shim.qc_handler.handle(m:msg) {
             received_qc(m.qc) := true;
     }
 
+    # received a timeout message through the network. Record its reception in received_timeout. Also record the reception of the accompanying quorum certificate in received_qc
     implement shim.timeout_handler.handle(m:msg) {
             received_timeout(m.round, m.qc, m.src) := true;
             received_qc(m.qc) := true;
     }
 
+    # received a timeout certificate through the network. Record its reception in received_timeout. Also record the reception of the accompanying quorum certificates in received_qc
     implement shim.tc_handler.handle(m:msg) {
         received_tc(m.tc) := true;
         if some n:process_index_t. n=n {
@@ -171,6 +237,7 @@ object processor(id:process_index_t) = {
                 
     }
 
+    # received a set of f+1 timeout messages (tc_fplusone_t) through the network. Record its reception in received_tc_fplusone. Also record the reception of the accompanying quorum certificates in received_qc
     implement shim.tc_fplusone_handler.handle(m:msg) {
         received_tc_fplusone(m.tc_po) := true;
         if some n:process_index_t. n=n {
@@ -181,46 +248,57 @@ object processor(id:process_index_t) = {
     }
 
 
+    # This is the procedure given in line 27 of Algorithm 2 of the paper, executed upon receiving a quorum certificate. For reasoning about safety, we only have this procedure that takes a quorum certificate as parameter. For liveness, we would have to augment this to work also when this processor receives a quorum of prepare messages directly.
     action qc_processing(qc:qc_t) = {
         require received_qc(qc);
         require forall B:block_t. qc_t.block(qc,B) -> ~ processed_qc(B); # this is to reflect the semantics of "upon first observing qc" in line 27 of algorithm 2. This action should not be invoked more than once for the same block
 
+        # b_qc is a variable used to store the block that is certified by the input parameter qc
         var b_qc : block_t;
         if some b:block_t. qc_t.block(qc,b) {
             b_qc := b;
         }
+
+        # the variable r stores the round next to the round of b_qc
         var r : round_t;
         if some r_b:round_t. block_t.round(b_qc,r_b) {
             r := round_t.next(r_b);
         }
+
+        # record the qc has been processed for b_qc
         processed_qc(b_qc) := true;
 
+        # line 30 of algorithm 2: if r_c < b_qc.r +1, then invoke proposeNormal
         if (forall R, Rs1:round_t. block_t.round(b_qc,R) & round_t.succ(Rs1,r_c) -> Rs1 < R) {
 
             ### procedure calls in the pseudocode are inlined here to speed up IVy verification
             ### proposeNormal ###
 
+            # line 3 of algorithm 1: leader of the round next to b_qc.r broadcasts a normal proposal for that round
             if leader(r) = id {
-                    var b := block_t.block(r,b_qc);
-                    var m : msg;
-                    m.kind := msg_kind.proposal_n;
-                    m.block := b;
-                    m.src := id;
-                    m.qc := qc;
-                    call shim.broadcast(id, m);
-                }
+                var b := block_t.block(r,b_qc);
+                var m : msg;
+                m.kind := msg_kind.proposal_n;
+                m.block := b;
+                m.src := id;
+                m.qc := qc;
+                call shim.broadcast(id, m);
+            }
         }
 
+        # Line 32 of Algorithm 2 - update the locked qc to the currently received qc, if its round is greater than the locked qc.
         if forall B_l:block_t. forall R_l,R_qc:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) & block_t.round(b_qc,R_qc) -> R_l < R_qc {
             qc_l := qc;
         }
 
+        # commit requires checking that this processor has received qc's for all ancestors. Ancestors are only defined for those blocks that have quorums, which cannot be verified by a processor locally inthe absence of cryptographic integrity checks. We don't implement the crypotographic integrity  checks; instead, we directly check that all honest members of a quorum have actually sent the concerned messages. This is done in quorum_verification.ivy and the actual commit is done in safety.ivy isolate commit_to_chain_m1
         ######### tryCommit ##########
         # if some bp:block_t. commit_candidate(bp) {
         #     b_v(B) := b_v(B) | B = bp | (block_t.ancestor(bp,B) & block_t.ancestor(B,b_h));
         #     b_h := bp;
         # }
 
+        # Line 35 of Algorithm 2 - multicast the received qc
         ######### multicastQC #########
         var m : msg;
         m.kind := msg_kind.qc;
@@ -228,6 +306,7 @@ object processor(id:process_index_t) = {
         m.src := id;
         call shim.broadcast(id, m);
 
+        # Line 13 of Algorithm 1: advance to the round next to the round of b_qc, if we are currently in an earlier round
         ######### advanceToRound #############
         if r_c < r {
             r_c := r;
@@ -235,9 +314,11 @@ object processor(id:process_index_t) = {
         }
     }
 
+    # This function encodes the conditions lines 38-43 of Algorithm 2, for processing an optimistic proposal
     function send_prepare_o_condition(B_pr:block_t): bool
     definition send_prepare_o_condition(B_pr) = block_t.round(B_pr,r_c) & a_f < r_c & a_n < r_c & (forall B_l:block_t. forall R_l:round_t. qc_t.block(qc_l,B_l) & block_t.round(B_l,R_l) -> block_t.parent(B_pr,B_l) & round_t.succ(R_l, r_c)) & (forall R_s:round_t. round_t.succ(R_s,r_c) -> t_l < R_s)
 
+    # The procedure given in line 37 of Algorithm 2, upon pocessing an optimistic proposal
     action optimistic_proposal_processing(b_pr:block_t) = {
         require received_proposal_o(b_pr,leader(r_c));
 
@@ -245,15 +326,20 @@ object processor(id:process_index_t) = {
 
         require block_t.cstd(b_pr);
 
+        # require that the timer has not yet expired for this round
         require ~ t_r;
 
         require ~ possessed_optimistic_for_round(r_c);
 
         possessed_optimistic_for_round(r_c) := true;
 
+        # Line 45 of ALgorithm 2: propose optimistic.
         ###### proposeOptimistic ############
+        # Line 7,8 of Algorithm 1
         var rs := round_t.next(r_c);
         if leader(rs) = id & b_o ~= b_pr {
+
+            # Line 10,11 of ALgorithm 1
             var b := block_t.block(rs,b_pr);
             var m : msg;
             m.kind := msg_kind.proposal_o;
@@ -263,8 +349,10 @@ object processor(id:process_index_t) = {
             call shim.broadcast(id, m);
         }
 
+        # This condition verified by IVy states that parent of b_pr (the currently proposed block) is locked (i.e., in qc_l) by this processor
         ensure qc_t.block(qc_l,Bl) & block_t.round(Bl,Rl) -> block_t.parent(b_pr,Bl) & Rl < r_c & processed_qc(Bl);
 
+        # Line 46 of ALgorithm 2: broadcast prepare optimistic message
         var m : msg;
         m.kind := msg_kind.prepare_o;
         m.block := b_pr;
@@ -272,35 +360,49 @@ object processor(id:process_index_t) = {
 
         call shim.broadcast(id, m);
 
+        # Line 47, 48 of Algorithm 2
         a_o := r_c;
         b_o := b_pr;
     }
 
+    # This function encodes the conditions in line 50-56 of Algorithm 2, for processing a normal proposal
     function send_prepare_n_condition(B_pr:block_t, QC:qc_t) : bool
     definition send_prepare_n_condition(B_pr, QC) = block_t.round(B_pr,r_c) & a_f < r_c & t_l < r_c & (a_o < r_c  | b_o = B_pr) & (forall B:block_t. forall R:round_t. qc_t.block(QC,B) & block_t.round(B,R) -> block_t.parent(B_pr,B) & round_t.succ(R, r_c))
 
+    # The procedure in Line 49 of Algorithm 2, executed upon receiving a normal proposal
     action normal_proposal_processing(b_pr:block_t, qc:qc_t) = {
 
         require received_proposal_n(b_pr, leader(r_c));
         require received_qc(qc);
         require block_t.cstd(b_pr);
+
+        # Require that the timer has not yet expired for this round
         require ~ t_r;
         require ~ possessed_normal_for_round(r_c);
+
+        #require that the parent of the proposed block b_pr is certified by the accompanying QC qc
         require forall B:block_t. qc_t.block(qc,B) -> block_t.parent(b_pr,B);
         
         possessed_normal_for_round(r_c) := true;
 
+        # If the accompanying qc is not yet processed yet, do that first
         if some b:block_t. qc_t.block(qc,b) & ~ processed_qc(b) {
             call qc_processing(qc);
         }
 
+        # After processing the accompanying the qc, require that the conditions in lines 50-56 of Algorithm are met
         require send_prepare_n_condition(b_pr,qc);
 
+        # This condition verified by IVy ensures that the parent of the prposed block b_pr is for a strictly lesser round
         ensure block_t.parent(b_pr,Bp) & block_t.round(Bp,Rp) -> Rp < r_c;
 
+        Line 58: propose optimistic
         ###### proposeOptimistic ############
+        # Line 7,8 of Algorithm 1
         var rs := round_t.next(r_c);
         if leader(rs) = id & b_o ~= b_pr{
+
+            #Lines 10-11 of Alorithm 1
             var b := block_t.block(rs,b_pr);
             var m : msg;
             m.kind := msg_kind.proposal_o;
@@ -311,6 +413,8 @@ object processor(id:process_index_t) = {
         }
 
         if send_prepare_n_condition(b_pr,qc) {
+
+            # Line 59 of Algorithm 2: broadcast prepare normal message
             var m : msg;
             m.kind := msg_kind.prepare_n;
             m.block := b_pr;
@@ -318,6 +422,7 @@ object processor(id:process_index_t) = {
 
             call shim.broadcast(id, m);
 
+            # Line 60 of Algorithm 2: a_n is updated to the current round
             a_n := r_c;
         }
     }
@@ -337,13 +442,18 @@ object processor(id:process_index_t) = {
         call shim.broadcast(id, m);
     }
 
+    # Line 68 of Algorithm 3
     relation timeout_condition(R:round_t)
     definition timeout_condition(R) = ~ expired_rounds(R) & r_c <= R
 
+    # This is the procedure in line 73 of Algorithm 3, invoked if the timer for the current round expires. In this Ivy model, we don't explicitly keep track of time. For safety, this procedure can be invoked arbitrarily at any time and it is verified the safety is not violated in any case. For liveness, some fairness conditions have to be imposed on when this action is executed
     action timer_expire = {
+
+        # Indicate that the timer has expired for this round
         t_r := true;
 
         if timeout_condition(r_c) {
+            # line 69 of Algorithn 3: multicast timeout message
             var m : msg;
             m.kind := msg_kind.timeout;
             m.round := r_c;
@@ -351,13 +461,18 @@ object processor(id:process_index_t) = {
             m.src := id;
 
             call shim.broadcast(id, m);
+
+            # Line 70 of Algorithm 3: current round is expired
             expired_rounds(r_c) := true;
+
+            # Line 71, 72 of Algorithm 3: t_l is the latest round that has expired
             if (t_l < r_c) {
                 t_l := r_c;
             }
         }
     }
 
+    # This is the procedure in line 76 of Algorithm 3, executed when the processor receives a set of f+1 timeout messages
     action timeout_sync(tc:tc_fplusone_t) = {
         require received_tc_fplusone(tc);
 
@@ -369,6 +484,7 @@ object processor(id:process_index_t) = {
         require forall N:process_index_t. forall QC:qc_t. forall B:block_t. tc_fplusone_t.to_messages(tc,N, QC) & qc_t.block(QC,B) -> processed_qc(B);
         if forall R:round_t. tc_fplusone_t.round(tc,R) -> timeout_condition(R) {
             if some tc_r:round_t. tc_fplusone_t.round(tc,tc_r) {
+                # line 69 of Algorithn 3: multicast timeout message
                 var m : msg;
                 m.kind := msg_kind.timeout;
                 m.round := tc_r;
@@ -376,7 +492,9 @@ object processor(id:process_index_t) = {
                 m.src := id;
 
                 call shim.broadcast(id, m);
+                # Line 70 of Algorithm 3: current round is expired
                 expired_rounds(tc_r) := true;
+                # Line 71, 72 of Algorithm 3: t_l is the latest round that has expired
                 if (t_l < tc_r) {
                     t_l := tc_r;
                 }
@@ -384,20 +502,28 @@ object processor(id:process_index_t) = {
         }
     }
 
+    # This is the procedure in line 80 of Algorithm 3, executed when the processor receives a timeout certificate
     action tc_processing(tc:tc_t) = {
         require forall R:round_t. tc_t.round(tc,R) -> ~ observed_tc_for_round(R);
         require forall N:process_index_t. forall QC:qc_t. forall B:block_t. tc_t.to_messages(tc,N,QC) & qc_t.block(QC,B)-> processed_qc(B); # this is to ensure that all QC's included in tc are processed first
+
+        # the variable tc_round stores the round for which the timeout certificate tc has been received
         var tc_round : round_t;
         if some r:round_t. tc_t.round(tc, r) {
             tc_round := r;
         }
         observed_tc_for_round(tc_round) := true;
+
+        # the variable tc_round_s is the round next to tc_round
         var tc_round_s := round_t.next(tc_round);
+
+        # line 84,85 of Algorithm 3: if tc_round_s is greater than the current round r_c, propose a fallback block
         if (r_c < tc_round_s) {
             ##### proposeFallback #########
             if (id = leader(tc_round_s)) {
                 if some qcp:qc_t. tc_t.maxQC(tc,qcp) {
                     if some b_qcp:block_t. qc_t.block(qcp,b_qcp) {
+                        # line 64,65 of Algorithm 3: b_qcp is the block with the maximum round in all the QC's contained in tc. it will be the parent of the new block being proposed
                         var b := block_t.block(tc_round_s,b_qcp);
                         var m : msg;
                         m.kind := msg_kind.proposal_f;
@@ -405,12 +531,14 @@ object processor(id:process_index_t) = {
                         m.tc := tc;
                         m.src := id;
 
+                        # Line 66 of Algorithm 3: multicast the fallback proposal message
                         call shim.broadcast(id, m);
                     }
                 }
             }
         }
 
+        # Line 86 of ALgorithm 3: forward the tc to the leader of the next round
         ####### forward ############
         var m:msg;
         m.kind := msg_kind.tc;
@@ -418,6 +546,7 @@ object processor(id:process_index_t) = {
         m.tc := tc;
         shim.send(id,leader(tc_round_s),m);
 
+        #Line 87 of algorithm 3: timeout for tc_round
         ########### timeout ############
         if timeout_condition(tc_round) {
             var m : msg;
@@ -433,6 +562,7 @@ object processor(id:process_index_t) = {
             }
         }
 
+        # Line 88 of Algorithm 3: advance to the round next to tc's round
         ######### advanceToRound #############
         if r_c < tc_round_s {
             r_c := tc_round_s;
@@ -440,24 +570,30 @@ object processor(id:process_index_t) = {
         }
     }
 
+    # This function encodes the conditions in lines 90-96 of Algorithm 3, to be satisfied for processing fall back proposals
     function send_prepare_f_condition(B_pr:block_t, TC:tc_t): bool
     definition send_prepare_f_condition(B_pr, TC) = block_t.round(B_pr,r_c) & a_n < r_c & t_l < r_c & (forall QCp:qc_t. forall B_qcp:block_t. tc_t.maxQC(TC,QCp) & qc_t.block(QCp,B_qcp) -> block_t.parent(B_pr,B_qcp)) & (forall R_tc:round_t. tc_t.round(TC,R_tc) -> round_t.succ(R_tc,r_c))
 
+    # This is the procedure in line 89 of Algorithm 3, executed when the processor receives a fallback proposal
     action fallback_proposal_processing(b_pr:block_t, tc:tc_t) = {
 
         require received_proposal_f(b_pr, leader(r_c));
-        require forall N:process_index_t. forall QC:qc_t. forall B:block_t. tc_t.to_messages(tc,N,QC) & qc_t.block(QC,B)-> processed_qc(B);
+        require forall N:process_index_t. forall QC:qc_t. forall B:block_t. tc_t.to_messages(tc,N,QC) & qc_t.block(QC,B)-> processed_qc(B); # this is to ensure that all QC's contained in tc are already processed
         require send_prepare_f_condition(b_pr,tc);
         require block_t.cstd(b_pr);
+
+        # require that the current round has not expired
         require ~ t_r;
         require ~ possessed_fallback_for_round(r_c);
 
         possessed_fallback_for_round(r_c) := true;
 
+        # process the accompanying tc first
         if some r:round_t. tc_t.round(tc,r) & ~ observed_tc_for_round(r) {
             call tc_processing(tc);
         }
 
+        # Line 98 of Algorithm 3: send an optimistic proposal
         ###### proposeOptimistic ############
         var rs := round_t.next(r_c);
         if leader(rs) = id & b_o ~= b_pr {
@@ -470,6 +606,7 @@ object processor(id:process_index_t) = {
             call shim.broadcast(id, m);
         }
 
+        # this condition verified by IVy ensures that the parent of the proposed block is the one which has the maximum round in all the QCs contained in tc and the parent's round is strictly less than the current round
         ensure tc_t.maxQC(tc,QCp) & qc_t.block(QCp,B_qcp) & block_t.round(B_qcp,Rp) -> block_t.parent(b_pr,B_qcp) & processed_qc(B_qcp) & Rp < r_c;
         
         var m : msg;
@@ -477,10 +614,14 @@ object processor(id:process_index_t) = {
         m.block := b_pr;
         m.src := id;
 
+        # Line 99 of Algorithm 3: multicast a prepare fallback message
         call shim.broadcast(id, m);
+
+        # Line 100 of Algorithm 3: a_f is the latest round for which the processor has sent a prepare fallback message
         a_f := r_c;
     }
 
+    # This is to take into account actions of byzantine processes. They can send any message, provided it is being sent by a byzantine node and the source of the message as mentioned in the message is also a byzantine node (byzantine nodes cannot imitate digital signatures of honest nodes)
     action byzantine_send(m:msg) = {
         require ~ is_good(id);
         require ~ is_good(m.src);

@@ -34,6 +34,7 @@ isolate round_t_conv = {
 isolate block_t = {
     type this
 
+    # In IVy model, all artefacts that will be ever used are already present in the initial state; nothing can be "constructed" out of thin air if it doesn't already exist. New blocks also cannot be constructed if they don't exist before. To work around this, the following unary relation cstd (short for constructed) is used: a block that is not cstd cannot participate in any activity (it cannot be associated with any round; it cannot have any parent etc.). These are enforced in the invariants in the following isolate block_t_properties. To become active, a block has to be first cstd, which is only done in the action block, which takes the round and parent block as parameters. That is the action invoked by honest processes when they have to propose a new block
     relation cstd(B:block_t)
 
     relation round(B:block_t, R:round_t)
@@ -77,6 +78,7 @@ isolate block_t = {
     }
 
     action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
+        # Assume that the block b that is being newly constructed is not already cstd
         assume ~cstd(b);
         assume b ~= block_t.unused;
 
