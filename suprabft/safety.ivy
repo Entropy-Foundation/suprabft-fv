@@ -2,36 +2,49 @@
 
 # The full safety property is stated and proved in the isolate full_safety, the last isolate in this file. Run the command ivy_check trace=true complete=fo safety.ivy to verify.
 
+# The remaining isolates are supporting full_safety (they are required to prove full_safety) or "helping" other isolates (they help to speed up IVy checks)
+
 include types
 include quorum_verification
 include moonshot
 
+# only cstd blocks can participate in certaion relations
 isolate only_cstd_blocks = {
+    # genesis block is always cstd
     invariant [genesis_block_cstd] block_t.cstd(block_t.genesis)
     
+    # only cstd blocks or the "unused" block can have honest processes sending optimistic prepare messages
     invariant [prepare_o_cstd] verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) -> B = block_t.unused | block_t.cstd(B)
 
+    # only cstd blocks can be locked by honest processes
     invariant [locked_block_cstd] qc_t.block(verify_quorum.processor(N).qc_l,B_l) & is_good(N) -> block_t.cstd(B_l)
 
+    # only cstd blocks can have honest processes sending normal prepare messages
     invariant [prepare_n_cstd] verify_quorum.processor_sent_prepare_n(N,B) & is_good(N) -> block_t.cstd(B)
 
+    # only cstd blocks can have honest processes sending fallback prepare messages
     invariant [prepare_f_cstd] verify_quorum.processor_sent_prepare_f(N,B) & is_good(N) -> block_t.cstd(B)
 
+    # if a block B has a QC, then B is cstd
     invariant [certified_block_cstd] verify_quorum.qc_sanity_check(QC) & qc_t.block(QC,B) -> block_t.cstd(B)
 
+    # if an honest processor N has processed QC for a block B, then B is cstd
     invariant [processed_qc_cstd] is_good(N) & verify_quorum.processor(N).processed_qc(B) -> block_t.cstd(B)
 } with block_t, verify_quorum, qc_t, qc_t_properties
 
 isolate basic_validities = {
+    # any processor N can only have sanity checked and valid quorum quorum certificate stored in its local variable qc_l, its currently locked qc
     invariant [qc_l_valid] verify_quorum.qc_sanity_check(verify_quorum.processor(N).qc_l) & verify_quorum.qc_has_quorum(verify_quorum.processor(N).qc_l)
 } with verify_quorum, block_t, qc_t, qc_t_properties
 
 isolate locked_qc_processed = {
 
+    # if Bl is the block associated with the locked qc qc_l, then a qc must have been processed for Bl
     invariant [lock_qc_processed] is_good(N) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) -> verify_quorum.processor(N).processed_qc(Bl)
 
 }  with block_t, round_t, qc_t, qc_t_properties, verify_quorum
 
+# this isolate defines when a block has a quorum. qc_t does the same, but a qc comes into existence only after some processor observes it. Here, it is an abstract definition of when a 2/3rd majority have voted for a block, without any processor recognizing that so many votes have been sent
 isolate quorum_definition = {
 
     property verify_quorum.processor(N).send_prepare_f_condition(B,TC) | ~ verify_quorum.processor(N).send_prepare_f_condition(B,TC)
@@ -46,23 +59,29 @@ isolate quorum_definition = {
     relation block_has_quorum_n(B:block_t)
     relation block_has_quorum_f(B:block_t)
 
+    # there is a quorum Q, all of whose honest members have sent an optimistic prepare message for block B
     definition block_has_quorum_o(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_o(N,B)
 
+    # there is a quorum Q, all of whose honest members have sent a normal prepare message for block B
     definition block_has_quorum_n(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_n(N,B)
 
+    # there is a quorum Q, all of whose honest members have sent a fallback prepare message for block B
     definition block_has_quorum_f(B) = exists Q:quorum_t. forall N:process_index_t. quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,B)
 
     relation block_has_quorum(B:block_t)
     definition block_has_quorum(B) =  block_has_quorum_o(B) | block_has_quorum_n(B) | block_has_quorum_f(B)
 
+    # If QC is sanity checked, has a valid quorum and associated to block B, then B has a quorum according this isolate's definition
     property [qc_implies_quorum] verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) -> block_has_quorum(B)
 
 }  with block_t, round_t, verify_quorum, block_t_properties, quorum_f_after_ldc_m1.rc_gte_prepare, tc_r_no_po_rs_quorum_m1.rc_gt_locked_block, quorum_properties_1.processed_qc_quorum, only_cstd_blocks, basic_validities.qc_l_valid, locked_qc_processed
 
 isolate quorum_properties_1 = {
 
+    # if an honest processor N has processed qc for some block B, then B has a quorum
     invariant [processed_qc_quorum] is_good(N) & verify_quorum.processor(N).processed_qc(B) -> quorum_definition.block_has_quorum(B)
 
+    # if an honest processor N has sent a prepare message for a block B and B's parent is Bp, then N has processed qc for Bp
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.parent(B,Bp) -> verify_quorum.processor(N).processed_qc(Bp)
 
     attribute macro_finder = false
@@ -71,6 +90,7 @@ isolate quorum_properties_1 = {
 
 isolate quorum_properties_2 = {
 
+    # if an honest processor N has sent a prepare message for a block B and B's parent is Bp, then  Bp has a quorum
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.parent(B,Bp) -> quorum_definition.block_has_quorum(Bp)
 
     # attribute macro_finder = false
@@ -79,16 +99,19 @@ isolate quorum_properties_2 = {
 
 isolate quorum_properties_3 = {
 
+    # if block B has a quorum and B's parent is Bp, then Bp has a quorum
     invariant [quorum_propogation] quorum_definition.block_has_quorum(B) & block_t.parent(B,Bp) -> quorum_definition.block_has_quorum(Bp)
 } with block_t, round_t, verify_quorum, quorum_definition, quorum_properties_2
 
 
 isolate block_quorum_cstd = {
+    # any block B that has a quorum and not equal to the "unused" block is cstd
     invariant quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> block_t.cstd(B)
 
     # invariant quorum_definition.block_has_quorum(B) -> block_t.cstd(B)
 } with block_t, round_t, verify_quorum, every_quorum_good, only_cstd_blocks, quorum_definition, block_t_properties.unused_not_cstd
 
+# This is same as the isolate quorum_definition, except that the quorum Q is present explicitly instead of being existentially quantified. This is required to speed up checking of some invariants, as IVy gets stuck for a long time with some invariants if quorum is existentially quantified
 isolate quorum_definition_expl = {
 
     relation block_quorum_o(B:block_t, Q:quorum_t)
@@ -111,29 +134,38 @@ isolate quorum_definition_expl = {
 
 isolate tc_qc_o_intersection = {
 
+    # this is same as quorum intersection axiom, repeated here in a form that helps speed up checking the next invariant
     invariant forall Q_t,Q_q:quorum_t. exists N:process_index_t. quorum_t.member(Q_q,N) & quorum_t.member(Q_t,N) & is_good(N)
 
+    # Every TC and QC has an honest member in common who has sent a timeout message in TC as well as a prepare message in QC
     invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.quorum(TC,Q_t) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.quorum(QC,Q_q) -> exists N:process_index_t. quorum_t.member(Q_q,N) & quorum_t.member(Q_t,N) & is_good(N)
 
     # attribute macro_finder=false
 } with verify_quorum, block_t, quorum_intersection_axiom, every_quorum_good, only_cstd_blocks.prepare_o_cstd
 
+# this is a proof of lemma 2 in the paper: if TCr exists, then a quorum of PO(Br+1) messages cannot exist. It is broken up into two isolates to speed up IVy checking
 isolate tc_r_no_po_rs_quorum_m1 = {
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if an honest processor N has sent an optimistic prepare message for block B of round R, then N's locked block B_l has round R_l that is greater than or equal to R-1
     invariant verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) & qc_t.block(verify_quorum.processor(N).qc_l,B_l) & block_t.round(B_l,R_l) & round_t.succ(Rp,R) -> Rp <= R_l 
 
+    # if a processor N has locked block B_l or round R_l, then the current round r_c is strictly greater than R_l
     invariant [rc_gt_locked_block] qc_t.block(verify_quorum.processor(N).qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < verify_quorum.processor(N).r_c
 
+    # if an honest processor N is part of both TC and QC which has a quorum of optimistic prepare messages, then N has sent a timeout message in TC as well as an optimistic prepare message in QC. This is a simple consequence of the quorum intersection axiom, written explicitly to speed up IVy processing
     invariant [honest_sends_prepare_o_timeout] verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & tc_t.quorum(TC,Q_t) & quorum_t.member(Q_t,N) & is_good(N) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.block(QC,B) & qc_t.quorum(QC,Q_q) & quorum_t.member(Q_q,N) -> ((exists QC_to:qc_t. verify_quorum.processor_sent_timeout(N,R_tc,QC_to)) & verify_quorum.processor_sent_prepare_o(N,B))
 
+    # if a processor N has sent a timout message for round R_tc, then its local variable t_l is at least R_tc
     invariant [tl_greatest_to] verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & is_good(N) -> R_tc <= verify_quorum.processor(N).t_l
 
+    # if an honest processor N has sent a timeout message for round R_tc and an optimistic prepare message for a block B of round R, then R cannot be (R_tc+1)
     invariant [prepare_o_not_succ_timeout] verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 
     # attribute macro_finder=false
 } with block_t, verify_quorum, round_t, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.genesis_round_0, qc_t_properties, block_t_properties.block_t_inv_round_unique, basic_validities.qc_l_valid, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists
 
+# this states and proves lemma 2, with the previous isolate as "helping" isolate
 isolate tc_r_no_po_rs_quorum = {
 
     invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_o(QC) & qc_t.block(QC,B) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
@@ -142,28 +174,40 @@ isolate tc_r_no_po_rs_quorum = {
 
 } with block_t, verify_quorum, round_t, tc_r_no_po_rs_quorum_m1.honest_sends_prepare_o_timeout, tc_r_no_po_rs_quorum_m1.prepare_o_not_succ_timeout, tc_qc_o_intersection
 
+# this is a helper isolate to prove lemma 3: suppose QCi is constructed from PO(Bi) votes and QCj is constructed from PN(Bj) votes. If i=j, then Bi=Bj
 isolate qc_o_qc_n_m1 = {
+
+    # processor N has sent an optimistic prepare message for b_o
     invariant verify_quorum.processor_sent_prepare_o(N,verify_quorum.processor(N).b_o)
 
+    # if b_o is not the "unused" block, then its round is a_o
     invariant verify_quorum.processor(N).b_o ~= block_t.unused -> block_t.round(verify_quorum.processor(N).b_o,verify_quorum.processor(N).a_o)
 
+    # a_o or a_n cannot exceed the current round r_c
     invariant [ao_an_le_rc] verify_quorum.processor(N).a_o <= verify_quorum.processor(N).r_c & verify_quorum.processor(N).a_n <= verify_quorum.processor(N).r_c
 
+    # if an honest processor N has sent an optimistic prepare message for block B of round R, then it has already posessed optimistic proposal for round R ...
     invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_optimistic_for_round(R)
 
+    # ... and hence it cannot vote for any other optimistic proposal for the same round R. So if an honest processor N has sent optimistic prepare messages for blocks B1,B2 of the same round, then B1=B2
     invariant [optimistic_round_safety] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
+    # if an honest processor has sent an optimistic prepare message for a block B, then B is cstd or it is the "unused" block
     invariant verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) -> (B = block_t.unused | block_t.cstd(B))
 
+    # if an honest processor has sent an optimistic prepare message for a block B of round R, then R is less than or equal to a_o
     invariant forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_o
 
+    # if an honest processor has sent a normal prepare message for a block B of round R, then R is less than or equal to a_n
     invariant [an_highest] forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_n
 
+    # if an honest processor has sent a normal prepare message for B2 and an optimistic prepare message for B1 and B1,B2 share the same round, then B1=B2
     invariant [honest_vote] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     # attribute macro_finder=false
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.round_only_for_cstd, block_t_properties.block_t_inv_round_unique, only_cstd_blocks.prepare_n_cstd
 
+# this states and proves lemma 3, with the previous isolate as a "helping" lemma
 isolate qc_o_qc_n = {
 
     invariant verify_quorum.qc_sanity_check(QCo) & verify_quorum.qc_sanity_check(QCn) & verify_quorum.qc_has_quorum_o(QCo) & verify_quorum.qc_has_quorum_n(QCn) & qc_t.block(QCo,Bo) & qc_t.block(QCn,Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> Bo = Bn
@@ -172,61 +216,82 @@ isolate qc_o_qc_n = {
 
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, qc_o_qc_n_m1.honest_vote, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd
 
+# this isolate states and proves some of the cases given in the proof of lemma 4 of the paper.
 isolate round_safety_m1 = {
+
+    # a_f is less than or equal to the current round r_c
     invariant [af_le_rc] verify_quorum.processor(N).a_f <= verify_quorum.processor(N).r_c
 
+    # if an honest processor N has sent a normal prepare message for block B of round R, then it has already posessed a normal proposal for round R ...
     invariant is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_normal_for_round(R)
 
+    # ... and hence it cannot vote for any other normal proposal for the same round R. So if an honest processor N has sent normal prepare messages for blocks B1,B2 of the same round, then B1=B2
     invariant [prepare_n_prepare_n] is_good(N) & verify_quorum.processor_sent_prepare_n(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
+    # if an honest processor N has sent a fallback prepare message for block B of round R, then it has already posessed a fallback proposal for round R ...
     invariant is_good(N) & verify_quorum.processor_sent_prepare_f(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_fallback_for_round(R)
 
+    # ... and hence it cannot vote for any other fallback proposal for the same round R. So if an honest processor N has sent fallback prepare messages for blocks B1,B2 of the same round, then B1=B2
     invariant [prepare_f_prepare_f] is_good(N) & verify_quorum.processor_sent_prepare_f(N,B1) & verify_quorum.processor_sent_prepare_f(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
+    # if an honest processor N has sent an optimistic prepare message for block B of round R, then it has already posessed an optimistic proposal for round R ...
     invariant is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> verify_quorum.processor(N).possessed_optimistic_for_round(R)
 
+    # ... and hence it cannot vote for any other optimistic proposal for the same round R. So if an honest processor N has sent optimistic prepare messages for blocks B1,B2 of the same round, then B1=B2
     invariant [prepare_o_prepare_o] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
+    # if an honest processor N has sent a fallback prepare message for a block B of round R, then R is less than or equal to a_f
     invariant [af_highest] forall B:block_t. forall R:round_t. forall N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_f(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_f
 
+    # case 2 in the proof of lemma 4: if an honest process has sent a fallback prepare message for block Bf and a normal prepare message for block Bn and Bf,Bn share the same round, then Bf=Bn
     invariant [prepare_f_prepare_n] is_good(N) & verify_quorum.processor_sent_prepare_f(N,Bf) & verify_quorum.processor_sent_prepare_n(N,Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn -> Bf = Bn
 } with block_t, round_t, verify_quorum, qc_o_qc_n_m1.ao_an_le_rc, qc_o_qc_n_m1.optimistic_round_safety, block_t_properties.genesis_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.genesis_round_0, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, qc_o_qc_n_m1.an_highest, only_cstd_blocks.prepare_o_cstd
 
 isolate round_safety_m2 = {
 
+    # this relation keeps track of which TC was used by processor N to send a fallback prepare message for block B
     relation processor_sent_prepare_f_tc(N:process_index_t, B:block_t, TC:tc_t)
 
     after init {
         processor_sent_prepare_f_tc(N,B,TC) := false;
     }
 
+    # a byznatine processor id has sent a fallback prepare message for m.block, with TC m.tc, pretending to be from the processor m.src
     before verify_quorum.processor.byzantine_send(id:process_index_t, m:msg) {
         if m.kind = msg_kind.prepare_f {
             processor_sent_prepare_f_tc(m.src, m.block, m.tc) := true;
         }
     }
 
+    # processor id has sent a fallback prepare message for the block b_pr using timeout certificate tc
     before verify_quorum.processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
             processor_sent_prepare_f_tc(id,b_pr,tc) := true;
     }
 
+    # if an honest  processor N has sent a fallback prepare message for block B using TC, then B is cstd and TC is sanity checked, has a valid quourm and its maxQC has the maximum round among all the QCs in the TC
     invariant processor_sent_prepare_f_tc(N,B,TC) & is_good(N) -> block_t.cstd(B) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC)
 
+    # if an honest processor sent a fallback prepare message for a block B that was proposed and TC was the accompanying timeout certificate, then B.r = (TC.r+1)
     invariant [prepare_f_tc_for_prev_round] processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R_b) & tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R_b)
 
+    # if an honest processor sent a fallback prepare message in the moonshot protocol, it is captured here in this isolate in the relation processor_sent_prepare_f_tc
     invariant verify_quorum.processor_sent_prepare_f(N,B) & is_good(N) -> exists TC:tc_t. processor_sent_prepare_f_tc(N,B,TC)
 
+    # if QCf has a quorum of fallback prepare messages and N is an honest member of the quorum Q associated with QCf, then N has sent a fallback prepare message for Bf, the block associated with QCf
     invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & round_t.succ(R_tc,Rf) & qc_t.quorum(QCf,Q) & quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,Bf)
 
 } with block_t, round_t, verify_quorum, block_t_properties.block_t_inv_round_unique
 
 isolate round_safety_m3 = {
     
+    # this is same as the last invariant in the previous isolate, except one difference: instead of concluding the presence of a tuple in verify_quorum.processor_sent_prepare_f, here we conclude the presence of a tuple in round_safety_m2.processor_sent_prepare_f_tc
     invariant verify_quorum.qc_sanity_check(QCf) & verify_quorum.qc_has_quorum_f(QCf) & qc_t.block(QCf,Bf) & block_t.round(Bf,Rf) & round_t.succ(R_tc,Rf) & qc_t.quorum(QCf,Q) & quorum_t.member(Q,N) & is_good(N) -> exists TC:tc_t. round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc)
 
     relation tc_in_prev_round(TC:tc_t, R:round_t)
+    # TC is for the round (R-1)
     definition tc_in_prev_round(TC,R) = verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & (forall R_tc:round_t. tc_t.round(TC,R_tc) -> round_t.succ(R_tc,R))
 
+    # if TC is for round (R-1) and QC is associated with a block B of round R, then QC cannot have a quorum of optimistic prepare messages. This is used in case 3 of the proof of Lemma 4.
     invariant [tc_r_no_qc_o_rs] tc_in_prev_round(TC,R) & verify_quorum.qc_sanity_check(QC) & qc_t.block(QC,B) & block_t.round(B,R) -> ~ verify_quorum.qc_has_quorum_o(QC)
 
     attribute macro_finder = false
@@ -235,11 +300,13 @@ isolate round_safety_m3 = {
 
 isolate q_f_q_n_m1 = {
 
+    # if block Bf has a quorum of fallback prepare messages, Bn has a quorum of normal prepare messages and Bf,Bn share a common round, then there is an honest member who has sent a fallback prepare message for Bf as well as a normal prepare message for Bn
     invariant quorum_definition.block_has_quorum_f(Bf) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_f(N,Bf) & verify_quorum.processor_sent_prepare_n(N,Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd, quorum_definition.block_has_quorum_f, quorum_definition.block_has_quorum_n, block_t_properties.genesis_cstd
 
 isolate q_f_q_n = {
 
+    # if block Bf has a quorum of fallback prepare messages, Bn has a quorum of normal prepare messages and Bf,Bn share a common round, then Bf=Bn. This is case 2 in the proof of Lemma 4.
     invariant quorum_definition.block_has_quorum_f(Bf) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bf,Rf) & block_t.round(Bn,Rn) & Rf = Rn -> Bf = Bn
 
     attribute macro_finder=false
@@ -248,12 +315,14 @@ isolate q_f_q_n = {
 
 isolate q_o_q_n_m1 = {
 
+    # if block Bo has a quorum of optimistic prepare messages and Bn has a quorum of normal prepare messages, then there is an honest processor N who has sent an optimistic prepare message for Bo as well as a normal prepare message for Bn
     invariant quorum_definition.block_has_quorum_o(Bo) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,Bo) & verify_quorum.processor_sent_prepare_n(N,Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn
 
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, quorum_definition.block_has_quorum_o, quorum_definition.block_has_quorum_n
 
 isolate q_o_q_n = {
 
+    # if block Bo has a quorum of optimistic prepare messages and Bn has a quorum of normal prepare messages and Bn,Bo share a common round, then Bn=Bo. This is case 4 in the proof of Lemma 4.
     invariant quorum_definition.block_has_quorum_o(Bo) & quorum_definition.block_has_quorum_n(Bn) & block_t.round(Bo,Ro) & block_t.round(Bn,Rn) & Ro = Rn -> Bo = Bn
 
     attribute macro_finder=false
@@ -262,12 +331,14 @@ isolate q_o_q_n = {
 
 isolate q_ff_m1 = {  
 
+       # if blocks B1,B2 each have quorums of fallback prepare messages, there is an honest processor N who as sent fallback prepare messages for both B1 and B2.
        invariant quorum_definition.block_has_quorum_f(B1) & quorum_definition.block_has_quorum_f(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_f(N,B1) & verify_quorum.processor_sent_prepare_f(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
 
 } with block_t, round_t, verify_quorum, quorum_intersection_axiom, block_t_properties.genesis_cstd, quorum_definition.block_has_quorum_f#, block_t_properties.round_only_for_cstd
 
 isolate q_ff = {
 
+    # if blocks B1,B2 each have quorums of fallback prepare messages and they share a same round, then B1=B2. This is part of case 1 in the proof of Lemma 4.
     invariant quorum_definition.block_has_quorum_f(B1) & quorum_definition.block_has_quorum_f(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     # attribute macro_finder=false
@@ -276,6 +347,7 @@ isolate q_ff = {
 
 isolate q_nn_m1 = {  
 
+    # if blocks B1,B2 each have quorums of normal prepare messages, there is an honest processor N who as sent normal prepare messages for both B1 and B2.
     invariant quorum_definition.block_has_quorum_n(B1) & quorum_definition.block_has_quorum_n(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_n(N,B1) & verify_quorum.processor_sent_prepare_n(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
 
     # attribute macro_finder=false
@@ -284,6 +356,7 @@ isolate q_nn_m1 = {
 
 isolate q_nn = {
 
+    # if blocks B1,B2 each have quorums of normal prepare messages and they share a same round, then B1=B2. This is part of case 1 in the proof of Lemma 4.
     invariant quorum_definition.block_has_quorum_n(B1) & quorum_definition.block_has_quorum_n(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     attribute macro_finder=false
@@ -292,6 +365,7 @@ isolate q_nn = {
 
 isolate q_oo_m1 = {
 
+    # if blocks B1,B2 each have quorums of optimistic prepare messages, there is an honest processor N who as sent optimistic prepare messages for both B1 and B2
     invariant quorum_definition.block_has_quorum_o(B1) & quorum_definition.block_has_quorum_o(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> exists N:process_index_t. is_good(N) & verify_quorum.processor_sent_prepare_o(N,B1) & verify_quorum.processor_sent_prepare_o(N,B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2
 
     # attribute macro_finder=false
@@ -300,6 +374,7 @@ isolate q_oo_m1 = {
 
 isolate q_oo = {
 
+    # if blocks B1,B2 each have quorums of optimistic prepare messages and they share a same round, then B1=B2. This is part of case 1 in the proof of Lemma 4.
     invariant quorum_definition.block_has_quorum_o(B1) & quorum_definition.block_has_quorum_o(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     attribute macro_finder=false
@@ -308,8 +383,10 @@ isolate q_oo = {
 
 isolate tc_q_o_intersection = {
 
+    # same as quorum intersection axiom, written in a form helpful to speed up the checking of the following invariant
     invariant forall Q_t,Q_q:quorum_t. exists N:process_index_t. quorum_t.member(Q_q,N) & quorum_t.member(Q_t,N) & is_good(N)
 
+    # if TC has associated quorum Q_t, and B has a quorum Q_q of optimistic prepare messages, there is an honest processor who is a member o both Q_q and Q_t
     invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.quorum(TC,Q_t) & quorum_definition_expl.block_quorum_o(B,Q_q) -> exists N:process_index_t. quorum_t.member(Q_q,N) & quorum_t.member(Q_t,N) & is_good(N)
 
     # attribute macro_finder=false
@@ -318,14 +395,19 @@ isolate tc_q_o_intersection = {
 isolate tc_r_no_po_rs_quorum_n1 = {
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if an honest processor N has sent an optimistic prepare message for block B of round R and R_l is the round of the currently locked block, then R_l is greater than or equal to (R-1)
     invariant verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) & qc_t.block(verify_quorum.processor(N).qc_l,B_l) & block_t.round(B_l,R_l) & round_t.succ(Rp,R) -> Rp <= R_l 
 
+    # the current round r_c is strictly greather than the round R_l of the currently locked block
     invariant [rc_gt_locked_block] qc_t.block(verify_quorum.processor(N).qc_l,B_l) & block_t.round(B_l,R_l) -> R_l < verify_quorum.processor(N).r_c
 
+    # if Q_t is the quorum associated with TC, R_tc is the round associated with TC and Q_q is a quorum of optimistic prepare messages for a block B, there is an honest processor N who has sent a timeout message for R_tc as well as an optimistic prepare message for B
     invariant [honest_sends_prepare_o_timeout] verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & tc_t.quorum(TC,Q_t) & quorum_t.member(Q_t,N) & is_good(N) & quorum_definition_expl.block_quorum_o(B,Q_q) & quorum_t.member(Q_q,N) -> ((exists QC_to:qc_t. verify_quorum.processor_sent_timeout(N,R_tc,QC_to)) & verify_quorum.processor_sent_prepare_o(N,B))
 
+    # if an honest processor has sent a timeout message for R_tc, then R_tc is less than or equal to the local variable t_l
     invariant [tl_greatest_to] verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & is_good(N) -> R_tc <= verify_quorum.processor(N).t_l
 
+    # if an honest processor N has sent a timeout message for R_tc and an optimistic prepare message for a block B of round R, then R cannot be (R_tc+1)
     invariant [prepare_o_not_succ_timeout] verify_quorum.processor_sent_timeout(N,R_tc,QC_to) & verify_quorum.processor_sent_prepare_o(N,B) & is_good(N) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 
     # attribute macro_finder=false
@@ -335,6 +417,7 @@ isolate tc_r_no_po_rs_quorum_late = {
 
     property quorum_definition.block_has_quorum_o(B) -> exists Q:quorum_t. quorum_definition_expl.block_quorum_o(B,Q)
 
+    # if TC is for round R_tc and block B of round R has a quorum of optimistic prepare messages, then R cannot be (R_tc+1)
     invariant verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc) & quorum_definition.block_has_quorum_o(B) & block_t.round(B,R) -> ~ round_t.succ(R_tc,R)
 
     attribute macro_finder=false
@@ -343,10 +426,13 @@ isolate tc_r_no_po_rs_quorum_late = {
 
 isolate round_safety_n3 = {
     
+    # if Q is a quorum of fallback prepare messages for block Bf and N is an honext member of Q< then N has sent a fallback prepare message for Bf
     invariant quorum_definition_expl.block_quorum_f(Bf,Q) & block_t.round(Bf,Rf) & round_t.succ(R_tc,Rf) & quorum_t.member(Q,N) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,Bf)
     
+    # same as the previous invariant, except one difference: instead of concluding the existence of a tuple in verify_quorum.processor_sent_prepare_f, here it is concluded that there is a tuple in round_safety_m2.processor_sent_prepare_f_tc
     invariant quorum_definition_expl.block_quorum_f(Bf,Q) & block_t.round(Bf,Rf) & round_t.succ(R_tc,Rf) & quorum_t.member(Q,N) & is_good(N) -> exists TC:tc_t. round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,R_tc)
 
+    # if TC is for round (R-1) and block B is for round R, then B cannot have a quorum of optimistic prepare messages
     invariant [tc_r_no_qc_o_rs] round_safety_m3.tc_in_prev_round(TC,R) & block_t.round(B,R) -> ~ quorum_definition.block_has_quorum_o(B)
 
     attribute macro_finder = false
@@ -355,6 +441,7 @@ isolate round_safety_n3 = {
 
 isolate round_safety_n4 = {
 
+    # if block Bf has a quorum of fallback prepare messages, then some honest processor N has sent a prepare message for Bf along with a timeout certificate TC
     invariant quorum_definition.block_has_quorum_f(Bf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC)
 
     # attribute macro_finder = false
@@ -363,10 +450,7 @@ isolate round_safety_n4 = {
 
 isolate round_safety_n5 = {
 
-    # invariant quorum_definition.block_has_quorum_f(Bf) -> exists N:process_index_t. verify_quorum.processor_sent_prepare_f(N, Bf)
-
-    # invariant quorum_definition.block_has_quorum_f(Bf) -> block_t.cstd(Bf)
-
+    # same as previous invariant, but in addition, specifies that the TC is for the round previous to the round of Bf
     invariant quorum_definition.block_has_quorum_f(Bf) & block_t.round(Bf,Rf) -> exists N:process_index_t. exists TC:tc_t. is_good(N) & round_safety_m2.processor_sent_prepare_f_tc(N,Bf,TC) & round_safety_m3.tc_in_prev_round(TC,Rf)
 
     attribute macro_finder = false
@@ -375,12 +459,14 @@ isolate round_safety_n5 = {
 
 isolate quorum_f = {
 
+    # this is just relating quorum_definition.block_has_quorum_f with quorum_definition_expl.block_quorum_f using an existentially quantified quorum Q
     invariant quorum_definition.block_has_quorum_f(Bf) -> exists Q:quorum_t. quorum_definition_expl.block_quorum_f(Bf,Q)
 
 } with block_t, round_t, verify_quorum, quorum_definition,quorum_definition_expl
 
 isolate round_safety_n7 = {
 
+    # case 3 in the proof of lemma 4: if block Bf has a quorum of fallback votes, then no optimistically proposed block Bo for the same round can get a quorum
     invariant quorum_definition.block_has_quorum_f(Bf) & block_t.round(Bf,Rf) & block_t.round(Bo,Rf) -> ~ quorum_definition.block_has_quorum_o(Bo)
 
     attribute macro_finder = false
@@ -389,6 +475,7 @@ isolate round_safety_n7 = {
 
 isolate q_f_q_o = {
 
+    # stating the previous invariant in a different way: if Bf has a quorum of fallback prepare messages, Bo has a quorum of optimistic prepare messages and Bf,Bo share a common round (which will never happen as proved in the previous invariant), then Bf=Bo. Stated this way, it is easier for IVy to prove the following round safety property
     invariant quorum_definition.block_has_quorum_f(Bf) & quorum_definition.block_has_quorum_o(Bo) & block_t.round(Bf,Rf) & block_t.round(Bo,Ro) & Rf = Ro -> Bf = Bo
 
     # attribute macro_finder=false
@@ -397,6 +484,7 @@ isolate q_f_q_o = {
 
 isolate round_safety = {
 
+    # Lemma 4: if blocks B1,B2 each have got quorums and they share the same round, then B1=B2
     invariant quorum_definition.block_has_quorum(B1) & quorum_definition.block_has_quorum(B2) & block_t.round(B1,R1) & block_t.round(B2,R2) & R1 = R2 -> B1 = B2
 
     attribute macro_finder = false
@@ -404,6 +492,7 @@ isolate round_safety = {
 
 isolate parent_block_earlier_m1 = {
 
+    # if an honest processor N has sent a prepare message for block B, then B's parent Bp must have a lower round than B
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & B ~= block_t.genesis & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) -> Rp < R
 
     # attribute macro_finder = false
@@ -412,6 +501,7 @@ isolate parent_block_earlier_m1 = {
 
 isolate parent_block_earlier = {
 
+    # if a block B has got a quorum of prepare messages, then B's parent Bp must have a lower round than B
     invariant [parent_earlier] B ~= block_t.genesis & block_t.parent(B,Bp) & block_t.round(B,R) & block_t.round(Bp,Rp) & quorum_definition.block_has_quorum(B) -> Rp < R
 
     # attribute macro_finder = false
@@ -419,20 +509,28 @@ isolate parent_block_earlier = {
 } with block_t, round_t, qc_t, verify_quorum, block_t_properties.parent_only_for_cstd, block_t_properties.unused_not_cstd, parent_block_earlier_m1, every_quorum_good, block_t_properties.block_t_inv_round_unique, quorum_definition, block_t_properties.parent_self_genesis
 
 isolate to_after_prepare = {
+    # this is obviously true, but still written here so that IVy checker loads the definition of round_exists
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if an honest processor N sends a timeout message with QC, then QC is a valid quorum certificate
     invariant is_good(N) & verify_quorum.processor_sent_timeout(N,Rt,QC) -> verify_quorum.qc_sanity_check(QC)
 
+    # if an honest processor N has sent a timeout message for round Rt, then Rt is lesser than or equal to t_l
     invariant is_good(N) & verify_quorum.processor_sent_timeout(N,Rt,QC) -> Rt <= verify_quorum.processor(N).t_l
 
+    # the genesis quorum certificate is valid
     invariant verify_quorum.qc_sanity_check(qc_t.genesis)
 
+    # the quorum certificate locked by an honest processor N is always a valid QC
     invariant is_good(N) -> verify_quorum.qc_sanity_check(verify_quorum.processor(N).qc_l) 
 
+    # if an honest processor N has locked a QC, then it has the highest round among all the QC's processed by N so far
     invariant [locked_qc_latest_processed] is_good(N) & verify_quorum.processor(N).processed_qc(Bp) & block_t.round(Bp,Rp) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) & block_t.round(Bl,Rl) -> Rp <= Rl
 
+    # if an honest processor N has sent a prepare message for a block B and B's parent is Bp, then Bp's round is less than or equal to the round of the currently locked block
     invariant [locked_qc_gt_parent] is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & qc_t.block(verify_quorum.processor(N).qc_l,Bl) & block_t.round(Bl,Rl) -> Rp <= Rl
 
+    # if an honest processor N has sent a prepare message for block B of round R and also sent a timeout message for a round Rt greater than or equal to R with QC, then the round of QC is greater than or equal the round of B's parent Bp
     invariant [inv_to_after_prepare] is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.processor_sent_timeout(N,Rt,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rp <= Rq
 } with block_t, round_t, verify_quorum, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.certified_block_cstd, only_cstd_blocks.locked_block_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.genesis_round_0, qc_t_properties, qc_t, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, only_cstd_blocks.processed_qc_cstd, block_t_properties.parent_unique, block_t_properties.parent_only_for_cstd, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_f_cstd
 
@@ -440,10 +538,13 @@ isolate tc_after_prepare_m1 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B) 
 
+    # same as previous invariant except one difference: instead of requiring the processor N to have sent a timeout message as recorded in verify_quorum.processor_sent_timeout, here we require that there exists a timeout certificate in which N has contributed a timeout message
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & tc_t.to_messages(TC,N,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) -> Rp <= Rq
 
+    # same as previous invariant but instead of requiring a TC in which processor N has contributed a timeout message, here we require the existence of a TC and we relate the maxQC of that TC with the parent of B
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & tc_t.to_messages(TC,N,QC) & R <= Rt & qc_t.block(QC,Bq) & block_t.round(Bq,Rq) & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rq & Rq <= Rm & Rp <= Rm
 
+    # all QCs sent as part of timeout messages in TC are valid
     invariant verify_quorum.tc_sanity_check(TC) & tc_t.to_messages(TC,N,QC) -> verify_quorum.qc_sanity_check(QC)
 
     # attribute macro_finder=false
@@ -453,6 +554,7 @@ isolate tc_after_prepare_m2 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # same as previous to previous invariant, except that here, the block Bq associated with QC is not mentioned
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B) | verify_quorum.processor_sent_prepare_f(N,B)) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & tc_t.to_messages(TC,N,QC) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
 } with block_t, round_t, verify_quorum, tc_after_prepare_m1, block_t_properties.block_t_inv_round_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_unique, only_cstd_blocks.prepare_o_cstd, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_f_cstd
@@ -462,8 +564,10 @@ isolate tc_after_prepare_m3 = {
     # invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & tc_t.round(TC,Rt) & R <= Rt & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
     relation prepare_and_to(Bc:block_t, TC:tc_t)
+    # there is an honest processor N who has sent a prepare message for Bc and also contributed a timeout message in TC with QC
     definition prepare_and_to(Bc,TC) = exists N:process_index_t. exists QC:qc_t. is_good(N) & (verify_quorum.processor_sent_prepare_n(N,Bc) | verify_quorum.processor_sent_prepare_o(N,Bc) | verify_quorum.processor_sent_prepare_f(N,Bc)) & tc_t.to_messages(TC,N,QC)
 
+    # same a previous invariant, except that the requirement of processor N having sent a prepare message for B and contributed a timeout message in TC is stated here using the newly defined relation prepare_and_to
     invariant prepare_and_to(B,TC) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & tc_t.round(TC,Rt) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
 } with block_t, round_t, verify_quorum, tc_after_prepare_m2
@@ -472,6 +576,7 @@ isolate tc_after_prepare_m4 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if QC is valid and is associated with block B and TC is valid, the tuple (B,TC) are in the relation prepare_and_to
     invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC, B) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) -> tc_after_prepare_m3.prepare_and_to(B,TC)
 
     # attribute macro_finder=false
@@ -482,6 +587,7 @@ isolate tc_after_prepare_m5 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # same as previous to previous invariant, but instead of requiring that (B,TC) are in the relation prepare_and_to, here we require that there is a valid QC associated with B
     invariant verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC, B) & B ~= block_t.genesis & block_t.round(B,R) & block_t.parent(B,Bp) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,Rt) & R <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> Rp <= Rm
 
     # attribute macro_finder=false
@@ -492,14 +598,17 @@ isolate prepare_no_later_round_later_parent = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if an honest processor N has sent a normal or optimistic prepare message for a block B of round R and R is greater than Rl, then B's parent Bp is round greater than or equal to Rl
     invariant is_good(N) & (verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & B ~= block_t.unused & block_t.round(B,R) & Rl < R & block_t.parent(B,Bp) & block_t.round(Bp,Rp) -> Rl <= Rp
 
+    # if a block B has a quorum of normal or optimistic prepare messages and B is of round R greater than Rl, then B's parent Bp is of round greater than or equal to Rl
     invariant [quorum_no_parent] verify_quorum.qc_sanity_check(QC) & (verify_quorum.qc_has_quorum_n(QC) | verify_quorum.qc_has_quorum_o(QC)) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rl < R & block_t.parent(B,Bp) & block_t.round(Bp,Rp) -> Rl <= Rp
 } with block_t, round_t, verify_quorum, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, only_cstd_blocks.prepare_n_cstd, only_cstd_blocks.prepare_o_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_parent, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, basic_validities.qc_l_valid, every_quorum_good
 
 isolate quorum_no_after_ldc = {
     property block_t_conv.successive_blocks(B1,B2) | ~ block_t_conv.successive_blocks(B1,B2)
 
+    # if Bp is a local direct commit due to child Bc and QC is for a round greater than the round of Bc and QC has a quorum of normal or optimistic prepare messages, then QC's parent block is of round greater than or equal to the round of Bp
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & verify_quorum.qc_sanity_check(QC) & (verify_quorum.qc_has_quorum_n(QC) | verify_quorum.qc_has_quorum_o(QC)) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 } with block_t, round_t, verify_quorum, prepare_no_later_round_later_parent.quorum_no_parent, block_t_conv.successive_blocks
 
@@ -507,21 +616,28 @@ isolate quorum_f_after_ldc_m1 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if an honest processor N has sent a fallback prepare message for a block B, then B's round is lesser than or equal to a_f
     invariant [a_f_prepare_f] is_good(N) & verify_quorum.processor_sent_prepare_f(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_f
 
+    # if an honest processor N has sent a normal prepare message for a block B, then B's round is lesser than or equal to a_n
     invariant [a_n_prepare_n] is_good(N) & verify_quorum.processor_sent_prepare_n(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_n
 
+    # if an honest processor N has sent an optimistic prepare message for a block B, then B's round is lesser than or equal to a_o
     invariant [a_o_prepare_o] is_good(N) & verify_quorum.processor_sent_prepare_o(N,B) & block_t.round(B,R) -> R <= verify_quorum.processor(N).a_o
 
+    # if the tuple (N,B,TC) is in the relation round_safety_m2.processor_sent_prepare_f_tc, then the projected tuple (N,B) is in the relation verify_quorum.processor_sent_prepare_f
     invariant [prepare_f_tc_prepare_f] round_safety_m2.processor_sent_prepare_f_tc(N,B,TC) & is_good(N) -> verify_quorum.processor_sent_prepare_f(N,B)
 
+    # if an honest processor N has sent a prepare message for a block B, then B's round is lesser than or equal to the current round r_c
     invariant [rc_gte_prepare] is_good(N) & (verify_quorum.processor_sent_prepare_f(N,B) | verify_quorum.processor_sent_prepare_n(N,B) | verify_quorum.processor_sent_prepare_o(N,B)) & block_t.round(B,R) -> R <= verify_quorum.processor(N).r_c
 
+    # if an honest processor N has sent a fallback prepare message for a block B justified by TC, then TC is for the round previous to the round of B and B's parent Bp is certified by the maximum QC contained in TC
     invariant round_safety_m2.processor_sent_prepare_f_tc(N,B,TC) & is_good(N) & block_t.round(B,R) & tc_t.round(TC,Rt) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) -> block_t.cstd(B) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & verify_quorum.tc_maxQC(TC) & round_t.succ(Rt,R) & block_t.parent(B,Bm)
 } with block_t, round_t, verify_quorum, round_safety_m2, block_t_properties.unused_not_cstd, block_t_properties.genesis_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_parent, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.inv_parent_exists, block_t_properties.genesis_round_0, block_t_properties.genesis_cstd, block_t_properties.round_exists, block_t_properties, tc_after_prepare_m5, only_cstd_blocks, qc_o_qc_n_m1.ao_an_le_rc, round_safety_m1.af_le_rc, quorum_properties_1.processed_qc_quorum
 
 isolate quorum_f_after_ldc_m2 = {
 
+    # if Bp is local direct commit due to child Bc and TC is for a round greater than or equal to the round of Bc, then the maxmum QC in TC is for a round greater than or equal to the round of Bp
     invariant qc_t.block(QC, Bc) & is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,Rt) & Rc <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> block_t.parent(Bc,Bp) & Rp <= Rm
 
 } with block_t, round_t, verify_quorum, tc_after_prepare_m5, quorum_properties_1.processed_qc_quorum, block_t_properties.parent_only_for_cstd, block_t_properties.block_t_inv_round_unique, block_t_properties.genesis_cstd, block_t_properties.parent_self_genesis, block_t_properties.unused_not_cstd, parent_block_earlier.parent_earlier, only_cstd_blocks.processed_qc_cstd, quorum_f_after_ldc_m5, block_t_properties.genesis_round_0, qc_propogation_m1.processed_block_has_qc
@@ -530,6 +646,7 @@ isolate quorum_f_after_ldc_m3 = {
 
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) -> exists QC:qc_t. qc_t.block(QC,Bc)
 
+    # same a previous invariant except that here we don't explicitly require that there is a QC for Bc
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & verify_quorum.tc_sanity_check(TC) & verify_quorum.tc_has_quorum(TC) & tc_t.round(TC,Rt) & Rc <= Rt & verify_quorum.tc_maxQC(TC) & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> block_t.parent(Bc,Bp) & Rp <= Rm
 
     attribute macro_finder = false
@@ -537,6 +654,7 @@ isolate quorum_f_after_ldc_m3 = {
 
 isolate quorum_f_after_ldc_m4 = {
 
+    # same as previous invariant excpet that instead of requiring a TC for a round greater than or equal to the round of Bc, here we require an honest processor N1 to have sent a fallback prepare message for a block B of round greater than the round of Bc, justified by a TC
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & round_safety_m2.processor_sent_prepare_f_tc(N1,B,TC) & is_good(N1) & block_t.round(B,R) & Rc < R & tc_t.maxQC(TC,QCm) & qc_t.block(QCm,Bm) & block_t.round(Bm,Rm) -> block_t.parent(B,Bm) & Rp <= Rm
 
     attribute macro_finder = false
@@ -549,6 +667,7 @@ isolate quorum_f_after_ldc_m5 = {
 
     # invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) -> Rp < Rc
 
+    # if an honest processor has processed a qc for a block B, then the round of B is less than the current round r_c
     invariant is_good(N) & verify_quorum.processor(N).processed_qc(B) & block_t.round(B,R) -> R < verify_quorum.processor(N).r_c
 
     # attribute macro_finder = false
@@ -563,10 +682,13 @@ isolate quorum_f_after_ldc_m6 = {
 
     property block_t_conv.successive_blocks(B1,B2) | ~ block_t_conv.successive_blocks(B1,B2)
 
+    # if Bp is local direct commit because of child Bc and an honest processor N1 has sent a fallback prepare message for a block B of round greater than the round of Bc justified by Tc, then the parent of B is of round greater than or equal to the round of Bp
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & Rp < Rc & round_safety_m2.processor_sent_prepare_f_tc(N1,B,TC) & is_good(N1) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
+    # same as previous invariant, except that here, Rp < Rc is not mentioned
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & round_safety_m2.processor_sent_prepare_f_tc(N1,B,TC) & is_good(N1) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
+    # same as previous invariant, except that here we use verify_quorum.processor_sent_prepare_f in place of round_safety_m2.processor_sent_prepare_f_tc
     invariant [prepare_f_after_ldc] is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & Bc ~= block_t.genesis & block_t.round(Bc,Rc) & block_t.round(Bp,Rp) & verify_quorum.processor_sent_prepare_f(N1,B) & is_good(N1) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
     # attribute macro_finder = false
@@ -574,6 +696,7 @@ isolate quorum_f_after_ldc_m6 = {
 } with block_t, round_t, verify_quorum, round_safety_m2, quorum_f_after_ldc_m1, quorum_f_after_ldc_m5, quorum_f_after_ldc_m4, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_only_for_cstd, block_t_properties.inv_parent_exists, quorum_properties_1.processed_qc_quorum, block_t_properties.genesis_cstd, block_t_properties.unused_not_cstd, block_t_properties.genesis_round_0, block_t_properties.parent_unique, block_t_properties.block_t_inv_round_exists, quorum_f_after_ldc_m1.rc_gte_prepare, only_cstd_blocks, block_t_conv.successive_blocks
 
 isolate quorum_f_after_ldc = {
+    # same as previous invariant except that instead of requiring an honest processor N1 having sent a fallback prepare message for block B, here we require that there is a QC for B with a quorum of fallback prepare messages
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & Bc ~= block_t.genesis & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum_f(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 } with block_t, round_t, verify_quorum, quorum_f_after_ldc_m6.prepare_f_after_ldc, round_safety_m2, every_quorum_good, block_t_properties
 
@@ -581,6 +704,7 @@ isolate quorum_after_ldc_m1 = {
 
     property verify_quorum.processor(N).ldc(B) | ~ verify_quorum.processor(N).ldc(B)
     
+    # same as previous invariant except that instead of requiring a qurom of fallback prepare messages for B, here we require a quorum of prepare messages (of any kind) for B
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
     # attribute macro_finder = false
@@ -591,6 +715,7 @@ isolate quorum_after_ldc_m2 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if Bp is local direct commit because of child Bc, then Bc's round is the successor of Bp's round
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
     
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1

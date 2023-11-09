@@ -28,48 +28,52 @@ isolate round_t_conv = {
 #
 # These are used as per convenience in [algorithm.ivy] and other files. We have some
 # invariants set up here that relate the two.
-#
-# Note that actions where validity can only be determined with global view information are
-# placed there. For example, [global_view.qc_get_block] instead of [qc_t.get_block].
 isolate block_t = {
     type this
 
     # In IVy model, all artefacts that will be ever used are already present in the initial state; nothing can be "constructed" out of thin air if it doesn't already exist. New blocks also cannot be constructed if they don't exist before. To work around this, the following unary relation cstd (short for constructed) is used: a block that is not cstd cannot participate in any activity (it cannot be associated with any round; it cannot have any parent etc.). These are enforced in the invariants in the following isolate block_t_properties. To become active, a block has to be first cstd, which is only done in the action block, which takes the round and parent block as parameters. That is the action invoked by honest processes when they have to propose a new block
     relation cstd(B:block_t)
 
+    # round R is associated with block B
     relation round(B:block_t, R:round_t)
+
+    # P is the parent of block B
     relation parent(B:block_t, P:block_t)
+
+    # this ancestor relation is from an earlier version that is no longer used. The ancestor relation is set up only for those block that have a quorum, in certified_block_ancestor_m1 isolate in safety.ivy
     relation ancestor(B:block_t, A:block_t)
+
+    # this is from an earlier version that is no longer used. In the new version of the moonshot protocol, several blocks may get committed at once, so it is difficult in IVy to associate a height with each of them. Instead, we prove that the cert_block_ancestor relation is a total linear order on the set of all committed blocks
     relation height(B:block_t, H:height_t)
 
+    # This is the genesis block that is assumed to be already certified and marked as such for all processors
     individual genesis : block_t
 
+    # This "unused" block will never be proposed. It is used as an initial value for the local variable b_o of processors, the variable used to denoted the latest block for with the processor has sent an optimistic prepare message
     individual unused : block_t
 
     after init {
+
+        # Initially, genesis block is the only one that is constructed
         cstd(B) := B = genesis;
 
+        # Assume that the initial valued of genesis and unused blocks are not same
         assume genesis ~= unused;
 
+        # Initially, only the genesis block has a round associated with it; the round 0
         round(B, R) := B = genesis & R = 0;
+
+        # Initially, only the genesis block has a parent associated with it; itself
         parent(B, P) := B = genesis & P = genesis;
+
+        # the ancestor relation is no longer used
         ancestor(B, A) := B = genesis & A = genesis;
+
+        # the height relation is no longer used
         height(B, H) := B = genesis & H = 0;
     }
 
-    # action get_round(b:block_t) returns (r:round_t) = {
-    #     if some b_r:round_t. round(b, b_r) {
-    #         r := b_r;
-    #     }
-    # }
-
-    # action get_parent(b:block_t) returns (pB:block_t) = {
-
-    #     if some b_pB:block_t. parent(b, b_pB) {
-    #         pB := b_pB;
-    #     }
-    # }
-
+    # no longer used
     action get_height(b:block_t) returns (h:height_t) = {
 
         if some b_h:height_t. height(b, b_h) {
@@ -77,16 +81,20 @@ isolate block_t = {
         }
     }
 
+    # construct a new block b with round r_c and parent pB.
     action block(r_c:round_t, pB:block_t) returns (b:block_t) = {
         # Assume that the block b that is being newly constructed is not already cstd
         assume ~cstd(b);
+        # Assume that the block b that is being newly constructed is not the "unused" block
         assume b ~= block_t.unused;
 
         round(b, R) := R = r_c;
+        # height is no longer used
         height(b, H) := H = height_t.next(get_height(pB));
 
         cstd(b) := true;
         parent(b,B) := B = pB;
+        # ancestor is no longer used
         ancestor(b,pB) := true;
         ancestor(b,B) := ancestor(pB,B) | B = pB;
 
@@ -97,35 +105,65 @@ isolate block_t = {
 
 isolate block_t_properties = {
 
+    # genesis block remains cstd for ever
     invariant [genesis_cstd] block_t.cstd(block_t.genesis)
+
+    # unused block remains not cstd for ever
     invariant [unused_not_cstd] ~block_t.cstd(block_t.unused)
+
+    # the genesis block (and only the genesis block) is associated with round 0
     invariant [genesis_round_0] block_t.round(B, 0) <-> B = block_t.genesis
+
+    # the genesis block has itself as its parent
     invariant [genesis_parent] block_t.parent(block_t.genesis, P) <-> P = block_t.genesis
+
+    # height is no longer used
     invariant block_t.height(B, 0) <-> B = block_t.genesis
 
+    # genesis is the only block that has itself as its parent
     invariant [parent_self_genesis] block_t.parent(B, B) <-> B = block_t.genesis
 
+    # only cstd blocks can be associated with rounds
     invariant [round_only_for_cstd] block_t.round(B, R) -> block_t.cstd(B)
+
+    # only cstd blocks can have parents
     invariant [parent_only_for_cstd] block_t.parent(B, P) -> block_t.cstd(B) & block_t.cstd(P)
+
+    # height is no longer used
     invariant block_t.height(B, H) -> block_t.cstd(B)
 
     relation round_exists(B:block_t)
+    # there exists a round associated with block B
     definition round_exists(B) = exists R:round_t. block_t.round(B, R)
+
+    # cstd blocks always have rounds associated with them
     invariant [block_t_inv_round_exists] block_t.cstd(B) -> round_exists(B)
+
     relation parent_exists(B:block_t)
+    # there exists a parent associated with block B
     definition parent_exists(B) = exists P:block_t. block_t.parent(B, P)
+
+    # cstd blocks always have parents associated with them
     invariant [inv_parent_exists] block_t.cstd(B) -> parent_exists(B)
+
+    # height is no longer used
     relation height_exists(B:block_t)
     definition height_exists(B) = exists H:height_t. block_t.height(B, H)
     invariant [cstd_block_height_exists] block_t.cstd(B) -> height_exists(B)
 
+    # a block is associated with at most one round
     invariant [block_t_inv_round_unique] block_t.round(B, R1) & block_t.round(B, R2) -> R1 = R2
+
+    # a block is associated with at most one parent
     invariant [parent_unique] block_t.parent(B, P1) & block_t.parent(B, P2) -> P1 = P2
+
+    # height is no longer used
     invariant block_t.height(B, H1) & block_t.height(B, H2) -> H1 = H2
     invariant (block_t.parent(B,P) & block_t.height(B,Hb) & block_t.height(P,Hp) & B ~= block_t.genesis) -> height_t.succ(Hp,Hb)
 
 } with block_t, round_t, height_t, types_block_t_requires, types_block_t_ensures
 
+# This isolate proves that every round greater than 0 has a predeccor
 isolate round_predecessor = {
     axiom [round_induction] {
         relation rel1(R:round_t)
@@ -150,72 +188,12 @@ isolate block_t_conv = {
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
     relation successive_blocks(Bp:block_t, Bc:block_t)
+    # round of block Bc is the successor of round of block Bp
     definition successive_blocks(Bp,Bc) = forall Rp,Rc:round_t. block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
 
-    # relation round_lte(Bl:block_t, Bg:block_t)
-    # definition round_lte(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl <= Rg)
-
-    # relation round_lt(Bl:block_t, Bg:block_t)
-    # definition round_lt(Bl,Bg) = block_t.cstd(Bl) & block_t.cstd(Bg) & (forall Rl,Rg:round_t. block_t.round(Bl,Rl) & block_t.round(Bg,Rg) -> Rl < Rg)
-
-    # relation round_same(B1:block_t,B2:block_t)
-    # definition round_same(B1,B2) = block_t.cstd(B1) & block_t.cstd(B2) & (forall R1,R2:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2)
-
-    # relation block_lt_predecessor(B:block_t, R:round_t)
-    # definition block_lt_predecessor(B,R) = 0 < R & forall Rb,Rp:round_t. block_t.round(B,Rb) & round_t.succ(Rp,R) -> Rb < Rp
-
-    # relation block_lt_round(B:block_t, R:round_t)
-    # definition block_lt_round(B,R) = 0 < R & forall Rb:round_t. block_t.round(B,Rb) -> Rb < R
-
-    # relation block_lte_round(B:block_t, R:round_t)
-    # definition block_lte_round(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> Rb <= R
-
-    # relation block_pred_pred(B:block_t, R:round_t)
-    # definition [def_block_pred_pred] block_pred_pred(B,R) = 0 < R & ~ round_t.succ(0,R) & forall Rb:round_t. block_t.round(B,Rb) -> round_t_conv.round_pred_pred(Rb,R)
-
-    # relation block_pred(B:block_t, R:round_t)
-    # definition [def_block_pred] block_pred(B,R) = forall Rb:round_t. block_t.round(B,Rb) -> round_t.succ(Rb,R)
-
-    # invariant round_lte(B1,B2) & round_lte(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B2,R3) -> R1 <= R2 & R2 <= R3 & R1 <= R3)
-    # invariant round_lte(B1,B2) & round_lte(B2,B3) -> round_lte(B1,B3)
-    # invariant block_t.cstd(B) -> round_lte(B,B)
-    # invariant block_t.cstd(B1) & block_t.cstd(B2) -> round_lte(B1,B2) | round_lte(B2,B1)
-    # invariant round_lte(B1,B2) & round_lte(B2,B1) & block_t.round(B1,R1) & block_t.round(B2,R2) -> R1 = R2
-
-    #attribute macro_finder=false
 } with block_t, round_t, round_predecessor, block_t_properties
 
-# isolate block_t_conv_p1 = {
-
-#     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
-    
-
-#     invariant block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B1,B2)
-#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> (forall R1,R2,R3:round_t. block_t.round(B1,R1) & block_t.round(B2,R2) & block_t.round(B3,R3) -> R1 < R2 & R2 < R3 & R1 < R3)
-#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lt(B2,B3) -> block_t_conv.round_lt(B1,B3)
-#     invariant block_t.cstd(B1) & block_t.cstd(B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_lt(B2,B1) | block_t_conv.round_same(B1,B2)
-#     #invariant block_t_conv.round_lt(B1,B2) -> ~ block_t_conv.round_lt(B2,B1)
-
-#     invariant block_t_conv.round_lte(B1,B2) -> block_t_conv.round_lt(B1,B2) | block_t_conv.round_same(B1,B2)
-
-#     invariant block_t_conv.block_lt_predecessor(B,R1) & R1 <= R2 -> block_t_conv.block_lt_predecessor(B,R2)
-
-#     invariant block_t_conv.round_lt(B1,B2) & block_t_conv.round_lte(B2,B3) -> block_t_conv.round_lt(B1,B3)
-
-#     property round_t.succ(R1,R2) -> R1 < R2
-
-#     invariant block_t.cstd(B1) & block_t.cstd(B2) & ~block_t_conv.round_lt(B1,B2) -> block_t_conv.round_lte(B2,B1)
-
-#     # invariant round_t_conv.round_pred_pred(Rb,R) & round_t.succ(Rp,R) -> Rb < Rp
-
-#     invariant block_t_conv.block_pred_pred(B,R) -> block_t_conv.block_lt_predecessor(B,R)
-
-#     attribute macro_finder=false
-
-# } with block_t, round_t, round_predecessor, block_t_conv, round_t_conv, block_t_properties
-
-
-
+# this quorum is used for a collection f+1 timeout messages
 isolate quorum_fplusone_t = {
     type this
 
@@ -223,9 +201,12 @@ isolate quorum_fplusone_t = {
 }
 
 isolate every_quorum_fplusone_good = {
+
+    # there is at least one honest member in any collection of f+1 members
     axiom exists N:process_index_t. is_good(N) & quorum_fplusone_t.member(Q, N)
 }
 
+# this quorum is used for a collection of at least 2/3 members
 isolate quorum_t = {
     type this
 
@@ -235,21 +216,29 @@ isolate quorum_t = {
 }
 
 isolate genesis_member = {
+    # all processors are members of the genesis quorum
     axiom quorum_t.member(quorum_t.genesis, N)
 }
 
 isolate every_quorum_good = {
+    # there is at least one honest member in every collection 2/3 members
     axiom exists N:process_index_t. is_good(N) & quorum_t.member(Q, N)
 }
 
 isolate quorum_intersection_axiom = {
+
+    # any two quorums Q1 and Q2 have at least one honest processor in common
     axiom exists N:process_index_t. is_good(N) & quorum_t.member(Q1, N) & quorum_t.member(Q2, N)
 }
 
+# this type is used for quorum certificates of a block
 isolate qc_t = {
     type this
 
+    # B is the block associated with QC
     relation block(QC:qc_t, B:block_t)
+
+    # Q is the quorum associated with QC
     relation quorum(QC:qc_t, Q:quorum_t)
 
     individual genesis : qc_t
@@ -267,76 +256,72 @@ isolate qc_t_properties = {
     
 } with qc_t
 
-# isolate qc_t_conv = {
-#     relation qc_gte_block(QC:qc_t, B:block_t)
-#     definition qc_gte_block(QC,B) = forall Bqc:block_t. qc_t.block(QC,Bqc) -> block_t_conv.round_lte(B,Bqc)
-# }
 
+# there are three types of timeout messages sent. timer_expire: a processor's timer expired, timeout_sync: a processor received a collection of f+1 timeout messages, tc_received: a processor received a timeout certificate
 object to_kind = {
     type this = {timer_expire, timeout_sync, tc_received}
 }
 
+# a collection of f+1 timeout messages
 isolate tc_fplusone_t = {
     type this
 
     relation round(TC:tc_fplusone_t, R:round_t)
     relation quorum(TC:tc_fplusone_t, Q:quorum_fplusone_t)
+    # the processor N has sent a timeout message with QC as part of this TC's collection
     relation to_messages(TC:tc_fplusone_t, N:process_index_t, QC:qc_t)
 }
 
+# a collection of 2/3 members who have sent timeout messages
 isolate tc_t = {
     type this
 
     relation round(TC:tc_t, R:round_t)
     relation quorum(TC:tc_t, Q:quorum_t)
+    
+    # QC is intended to be the one with the maximum round among all the QCs that are part of this TC
     relation maxQC(TC:tc_t, QC:qc_t)
+
+    # the processor N has sent a timeout message with QC as part of this TC's collection
     relation to_messages(TC:tc_t, N:process_index_t, QC:qc_t)
 }
 
 isolate tc_t_conv = {
     relation tc_pred_pred(TC:tc_t, R:round_t)
+    # TC is for the round (R-2)
     definition tc_pred_pred(TC,R) = 0 < R & ~ round_t.succ(0,R) & forall Rt:round_t. tc_t.round(TC,Rt) -> round_t_conv.round_pred_pred(Rt,R)
 
     relation tc_pred(TC:tc_t, R:round_t)
+    # TC is for the round (R-1)
     definition tc_pred(TC,R) = 0 < R & forall Rt:round_t. tc_t.round(TC,Rt) -> round_t.succ(Rt,R)
 
     relation tc_block_same_round(TC:tc_t, B:block_t)
+    # TC is for the round R
     definition tc_block_same_round(TC,B) = forall Rt,Rb:round_t. tc_t.round(TC,Rt) & block_t.round(B,Rb) -> Rt = Rb
 } with tc_t, block_t#, block_t_conv, round_t, round_predecessor
 
 isolate types_block_t_requires = {
-    # before block_t.get_round(b:block_t) returns (r:round_t) {
-    #     require block_t.cstd(b);#_#
-    # }
 
-    # before block_t.get_parent(b:block_t) returns (pB:block_t) {
-    #     require block_t.cstd(b);
-    # }
-
+    # height is no longer used
     before block_t.get_height(b:block_t) returns (h:height_t) {
         require block_t.cstd(b);
     }
 
     before block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
+        # require that the block b is being constructed for a round greater than 0
         require r_c > 0;#_#
+
+        # require that the parent block pB is already constructed
         require block_t.cstd(pB);
     }
 } with block_t
 
 isolate types_block_t_ensures = {
+
+    # height is no longer used
     property block_t_properties.height_exists(B) | ~ block_t_properties.height_exists(B)
-    # after block_t.get_round(b:block_t) returns (r:round_t) {
 
-    #     ensure block_t.round(b, r);
-
-    # }
-
-    # after block_t.get_parent(b:block_t) returns (pB:block_t) {
-
-    #     ensure block_t.parent(b, pB);
-
-    # }
-
+    # height is no longer used
     after block_t.get_height(b:block_t) returns (h:height_t) {
 
         ensure block_t.height(b, h);
@@ -344,8 +329,10 @@ isolate types_block_t_ensures = {
     }
 
     after block_t.block(r_c:round_t, pB:block_t) returns (b:block_t) {
+        # height is no longer used
         ensure block_t.height(pB,Hp) & block_t.height(b,Hb) -> height_t.succ(Hp,Hb);
 
+        # ensure that the new block is now cstd
         ensure block_t.cstd(b);
     }
 } with block_t, height_t, block_t_properties.cstd_block_height_exists, types_block_t_requires

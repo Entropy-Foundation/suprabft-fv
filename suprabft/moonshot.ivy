@@ -216,7 +216,7 @@ object processor(id:process_index_t) = {
     }
 
     # received a quorum certificate through the network. Record its reception in received_qc
-    mplement shim.qc_handler.handle(m:msg) {
+    implement shim.qc_handler.handle(m:msg) {
             received_qc(m.qc) := true;
     }
 
@@ -396,7 +396,7 @@ object processor(id:process_index_t) = {
         # This condition verified by IVy ensures that the parent of the prposed block b_pr is for a strictly lesser round
         ensure block_t.parent(b_pr,Bp) & block_t.round(Bp,Rp) -> Rp < r_c;
 
-        Line 58: propose optimistic
+        #Line 58: propose optimistic
         ###### proposeOptimistic ############
         # Line 7,8 of Algorithm 1
         var rs := round_t.next(r_c);
