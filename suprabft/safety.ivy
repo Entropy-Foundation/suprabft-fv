@@ -718,6 +718,7 @@ isolate quorum_after_ldc_m2 = {
     # if Bp is local direct commit because of child Bc, then Bc's round is the successor of Bp's round
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & block_t.round(Bc,Rc) -> round_t.succ(Rp,Rc)
     
+    # same as previous invariant, except that instead of Rc being the round of Bc, it is the succuessor of Rp, the round of Bp
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & B ~= block_t.unused & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
     # attribute macro_finder = false
@@ -726,10 +727,12 @@ isolate quorum_after_ldc_m2 = {
 
 isolate quorum_after_ldc = {
     
+    # if Bp is locally direct commit and Rc is the successor of Bp's round Rp and QC certifies a block B of round strictly greater than Rc, the B's parent is of round at least Rp.  This is used to prove lemma 5 by induction
     invariant is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,R) & Rc < R & block_t.parent(B,Bp1) & block_t.round(Bp1,Rp1) -> Rp <= Rp1
 
 } with block_t, round_t, verify_quorum, quorum_after_ldc_m2, block_t_conv.successive_blocks, only_cstd_blocks.certified_block_cstd, basic_validities, block_t_properties.parent_self_genesis, block_t_properties.block_t_inv_round_unique, block_t_properties.round_only_for_cstd, block_t_properties.parent_only_for_cstd, block_t_properties.genesis_cstd, block_t_properties.inv_parent_exists, block_t_properties.parent_exists, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.unused_not_cstd#, block_t_properties.genesis_parent, block_t_properties.genesis_round_0
 
+# stating lemma 5 requires ancestors. In this and the following few isolates, the ancestor relation is developed for blocks that have quorum
 isolate certified_block_ancestor_m1 = {
 
     #Bd is descendant block, Ba is ascendant block
@@ -739,6 +742,7 @@ isolate certified_block_ancestor_m1 = {
         cert_block_ancestor(Bd,Ba) := Bd = block_t.genesis & Ba = block_t.genesis;
     }
 
+    # if b_pr just got a qourum, make it a descendant of its parent and all parents ascendants
     after verify_quorum.processor.normal_proposal_processing(id:process_index_t, b_pr:block_t, qc:qc_t) {
         if quorum_definition.block_has_quorum(b_pr) {
             if some bp:block_t. block_t.parent(b_pr,bp) {
@@ -747,6 +751,7 @@ isolate certified_block_ancestor_m1 = {
         }
     }
 
+    # if b_pr just got a qourum, make it a descendant of its parent and all parents ascendants
     after verify_quorum.processor.optimistic_proposal_processing(id:process_index_t, b_pr:block_t) {
         if quorum_definition.block_has_quorum(b_pr) {
             if some bp:block_t. block_t.parent(b_pr,bp) {
@@ -755,6 +760,7 @@ isolate certified_block_ancestor_m1 = {
         }
     }
 
+    # if b_pr just got a qourum, make it a descendant of its parent and all parents ascendants
     after verify_quorum.processor.fallback_proposal_processing(id:process_index_t, b_pr:block_t, tc:tc_t) {
         if quorum_definition.block_has_quorum(b_pr) {
             if some bp:block_t. block_t.parent(b_pr,bp) {
@@ -763,6 +769,7 @@ isolate certified_block_ancestor_m1 = {
         }
     }
 
+    # if b_pr just got a qourum, make it a descendant of its parent and all parents ascendants
     after verify_quorum.processor.byzantine_send(id:process_index_t, m:msg) {
         if (m.kind = msg_kind.prepare_f | m.kind = msg_kind.prepare_n | m.kind = msg_kind.prepare_o) & quorum_definition.block_has_quorum(m.block) & block_t.cstd(m.block) {
             if some bp:block_t. (block_t.parent(m.block,bp) & block_t.cstd(bp)) {
@@ -777,6 +784,7 @@ isolate certified_block_ancestor_m1 = {
 
 isolate certified_block_ancestor_m2 = {
 
+    # only blocks that are constructed and have quorum can participate in the ancestor relation
     invariant certified_block_ancestor_m1.cert_block_ancestor(Bd,Ba) -> block_t.cstd(Bd) & block_t.cstd(Ba) & quorum_definition.block_has_quorum(Bd) & quorum_definition.block_has_quorum(Ba) & Bd ~= block_t.unused & Ba ~= block_t.unused
 
     # attribute macro_finder = false
@@ -787,13 +795,11 @@ isolate certified_block_ancestor_m3 = {
 
     property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
 
+    # for the genesis block, it itself is the only ancestor
     invariant [block_genesis_ancestor] certified_block_ancestor_m1.cert_block_ancestor(block_t.genesis, A) <-> A = block_t.genesis
 
+    # a block is its own ancestor iff it is the genesis block
     invariant [self_ancestor_genesis] certified_block_ancestor_m1.cert_block_ancestor(B, B) <-> B = block_t.genesis
-
-    # invariant block_t.parent(B, P) -> (B = block_t.genesis & P = block_t.genesis) | (forall B_h,P_h:height_t. block_t.height(B, B_h) & block_t.height(P, P_h) -> height_t.succ(P_h, B_h))
-
-    # invariant block_t.parent(B,Bp) & block_t.parent(Bp,Ba) & block_t.round(B,R) & block_t.round(Ba,Ra) & B ~= block_t.genesis -> Ra < R
 
     # attribute macro_finder = false
 
@@ -803,8 +809,10 @@ isolate certified_block_ancestor_m4 = {
 
     property quorum_definition.block_has_quorum(B) | ~ quorum_definition.block_has_quorum(B)
 
+    # if a block B has quorum, then B's parent is an ancestor of B
     invariant [parent_is_ancestor] block_t.parent(B, P) & quorum_definition.block_has_quorum(B) & B ~= block_t.unused -> certified_block_ancestor_m1.cert_block_ancestor(B, P)
 
+    # the ancestor relation is transitive
     invariant [ancestor_transitive] certified_block_ancestor_m1.cert_block_ancestor(A1, A2) & certified_block_ancestor_m1.cert_block_ancestor(A2, A3) -> certified_block_ancestor_m1.cert_block_ancestor(A1, A3)
 
     # attribute macro_finder = false
@@ -815,15 +823,20 @@ isolate certified_block_ancestor_m5 = {
 
     property block_t_properties.parent_exists(B) | ~ block_t_properties.parent_exists(B)
 
+    # if a block B has two ancestors A1,A2, then they are also ancestors of B's parent or equal to B's parent
     invariant [ancestor_no_branches] certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) & block_t.parent(B,Bp) -> (A1 = Bp | A2 = Bp | (certified_block_ancestor_m1.cert_block_ancestor(Bp, A1) & certified_block_ancestor_m1.cert_block_ancestor(Bp, A2)))
 
+    # if a block B has two ancestors A1,A2, then A1 and A2 are themselves related by the ancestor relation
     invariant [ancestor_no_divergence] certified_block_ancestor_m1.cert_block_ancestor(B, A1) & certified_block_ancestor_m1.cert_block_ancestor(B, A2) -> A1 = A2 | certified_block_ancestor_m1.cert_block_ancestor(A1, A2) | certified_block_ancestor_m1.cert_block_ancestor(A2, A1)
 
     relation inbetween(D:block_t, A:block_t)
+    # block M is an ancestor of D and A is an ancestor of M (M is in between D and A)
     definition inbetween(D, A) = exists M:block_t. certified_block_ancestor_m1.cert_block_ancestor(D, M) & certified_block_ancestor_m1.cert_block_ancestor(M, A)
 
+    # if A is an ancestor of D and there is nothing in between D and A, then A is the parent of B. This defines the parent relation in terms of the ancestor relation.
     invariant [transitive_to_base_relation] certified_block_ancestor_m1.cert_block_ancestor(D, A) & ~inbetween(D, A) -> (D = block_t.genesis & A = block_t.genesis) | block_t.parent(D, A)
 
+    # B's parent P is an ancestor of B and there is nothing in between B and P
     invariant block_t.parent(B,P) & P ~= block_t.genesis  & quorum_definition.block_has_quorum(B) & quorum_definition.block_has_quorum(P) & certified_block_ancestor_m1.cert_block_ancestor(B, P)-> ~inbetween(B,P)
 
     # attribute macro_finder = false
@@ -834,18 +847,25 @@ isolate certified_block_ancestor_m6 = {
 
     property block_t_properties.round_exists(B) | ~ block_t_properties.round_exists(B)
 
+    # if A is an ancestor of D and P is D's parent, then A is equal to P and A is an ancestor of P
     invariant [ancestor_case_split] certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.parent(D,P) -> P = A | certified_block_ancestor_m1.cert_block_ancestor(P,A)
 
+    # if A is an ancestor of D and P is D's parent, then P's round is strictly lesser than D's round
     invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.parent(D,P) & D ~= block_t.genesis & block_t.round(D,Rd) & block_t.round(P,Rp) -> Rp < Rd
 
+    # if A is an ancestor and parent of D, then D's round is strictly greater than A's round
     invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.parent(D,A) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
 
+    # if A is an ancestor of D and P is D's parent, then P's round is strictly lesser than D's round and A's round is lesser than or equal to P's round
     invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis & block_t.parent(D,P) & block_t.round(P,Rp) -> Rp < Rd & Ra <= Rp
 
+    # same as previous invariant, except that the inference says Ra < Rd instead of Ra <= Rp and Rp < Rd
     invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis & block_t.parent(D,P) & block_t.round(P,Rp) -> Ra < Rd
 
+    # same as previos invariant, except that the round of P is not mentioned
     invariant certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis & block_t.parent(D,P) -> Ra < Rd
 
+    # same as previous invariant, excet that P is not mentioned
     invariant [block_ancestor_lesser_round] certified_block_ancestor_m1.cert_block_ancestor(D,A) & block_t.round(D,Rd) & block_t.round(A,Ra) & D ~= block_t.genesis -> Ra < Rd
 
     attribute macro_finder = false
@@ -854,6 +874,7 @@ isolate certified_block_ancestor_m6 = {
 
 isolate quorum_after_ldc_descendant_m1 = {
     
+    # if Bp is local direct commit due to child Bc and QC certifies a block B of round next to Bp's round, then B is in fact equal to Bc
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rc) -> quorum_definition.block_has_quorum(Bc) & quorum_definition.block_has_quorum(B) & B = Bc
 
     attribute macro_finder = false
@@ -862,13 +883,16 @@ isolate quorum_after_ldc_descendant_m1 = {
 
 isolate quorum_after_ldc_descendant_m2 = {
     
+    # if Bp is local direct commit due to child Bc and QC certifies a block B of round next to Bp's round, then Bp is an ancestor of B
     invariant is_good(N) & verify_quorum.processor(N).ldc_pair(Bp,Bc) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rc) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
     
+    # same as previous invariant, except that Bc is not explicitly mentioned as the child of Bp due to which Bp is local direct commit
     invariant [quorum_succ_ldc_descendant] is_good(N) & verify_quorum.processor(N).ldc(Bp) & block_t.round(Bp,Rp) & round_t.succ(Rp,Rc) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC) & qc_t.block(QC,B) & block_t.round(B,Rc) -> certified_block_ancestor_m1.cert_block_ancestor(B,Bp)
 
 } with block_t, round_t, verify_quorum, quorum_after_ldc_descendant_m1, certified_block_ancestor_m1, block_t_properties.block_t_inv_round_unique, block_t_properties.parent_unique, block_t_properties.round_exists, block_t_properties.block_t_inv_round_exists, block_t_properties.unused_not_cstd, only_cstd_blocks.processed_qc_cstd, block_t_properties.genesis_round_0, block_t_properties.parent_self_genesis, parent_block_earlier.parent_earlier, certified_block_ancestor_m4.parent_is_ancestor
 
 isolate qc_propogation_m1 = {
+    # processor N has processed QC certifying block B
     relation processed_qc_certificate(N:process_index_t, B:block_t, QC:qc_t)
 
     after init {
@@ -879,6 +903,7 @@ isolate qc_propogation_m1 = {
         processed_qc_certificate(id,B,qc) := qc_t.block(qc,B);
     }
 
+    # if an honest processor 
     invariant is_good(N) & processed_qc_certificate(N,B,QC) -> qc_t.block(QC,B) & verify_quorum.qc_sanity_check(QC) & verify_quorum.qc_has_quorum(QC)
 
     invariant is_good(N) & verify_quorum.processor(N).processed_qc(B) -> exists QC:qc_t. processed_qc_certificate(N,B,QC)
