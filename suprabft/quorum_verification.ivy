@@ -76,7 +76,7 @@ isolate verify_quorum = {
         }
     }
 
-    # A byzantine process has sent a message. If it is a prepare of timeout message, record this fact
+    # A byzantine process has sent a message. If it is a prepare or timeout message, record this fact
     before processor.byzantine_send(id:process_index_t, m:msg) {
         if m.kind = msg_kind.prepare_o {
             processor_sent_prepare_o(m.src, m.block) := true;
