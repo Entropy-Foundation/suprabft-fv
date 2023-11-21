@@ -8,9 +8,9 @@
 }
 
 \title{Formal Verification of Moonshot SMR Protocol}
-\author{Saurabh Joshi, Isaac Doidge, Raghavendra Ramesh, Nibesh
-Shrestha\textbar Chandradeep Dey, Gangamreddypalli Namratha Reddy, M.~Praveen}
-\institute{Supra Oracles \textbar~ Chennai Mathematical Institute}
+\author{ M.~Praveen, Chandradeep Dey, Namratha Reddy
+\\ Acknowledging: Isaac Doidge, Raghavendra Ramesh}
+\institute{Chennai Mathematical Institute ~\textbar~ Supra Oracles }
 \date{November 2023}
 
 \begin{document}
@@ -21,10 +21,22 @@ Shrestha\textbar Chandradeep Dey, Gangamreddypalli Namratha Reddy, M.~Praveen}
 \begin{frame}
     \frametitle{Goal of the Project}
     \begin{itemize}
-        \item The Moonshot State Machine Replication protocol has been
-            proven to be safe and live by the Supra Research team
+        \item Supra Research has invented highly efficient (both in
+            terms of throughput and latency) Chained Moonshot State
+            Machine Replication protocol. White paper is available on
+            Supra website and the academic version will be soon on
+            ePrint.
             \pause
             \vfill
+        \item The papers contain full safety and liveness proofs, hand
+            written by experts.
+            \pause
+            \vfill
+        \item The safety and liveness proofs and written in English
+            language, prone to errors and overlooks by humans. Even
+            proofs in classical mathematics published in peer reviewed
+            journals are known to have errors (subtle, hard to
+            detect).
         \item The goal of this project is to write the above safety
             proof in a formal logical language and verify its
             correctness
