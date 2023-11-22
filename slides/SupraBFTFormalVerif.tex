@@ -7,7 +7,7 @@
   \usecolortheme{seahorse}
 }
 
-\title{Formal Verification of Moonshot SMR Protocol}
+\title{Formal Verification of Chained Moonshot SMR Protocol}
 \author{ M.~Praveen, Chandradeep Dey, Namratha Reddy
 \\ Acknowledging: Isaac Doidge, Raghavendra Ramesh}
 \institute{Chennai Mathematical Institute ~\textbar~ Supra Oracles }
@@ -32,25 +32,33 @@
             written by experts.
             \pause
             \vfill
-        \item The safety and liveness proofs and written in English
+        \item The safety and liveness proofs are written in English
             language, prone to errors and overlooks by humans. Even
             proofs in classical mathematics published in peer reviewed
             journals are known to have errors (subtle, hard to
             detect).
-        \item The goal of this project is to write the above safety
-            proof in a formal logical language and verify its
-            correctness
             \pause
             \vfill
-        \item What is gained from this exercise? \pause
-            \vfill
-            \begin{itemize}
-                \item Confidence that there are no errors in the proof
-                    \pause
-                    \vfill
-                \item Possibility of generating test cases from the
-                    formal proof constructed
-            \end{itemize}
+        \item In its 1994 annual report, Intel wrote that it incurred a cost of USD 494 million for recalling and replacing defective Pentium processors.
+        \pause
+        \vfill
+        \item Industry has come a long way and now (especially the hardware industry) has made formal verification an integral part of design and development.
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Goal of the Project}
+\begin{itemize}
+        \item There are many ways to do formal verification. One is to write English proofs in a formal language (similar to programming language, but meant for writing proofs) and check it for correctness by running it through a machine proof checker.
+        \pause
+        \vfill
+        \item Formally verifying software is much harder than hardware. But with recent advances, it is becoming the golden standard for giving any kind of assurance.
+        \pause
+        \vfill
+        \item The goal of this project is to write the safety proof of the chained Moonshot SMR protocol in a formal language and check its correctness by automated proof checkers.
+        \pause
+        \vfill
+        \item Extensive testing and peer review do a good job of detecting the presence of bugs, but can still miss subtle ones. Proving the absence of bugs can be done only through formal verification.
     \end{itemize}
 \end{frame}
 
@@ -58,7 +66,7 @@
     \frametitle{Tools and Methods Used}
     \begin{itemize}
         \item \alert{IVy}: a deductive
-            verification tool, verified Tendermint, HotStuff etc.
+            verification tool, verified Tendermint, (part of) HotStuff etc.
             \pause
             \vfill
         \item Moonshot pseudocode $\Rightarrow$ IVy model
@@ -82,6 +90,9 @@
         \item Main challenge: Z3 can get stuck for hours without
             saying yes or no. \pause Need to know logic to overcome
             this
+            \pause
+            \vfill
+        \item It is an intense and laborious process, needing expertise in both the protocol and logical theory underlying the proof system.\pause Tendermint and similar protocols that have been formally verified are simpler compared to chained Moonshot. This is the first time that an industrial strength protocol as complicated as chained Moonshot has been formally verified
     \end{itemize}
 \end{frame}
 
@@ -178,7 +189,7 @@
             \pause
             \vfill
         \item Moonshot has a complicated pipelining mechanism to
-            improve communication complexity. This is the first time a
+            improve latency and throughput. This is the first time a
             such a complicated protocol has been formally verified
     \end{itemize}
     \pause
