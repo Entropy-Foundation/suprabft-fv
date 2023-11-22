@@ -192,6 +192,33 @@
             improve latency and throughput. This is the first time a
             such a complicated protocol has been formally verified
     \end{itemize}
+\end{frame}
+\begin{frame}
+    \frametitle{Formal Verification of Commit Moonshot}
+    \begin{itemize}
+        \item Commit Moonshot is a variant of Chained Moonshot
+            protocol
+            \pause
+            \vfill
+        \item After a block is certified, honest processes multicast
+            another kind of message called commit message
+            \pause
+            \vfill
+        \item Honest processes commit a block as soon as they receive
+            a quorum of commit messages for that block
+            \pause
+            \vfill
+        \item Some parts of the IVy model and invariants from the
+            formal verification of chained Moonshot protocol can be
+            re-used for the formal verification of commit Moonshot
+            protocol. A significant part of the proofs will have to be
+            re-worked.
+            \pause
+            \vfill
+        \item A rough estimate is 80 man hours. Formal verification of
+            chained Moonshot took 134 man hours after the latest
+            round of changes at the end of July.
+    \end{itemize}
     \pause
     \vfill
     \begin{center}
