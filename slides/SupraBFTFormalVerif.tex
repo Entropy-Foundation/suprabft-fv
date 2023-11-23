@@ -8,14 +8,22 @@
 }
 
 \title{Formal Verification of Chained Moonshot SMR Protocol}
-\author{ M.~Praveen, Chandradeep Dey, Namratha Reddy
-\\ Acknowledging: Isaac Doidge, Raghavendra Ramesh}
-\institute{Chennai Mathematical Institute ~\textbar~ Supra Oracles }
-\date{November 2023}
+\author{ M.~Praveen, Chandradeep Dey, Namratha Reddy}
+\institute{Chennai Mathematical Institute}
+
+\date{}
+%\institute{Supra Oracles }
+%\subtitle{Acknowledging: Isaac Doidge, Raghavendra Ramesh}
 
 \begin{document}
 \begin{frame}
     \titlepage
+
+    \begin{center}
+    Acknowledging: Raghavendra Ramesh, Isaac Doidge\\
+
+    \footnotesize{SupraOracles}
+    \end{center}
 \end{frame}
 
 \begin{frame}
@@ -24,7 +32,8 @@
         \item Supra Research has invented highly efficient (both in
             terms of throughput and latency) Chained Moonshot State
             Machine Replication protocol. White paper is available on
-            Supra website and the academic version will be soon on
+            Supra website
+            (\href{https://supraoracles.com/docs/SupraOracles-Moonshot-Whitepaper.pdf}{https://supraoracles.com/docs/SupraOracles-Moonshot-Whitepaper.pdf}) and the academic version will be soon on
             ePrint.
             \pause
             \vfill
@@ -33,22 +42,27 @@
             \pause
             \vfill
         \item The safety and liveness proofs are written in English
-            language, prone to errors and overlooks by humans. Even
-            proofs in classical mathematics published in peer reviewed
-            journals are known to have errors (subtle, hard to
-            detect).
-            \pause
-            \vfill
-        \item In its 1994 annual report, Intel wrote that it incurred a cost of USD 494 million for recalling and replacing defective Pentium processors.
-        \pause
-        \vfill
-        \item Industry has come a long way and now (especially the hardware industry) has made formal verification an integral part of design and development.
+            language, prone to errors and overlooks by humans, even
+            more so in the case of distributed systems. Ex:
+            \emph{On the correctness of Egalitarian Paxos, Information
+            Processing Letters, 2020} (identifies a problem in the
+            TLA\textsuperscript{+} specification and implementation of
+        Egalitarian Paxos) \pause and \emph{Revisiting Fast Practical
+        Byzantine Fault Tolerance, arXiv:1712.0136} (safety violation
+        in Zyzzyva and a liveness violation in FaB).
     \end{itemize}
 \end{frame}
 
 \begin{frame}
 \frametitle{Goal of the Project}
 \begin{itemize}
+        \item In 2014, Bitocoin consensus vulnerabilities were
+            exploited to steal USD 83,000 through a network attack.
+            \pause
+            \vfill
+        \item Industry (especially hardware) has made formal verification an integral part of design and development.
+        \pause
+        \vfill
         \item There are many ways to do formal verification. One is to write English proofs in a formal language (similar to programming language, but meant for writing proofs) and check it for correctness by running it through a machine proof checker.
         \pause
         \vfill
@@ -58,7 +72,9 @@
         \item The goal of this project is to write the safety proof of the chained Moonshot SMR protocol in a formal language and check its correctness by automated proof checkers.
         \pause
         \vfill
-        \item Extensive testing and peer review do a good job of detecting the presence of bugs, but can still miss subtle ones. Proving the absence of bugs can be done only through formal verification.
+        \item Extensive testing and peer review do a good job of
+            detecting the presence of bugs, but can still miss subtle
+            ones. Absence of bugs can only be proved through formal verification.
     \end{itemize}
 \end{frame}
 
@@ -85,15 +101,25 @@
             \vfill
         \item Is the set of logical formulas satisfiable? \alert{No}:
             protocol is safe
-            \pause
-            \vfill
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Challenges}
+    \begin{itemize}
         \item Main challenge: Z3 can get stuck for hours without
             saying yes or no. \pause Need to know logic to overcome
             this
             \pause
             \vfill
-        \item It is an intense and laborious process, needing expertise in both the protocol and logical theory underlying the proof system.\pause Tendermint and similar protocols that have been formally verified are simpler compared to chained Moonshot. This is the first time that an industrial strength protocol as complicated as chained Moonshot has been formally verified
-    \end{itemize}
+        \item It is an intense and laborious process, needing expertise in both the protocol and logical theory underlying the proof system.
+            \pause
+            \vfill
+        \item Tendermint and similar protocols that have been formally verified are simpler compared to chained Moonshot.
+            \pause
+            \vfill
+        \item This is the first time that an industrial strength protocol as complicated as chained Moonshot has been formally verified
+        \end{itemize}
 \end{frame}
 
 \begin{frame}
@@ -191,6 +217,10 @@
         \item Moonshot has a complicated pipelining mechanism to
             improve latency and throughput. This is the first time a
             such a complicated protocol has been formally verified
+            \pause
+            \vfill
+        \item Safety proof of Tendermint has around 30 invariants,
+            HotStuff has around 40
     \end{itemize}
 \end{frame}
 \begin{frame}
